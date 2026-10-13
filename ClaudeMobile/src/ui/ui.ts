@@ -12,7 +12,7 @@ import { type Building, type Dir, capacity, dayFraction, isNight, stackTotal } f
 import type { Game } from '../game';
 import { audio } from '../platform/audio';
 import { clear, duration, fmt, h, img, setOnly } from './dom';
-import { glyph, itemIcon, landThumb, thumb } from './glyphs';
+import { glyph, itemIcon, landThumb, thumb, uiIcon } from './glyphs';
 import { guideNote } from './guide';
 
 const CATS: { id: BuildCategory | 'land'; name: string }[] = [
@@ -25,6 +25,8 @@ const CATS: { id: BuildCategory | 'land'; name: string }[] = [
   { id: 'aether', name: 'Aether' },
   { id: 'wonder', name: 'Wonder' },
 ];
+
+const GEAR_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#efe2c4" stroke-width="1.8" stroke-linejoin="round"><path d="M10.3 2.6h3.4l.5 2.6 1.9.8 2.2-1.5 2.4 2.4-1.5 2.2.8 1.9 2.6.5v3.4l-2.6.5-.8 1.9 1.5 2.2-2.4 2.4-2.2-1.5-1.9.8-.5 2.6h-3.4l-.5-2.6-1.9-.8-2.2 1.5-2.4-2.4 1.5-2.2-.8-1.9-2.6-.5v-3.4l2.6-.5.8-1.9-1.5-2.2 2.4-2.4 2.2 1.5 1.9-.8z"/><circle cx="12" cy="12" r="3.4"/></svg>';
 
 const STATUS_TEXT: Record<string, string> = {
   working: 'Working', idle: 'Idle', noinput: 'Waiting for input', blocked: 'Output full', nopower: 'No breeze', night: 'Waiting for night', ready: 'Ready to collect',
@@ -39,6 +41,7 @@ export class UI {
   private lvlEl!: HTMLElement;
   private lvlBar!: HTMLElement;
   private clockEl!: HTMLElement;
+  private questIcon!: HTMLImageElement;
   private btnBuild!: HTMLButtonElement;
   private btnCraft!: HTMLButtonElement;
   private btnStash!: HTMLButtonElement;
@@ -82,28 +85,32 @@ export class UI {
   private mount(): void {
     const r = this.root;
     clear(r);
-    // HUD — top-left banner (island, level), quest card, top-right resources
-    // and day clock, bottom-centre nav with the big Build button.
-    this.res = h('div', { class: 'res-strip panel', onclick: () => this.openStash() });
-    this.lvlEl = h('span', { class: 'lvl num' });
+    // HUD — island card (top left), resources + settings + day clock (top
+    // right), quest card (bottom left), nav bar with the big Build (bottom).
+    this.res = h('div', { class: 'res-strip panel' });
+    this.lvlEl = h('span', { class: 'lvl' });
     this.lvlBar = h('i');
     const banner = h('div', { class: 'banner panel', onclick: () => this.openJournal() },
-      h('div', { class: 'crest' }, img(glyph('spark'))),
-      h('div', { class: 't' }, h('div', { class: 'isle' }, h('span', { class: 'title', text: 'Emberleaf Isle' }), this.lvlEl), h('div', { class: 'bar xp' }, this.lvlBar)));
-    this.clockEl = h('div', { class: 'clock', title: 'Time of day' }, h('div', { class: 'dial' }, h('i', { class: 'hand' })), h('span', { class: 'time num' }));
-    const menu = this.iconBtn('menu', 'Menu', () => this.openSettings());
-    const top = h('div', { class: 'hud-top' }, banner, this.res, h('div', { class: 'hud-right' }, this.clockEl, menu));
+      h('div', { class: 'portrait' }, img(uiIcon('island'))),
+      h('div', { class: 't' }, h('div', { class: 'isle', text: 'Emberleaf Isle' }), h('div', { class: 'lvlrow' }, this.lvlEl, h('div', { class: 'bar xp' }, this.lvlBar))));
+    this.clockEl = h('div', { class: 'clock', title: 'Time of day' }, h('i', { class: 'sun' }), h('span', { class: 'time' }));
+    const plus = h('button', { class: 'res-plus', 'aria-label': 'Open stash', onclick: () => { audio.unlock(); this.openStash(); } }, '+');
+    const menu = this.iconBtn('gear', 'Menu', () => this.openSettings());
+    menu.innerHTML = GEAR_SVG;
+    const top = h('div', { class: 'hud-top' }, banner, h('div', { class: 'hud-right' }, h('div', { class: 'res-wrap' }, this.res, plus), menu));
+    const left = h('div', { class: 'hud-left' }, this.iconBtn('compass', 'Centre view', () => this.g.view.cam.focus(0, -10, this.g.defaultZoom())));
     this.note = h('div', { class: 'qtext' });
-    this.quest = h('div', { class: 'quest panel hide' }, h('div', { class: 'caps', text: 'Next' }), this.note);
+    this.questIcon = img(uiIcon('book'));
+    this.quest = h('button', { class: 'quest panel hide', onclick: () => this.openJournal() }, h('div', { class: 'qicon' }, this.questIcon), h('div', { class: 'qbody' }, h('div', { class: 'caps', text: 'Next step' }), this.note), h('span', { class: 'chev', text: '›' }));
     this.btnBuild = this.mainBtn('build', 'Build', () => this.toggleBuild());
     this.btnBuild.classList.add('big');
     this.btnCraft = this.mainBtn('craft', 'Craft', () => this.toggleCraft());
-    this.btnStash = this.mainBtn('stash', 'Stash', () => this.openStash());
-    this.btnJournal = this.mainBtn('journal', 'Journal', () => this.openJournal());
-    const obs = this.mainBtn('eye', 'Observe', () => this.g.toggleObserve());
-    const bottom = h('div', { class: 'hud-bottom nav' }, this.btnStash, this.btnCraft, this.btnBuild, this.btnJournal, obs);
-    this.savedEl = h('div', { class: 'saved' }, h('i'), 'SAVED');
-    const hud = h('div', { class: 'hud passthrough' }, top, this.quest, bottom, this.savedEl);
+    this.btnStash = this.mainBtn('stash', 'Inventory', () => this.openStash(), 'Stash');
+    this.btnJournal = this.mainBtn('book', 'Journal', () => this.openJournal());
+    const obs = this.mainBtn('island', 'World', () => this.g.toggleObserve(), 'Observe');
+    const bottom = h('div', { class: 'hud-bottom nav panel' }, obs, this.btnStash, this.btnBuild, this.btnCraft, this.btnJournal);
+    this.savedEl = h('div', { class: 'saved' }, h('i'), 'Saved');
+    const hud = h('div', { class: 'hud passthrough' }, top, left, this.clockEl, this.quest, bottom, this.savedEl);
     hud.style.position = 'absolute';
     hud.style.inset = '0';
     this.build = h('div', { class: 'sheet' });
@@ -133,11 +140,11 @@ export class UI {
   }
 
   private iconBtn(name: string, title: string, fn: () => void): HTMLButtonElement {
-    return h('button', { class: 'icon-btn', title, 'aria-label': title, onclick: () => { audio.unlock(); fn(); } }, img(glyph(name)));
+    return h('button', { class: 'icon-btn', title, 'aria-label': title, onclick: () => { audio.unlock(); fn(); } }, img(uiIcon(name)));
   }
 
-  private mainBtn(name: string, label: string, fn: () => void): HTMLButtonElement {
-    return h('button', { class: 'main-btn', 'aria-label': label, onclick: () => { audio.unlock(); fn(); } }, img(glyph(name)), label);
+  private mainBtn(name: string, label: string, fn: () => void, aria = label): HTMLButtonElement {
+    return h('button', { class: 'main-btn', 'aria-label': aria, onclick: () => { audio.unlock(); fn(); } }, h('span', { class: 'ico' }, img(uiIcon(name))), h('span', { class: 'lbl', text: label }));
   }
 
   // ───────────────────────── per-frame ─────────────────────────
@@ -213,13 +220,18 @@ export class UI {
     const n = this.g.observe ? null : guideNote(s);
     if ((n ?? '') !== this.lastNote) {
       this.lastNote = n ?? '';
-      if (n) { this.note.textContent = n; this.quest.classList.remove('hide'); }
+      if (n) {
+        this.note.textContent = n;
+        this.quest.classList.remove('hide');
+        const named = BUILDING_LIST.find((d) => n.includes(d.name));
+        this.questIcon.src = named ? thumb(named.id) : uiIcon('book');
+      }
       else this.quest.classList.add('hide');
     }
     // level = discoveries made; the bar shows how much of the world is known
     const lvl = s.known.size;
-    if (this.lvlEl.textContent !== `Lv ${lvl}`) {
-      this.lvlEl.textContent = `Lv ${lvl}`;
+    if (this.lvlEl.textContent !== `Lv. ${lvl}`) {
+      this.lvlEl.textContent = `Lv. ${lvl}`;
       this.lvlBar.style.width = `${Math.round((lvl / DISCOVERY_LIST.length) * 100)}%`;
     }
     // day clock: daylight (0–0.68 of a cycle) spans 05:00–20:00, night the rest
@@ -230,7 +242,6 @@ export class UI {
     const time = this.clockEl.querySelector('.time')!;
     if (time.textContent !== `${hh}:${mm}`) {
       time.textContent = `${hh}:${mm}`;
-      (this.clockEl.querySelector('.hand') as HTMLElement).style.transform = `rotate(${Math.round(df * 360)}deg)`;
       this.clockEl.classList.toggle('night', isNight(s));
     }
     // main buttons
@@ -553,6 +564,10 @@ export class UI {
     return h('div', { class: 'bar ' + cls }, i);
   }
 
+  private section(title: string, right: string, ...children: HTMLElement[]): HTMLElement {
+    return h('div', { class: 'sect' }, h('div', { class: 'sect-h' }, h('span', { text: title }), right ? h('span', { class: 'r', text: right }) : null), ...children);
+  }
+
   private slot(item: ItemId, text: string, lack = false): HTMLElement {
     return h('span', { class: 'slot' + (lack ? ' lack' : ''), title: ITEMS[item].name }, img(itemIcon(item)), h('span', { class: 'num', text }));
   }
@@ -608,15 +623,23 @@ export class UI {
         }
         const rr = currentRecipe(b);
         if (rr) {
-          body.append(this.recipeFlow(b, rr, false), this.bar());
+          // Production: what one cycle takes and makes, with its timer
+          const prod = h('div', { class: 'flow' });
+          for (const k in rr.inputs) prod.append(this.slot(k as ItemId, `${rr.inputs[k as ItemId]}`, (b.inBuf[k as ItemId] ?? 0) < (rr.inputs[k as ItemId] ?? 0)));
+          prod.append(h('span', { class: 'arrow', text: '→' }));
+          for (const k in rr.outputs) prod.append(this.slot(k as ItemId, `${rr.outputs[k as ItemId]}`));
           const speed = (g.s.cache.boost.get(b.id) ?? 1);
-          const ins = Object.entries(rr.inputs).map(([k, v]) => `${v} ${ITEMS[k as ItemId].name}`).join(' + ');
-          const outs = Object.entries(rr.outputs).map(([k, v]) => `${v} ${ITEMS[k as ItemId].name}`).join(' + ');
-          const info = [`${ins} → ${outs}`, `${rr.time}s`];
+          body.append(this.section('Production', `⏱ ${(rr.time / speed).toFixed(1)}s`, prod, this.bar()));
+          // Inventory: what is buffered inside the machine
+          const inv = h('div', { class: 'flow inv' });
+          const cap = def.bufferCap ?? 12;
+          for (const k in rr.inputs) inv.append(this.slot(k as ItemId, `${fmt(b.inBuf[k as ItemId] ?? 0)}/${(rr.inputs[k as ItemId] ?? 0) * 2}`));
+          for (const k in rr.outputs) inv.append(this.slot(k as ItemId, `${fmt(b.outBuf[k as ItemId] ?? 0)}/${cap}`));
+          const info: string[] = [];
           if (rr.fuel) info.push(`fuel ${Math.floor(b.fuel)}`);
           if (speed > 1) info.push('resonating ×1.5');
           if (def.power) info.push(`uses ${def.power} breeze`);
-          body.append(h('div', { class: 'muted', style: 'font-size:0.76rem', text: info.join(' · ') }));
+          body.append(this.section('Inventory', info.join(' · '), inv));
         }
         actions.append(h('button', { class: 'btn', onclick: () => g.act(() => A.load(s, b.id), 'load') }, 'Load'));
         actions.append(h('button', { class: 'btn' + (stackTotal(b.outBuf) ? ' primary' : ''), onclick: () => { const res = g.act(() => A.collect(s, b.id), 'collect'); if (res.ok && res.got) this.floaterCenter(res.got); } }, 'Collect'));

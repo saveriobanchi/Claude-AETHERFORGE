@@ -1,0 +1,13 @@
+import { chromium } from '@playwright/test';
+const [url, out, w, h] = process.argv.slice(2);
+const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const page = await browser.newPage({ viewport: { width: +w, height: +h }, deviceScaleFactor: 2, hasTouch: true });
+page.on('pageerror', (e) => console.log('pageerror:', e.stack.split('\n').slice(0, 4).join(' | ')));
+await page.goto(url);
+await page.waitForFunction(() => window.gameReady === true, null, { timeout: 60000 });
+await page.waitForTimeout(1200);
+await page.screenshot({ path: out + '-hud.png' });
+await page.evaluate(() => { const g = window.game; const b = [...g.s.buildings.values()].find((x) => x.type === 'sawmill' || x.type === 'kiln'); g.select(b.id); });
+await page.waitForTimeout(800);
+await page.screenshot({ path: out + '-panel.png' });
+await browser.close();

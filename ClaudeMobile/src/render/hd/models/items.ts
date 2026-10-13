@@ -166,4 +166,23 @@ export const UI_ICONS: Record<string, (m: Model) => void> = {
     m.box([0, 0, 0.065], [0.13, 0.018, 0.006], MAT.iron, 0.004, { rot: [0, 0, 0.7 + Math.PI / 2] });
   },
   sack: (m) => sack(m, [0, 0, 0], 1.4),
+  gear: (m) => { gear(m, [0, 0, 0.04], 0.15, 0.04, 'z', 0.2, 8, MAT.iron); m.cyl([0, 0, 0.05], 0.05, 0.045, MAT.ironDark); },
+  compass: (m) => {
+    m.cyl([0, 0, 0.03], 0.17, 0.03, MAT.brass);
+    m.cyl([0, 0, 0.062], 0.14, 0.004, MAT.paper);
+    m.add((x, y, z) => Math.max(Math.abs(x) * 0.25 + Math.abs(y) - 0.03, Math.abs(z) - 0.006), MAT.redCloth, [0, 0, 0.07], [0.13, 0.04, 0.01], { rot: [0, 0, 0.8] });
+    m.torus([0, 0, 0.06], 0.17, 0.014, MAT.gold);
+  },
+  book: (m) => {
+    m.box([0, 0, 0.05], [0.16, 0.2, 0.045], MAT.leather, 0.015, { rot: [0, 0, 0.3] });
+    m.box([0.012, 0.004, 0.05], [0.145, 0.19, 0.038], MAT.paper, 0.004, { rot: [0, 0, 0.3] });
+    m.box([0, 0, 0.098], [0.16, 0.2, 0.006], MAT.leather, 0.004, { rot: [0, 0, 0.3] });
+    m.box([0, 0, 0.106], [0.06, 0.06, 0.004], MAT.gold, 0.002, { rot: [0, 0, 1.085] });
+  },
+  island: (m) => {
+    m.cyl([0, 0, 0.02], 0.2, 0.025, MAT.grass, 'z', 0.02);
+    m.cone([0, 0, -0.12], 0.19, 0.03, 0.12, MAT.cliffRock);
+    m.cyl([0.04, -0.02, 0.1], 0.015, 0.06, MAT.bark);
+    m.sphere([0.04, -0.02, 0.2], 0.07, MAT.leaf);
+  },
 };

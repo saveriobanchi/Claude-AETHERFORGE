@@ -92,7 +92,7 @@ export function bark(hex = 0x6e4a30): Mat {
 }
 
 /** Cut-stone masonry: clean blocks, mortar lines, per-block tone. */
-export function masonry(hex = 0xb2a898, course = 0.13, blockLen = 0.22, o: MatOpts = {}): Mat {
+export function masonry(hex = 0x9a8c7c, course = 0.13, blockLen = 0.22, o: MatOpts = {}): Mat {
   const base = lin(hex), mortar = lin(darken(hex, 0.42)), hi = lin(lighten(hex, 0.15)), moss = lin(0x5f8a34);
   const joint = (x: number, y: number, z: number) => {
     const row = Math.floor(z / course), fz = z / course - row;
@@ -105,7 +105,7 @@ export function masonry(hex = 0xb2a898, course = 0.13, blockLen = 0.22, o: MatOp
     const along = Math.floor((h.lx + h.ly) / blockLen + (row % 2) * 0.5 + hash3(row, 4, 4) * 0.4);
     const tone = 0.84 + hash3(row, along, 5) * 0.3;
     const j = joint(h.lx, h.ly, h.lz);
-    set(out, base, tone * (0.92 + noise3(h.x * 30, h.y * 30, h.z * 30) * 0.1));
+    set(out, base, tone * (0.95 + noise3(h.x * 12, h.y * 12, h.z * 12) * 0.06));
     // chipped top edge highlight and a few cracks
     const fz = h.lz / course - row;
     lerp3(out, out, hi, smoothstep(0.8, 0.95, fz) * 0.5);

@@ -68,15 +68,20 @@ export class Prim {
   constructor(public shape: Shape, public mat: Mat, public xf: Xf, bb: number[], public disp?: Shape, public dispAmp = 0) {
     this.bb = new Float64Array(bb);
   }
+  /** Uniform scale applied around the model origin (see Model.scale). */
+  s = 1;
   d(x: number, y: number, z: number): number {
     const o = this.tmp;
     this.xf.apply(x, y, z, o);
-    let d = this.shape(o[0], o[1], o[2]);
-    if (this.disp && d < this.dispAmp * 2 + 0.05) d += this.disp(o[0], o[1], o[2]);
-    return d;
+    const k = this.s;
+    const lx = o[0] / k, ly = o[1] / k, lz = o[2] / k;
+    let d = this.shape(lx, ly, lz);
+    if (this.disp && d < this.dispAmp * 2 + 0.05) d += this.disp(lx, ly, lz);
+    return d * k;
   }
   local(x: number, y: number, z: number, o: Float64Array): void {
     this.xf.apply(x, y, z, o);
+    o[0] /= this.s; o[1] /= this.s; o[2] /= this.s;
   }
 }
 
@@ -219,6 +224,16 @@ export class Model {
       return d * (sq < 1 ? sq : 1);
     };
     return this.add(shape, mat, [cx, cy, cz], [(x1 - x0) / 2 + k, (y1 - y0) / 2 + k, (z1 - z0) / 2 + k], o);
+  }
+
+  /** Scale the whole model uniformly about its origin (footprint centre on the ground). */
+  scale(k: number): this {
+    for (const p of this.prims) {
+      p.s *= k;
+      p.xf.cx *= k; p.xf.cy *= k; p.xf.cz *= k;
+      for (let i = 0; i < 6; i++) p.bb[i] *= k;
+    }
+    return this;
   }
 
   bounds(): [number, number, number, number, number, number] {

@@ -11,12 +11,15 @@ src/
     offline.ts     time-away model
     save.ts        versioned JSON save, migrations, export/import
   render/
-    art/           pixel canvas toolkit, sprite registry, legacy flat art
-    vox/           voxel art engine: 16-voxel blocks per tile, per-face light,
-                   ambient occlusion, emissive materials; block terrain,
-                   building/tree/item models with moving parts
-    bake.ts        bakes every sprite/icon into packed sheets (runs in Node)
-    artpack.ts     loads the pre-baked sheets at startup (production)
+    hd/            offline art renderer (runs in Node at build time):
+      sdf.ts       signed-distance model kit (boxes, cylinders, roofs, blobs…)
+      render.ts    iso sphere tracer: soft shadows, AO, sky/sun/bounce light,
+                   pixel-art palette snapping and selective outlines
+      mats.ts      procedural materials (planks, masonry, foliage, metal…)
+      models/      every building, tree, item icon, terrain piece and decor
+      catalog.ts   what to bake: frames, variants, lights, smoke points
+    artpack.ts     loads the baked sheets and hands out textures / UI URLs
+    art/           small pixel-canvas helpers for effects and UI glyphs
     world.ts       Pixi scene: chunked terrain, depth-sorted buildings, belts,
                    items, lights, overlays, wisps
     sky.ts         golden-hour sky gradient, sun bloom, painterly clouds,
@@ -53,19 +56,21 @@ production is assumed to stop at that moment.
 
 ## Rendering & performance
 
-- All art is procedural voxel models (no external image assets). `npm run art`
-  (part of `npm run build`) bakes every sprite, belt frame and icon into PNG
-  sheets in `public/art/` (~300 KB, generated, not committed); production
-  loads those instead of generating art on the device. Dev (`npm run dev`)
-  and `?liveart` generate art live.
+- All game art is modelled in code (src/render/hd) and baked by
+  `npm run art` (part of `npm run dev` and `npm run build`) into two PNG
+  sheets plus a manifest in `public/art/` (~1 MB, generated, not committed).
+  The bake renders each model with a sphere tracer in the game's exact
+  isometric projection, then snaps colours to hue-shifted pixel-art bands and
+  draws selective outlines, at 2 texels per world pixel. It runs on all CPU
+  cores (~80 s) and is skipped when the art sources are unchanged.
+- Terrain is one rock-column sprite plus one top sprite per tile (chosen by
+  depth-from-edge and open-edge mask), drawn back to front; decor and
+  waterfalls are scattered deterministically per tile.
 - The world is drawn crisp at a whole number of device pixels per art pixel
   into an offscreen texture, then scaled smoothly to the exact zoom, so pixels
   stay even-sized and pans/zooms glide sub-pixel without shimmer. The sky is
   drawn with smooth filtering on its own.
-- Terrain is voxel-rasterised on the CPU per 8×8-tile chunk into one texture
-  each and only re-rendered when ground changes (`tileRev`); after the first
-  build, changed chunks re-render one per frame, nearest the camera first.
-- Buildings, items and effects come from one atlas page → heavily batched.
+- Buildings, terrain, items and decor come from two baked sheets → heavily batched.
 - Off-screen buildings are culled; sprites, items and particles are pooled.
 - Night lights are additive sprites, drawn only when it is dark.
 - Adaptive quality: if a device cannot hold ~40 fps it switches once to 1×

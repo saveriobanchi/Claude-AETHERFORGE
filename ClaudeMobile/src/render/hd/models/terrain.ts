@@ -45,7 +45,8 @@ const skyTop = mat((h, out) => {
   const u = h.x + 0.5, v = h.y + 0.5;
   const fu = u * 2 - Math.floor(u * 2), fv = v * 2 - Math.floor(v * 2);
   const j = Math.min(smoothstep(0, 0.05, fu), smoothstep(1, 0.95, fu), smoothstep(0, 0.05, fv), smoothstep(1, 0.95, fv));
-  lerp3(out, lin(0x6a7a96), lin(0xdce4ee), j);
+  const tone = 0.88 + hash3(Math.floor(u * 2) & 1, Math.floor(v * 2) & 1, 9) * 0.2;
+  lerp3(out, lin(0x3a4660), lin(0x9eacc4), j * tone * (0.94 + tfbm(u, v, 6, 2, 8) * 0.12));
 }, {
   spec: 0.6, pow: 60,
   emit: (h, out) => {

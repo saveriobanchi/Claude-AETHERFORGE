@@ -31,6 +31,8 @@ export interface SpriteSpec {
   lights?: Light[];
   smoke?: [number, number, number];
   lamp?: boolean;
+  /** Visual scale (buildings are drawn a little larger than their footprint). */
+  scale?: number;
 }
 
 const sway = (f: number) => Math.sin(f * Math.PI * 2);
@@ -81,6 +83,9 @@ export const SPRITES: Record<string, SpriteSpec> = {
   forge: { frames: 1, fps: 8, main: 'st0', variants: { st0: 1, st1: 1, st2: 1, st3: 8 }, make: (f, v) => A.forge(Number(v.slice(2)), f), lights: [[0, 0, 2.9, 0x6cb8f2, 70]] },
 };
 
+/** Nature and the big forge keep their true size; machines are drawn a bit larger. */
+const BUILDING_SCALE: Record<string, number> = { tree: 1, elder_tree: 1, sapling: 1, tuft: 1, node_vein: 1.05, node_spring: 1, node_shard: 1.05, forge: 1, windmill: 1.1 };
+
 export type Rect = [number, number, number, number, number, number, number]; // sheet, x, y, w, h, ax, ay
 
 /** Render a set of models sharing one canvas box, then crop the union of their opaque pixels. */
@@ -118,7 +123,8 @@ for (const [type, sp] of Object.entries(SPRITES)) {
   JOBS['sprite:' + type] = () => {
     const sets = sp.variants ?? { _: sp.frames };
     const keys: string[] = [], models: Model[] = [];
-    for (const [v, n] of Object.entries(sets)) for (let i = 0; i < n; i++) { keys.push(`${type}:${v}:${i}`); models.push(phased(sp.make(i / n, v), i / n)); }
+    const k = sp.scale ?? (BUILDING_SCALE[type] ?? 1.15);
+    for (const [v, n] of Object.entries(sets)) for (let i = 0; i < n; i++) { keys.push(`${type}:${v}:${i}`); models.push(phased(sp.make(i / n, v).scale(k), i / n)); }
     const imgs = renderSet(models, SPRITE_OPTS);
     return keys.map((k, i) => [k, imgs[i]]);
   };
