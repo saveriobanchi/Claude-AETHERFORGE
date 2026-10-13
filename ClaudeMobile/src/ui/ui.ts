@@ -11,7 +11,7 @@ import { currentRecipe, forgeNeeds } from '../core/sim';
 import { type Building, type Dir, capacity, isNight, stackTotal } from '../core/state';
 import type { Game } from '../game';
 import { audio } from '../platform/audio';
-import { clear, duration, fmt, h, img } from './dom';
+import { clear, duration, fmt, h, img, setOnly } from './dom';
 import { glyph, itemIcon, landThumb, thumb } from './glyphs';
 import { guideNote } from './guide';
 
@@ -67,6 +67,7 @@ export class UI {
   private wasCraftVisible = false;
   private craftSig = '';
   private buildSig = '';
+  private lastKnownAtOpen = -1;
 
   constructor(g: Game, root: HTMLElement) {
     this.g = g;
@@ -239,9 +240,13 @@ export class UI {
     // start on the most relevant tab
     const avail = this.availableCats();
     if (!avail.includes(this.tab)) this.tab = avail[0] ?? 'craft';
-    const order = CATS.map((c) => c.id);
-    const unseen = this.unseenBuildables().sort((a, b) => order.indexOf(a.cat) - order.indexOf(b.cat));
-    if (unseen.length) this.tab = unseen[0].cat;
+    // jump to newly discovered things only once per discovery, never on every open
+    if (this.g.s.known.size !== this.lastKnownAtOpen) {
+      this.lastKnownAtOpen = this.g.s.known.size;
+      const order = CATS.map((c) => c.id);
+      const unseen = this.unseenBuildables().sort((a, b) => order.indexOf(a.cat) - order.indexOf(b.cat));
+      if (unseen.length) this.tab = unseen[0].cat;
+    }
     this.renderBuild();
     this.build.classList.add('open');
     audio.play('open');
@@ -314,8 +319,7 @@ export class UI {
       }
     }
     panel.append(tabs, cards);
-    clear(this.build);
-    this.build.append(panel);
+    setOnly(this.build, panel);
     // mark this tab's items as seen
     for (const u of this.unseenBuildables()) if (u.cat === this.tab) s.flags.add('seen:b:' + u.id);
   }
@@ -372,8 +376,7 @@ export class UI {
       h('div', { class: 't' }, h('div', { class: 'nm', text: name }), cost ? this.costEl(cost) : null, h('div', { class: 'hint', text: hint })),
       rot ? h('button', { class: 'btn', onclick: () => this.g.rotateMode(), 'aria-label': 'Rotate' }, img(glyph('rotate')), dirArrow) : null,
       h('button', { class: 'btn primary', onclick: () => { this.g.setMode({ kind: 'play' }); this.closeBuild(); audio.play('close'); } }, img(glyph('check')), 'Done'));
-    clear(this.build);
-    this.build.append(bar);
+    setOnly(this.build, bar);
   }
 
   costEl(cost: Stack, have = true): HTMLElement {
@@ -436,8 +439,7 @@ export class UI {
     const panel = h('div', { class: 'panel' },
       h('div', { class: 'panel-head' }, h('div', { class: 'thumb' }, img(thumb('workbench'))), h('div', { class: 't' }, h('div', { class: 'name', text: 'Workbench' }), h('div', { class: 'sub', text: 'Craft by hand from your stash' })), h('button', { class: 'close', onclick: () => this.closeCraft() }, img(glyph('close')))),
       grid);
-    clear(this.craft);
-    this.craft.append(panel);
+    setOnly(this.craft, panel);
   }
 
   // ───────────────────────── context panel ─────────────────────────
@@ -505,8 +507,10 @@ export class UI {
     this.panelBar = null;
     this.fillPanel(body, b);
     panel.append(head, body);
-    clear(this.side);
-    this.side.append(panel);
+    const prevBar = this.panelBar;
+    setOnly(this.side, panel);
+    // keep the live progress bar pointing at the node actually in the DOM
+    if (prevBar) this.panelBar = this.side.querySelector('.bar > i') ?? prevBar;
     this.side.classList.add('open');
   }
 

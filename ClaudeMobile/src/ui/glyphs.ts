@@ -3,6 +3,7 @@ import { iconFor } from '../render/art/icons';
 import { P } from '../render/art/palette';
 import { PixelCanvas, rgb, type RGBA } from '../render/art/pixel';
 import { spriteFor } from '../render/art/registry';
+import { beltFrames } from '../render/art/machines';
 
 const cache = new Map<string, string>();
 
@@ -220,8 +221,12 @@ export function thumb(type: string): string {
   const k = 't:' + type;
   let u = cache.get(k);
   if (!u) {
-    const def = spriteFor(type);
-    const f = def.variants?.s5?.[0] ?? def.variants?.st3?.[0] ?? def.variants?.g2?.[0] ?? def.frames[0];
+    let f: PixelCanvas;
+    if (type === 'belt' || type === 'express') f = beltFrames(0, type === 'express')[0];
+    else {
+      const def = spriteFor(type);
+      f = def.variants?.s5?.[0] ?? def.variants?.st3?.[0] ?? def.variants?.g2?.[0] ?? def.frames[0];
+    }
     let x0 = f.w, y0 = f.h, x1 = 0, y1 = 0;
     for (let y = 0; y < f.h; y++) for (let x = 0; x < f.w; x++) if (f.alpha(x, y)) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
     const c = new PixelCanvas(x1 - x0 + 1, y1 - y0 + 1);

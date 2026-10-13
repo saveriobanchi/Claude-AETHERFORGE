@@ -22,7 +22,7 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, props: Props = 
     else if (k === 'text') el.textContent = String(v);
     else if (k === 'html') el.innerHTML = String(v);
     else if (k === 'style') el.setAttribute('style', String(v));
-    else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v as EventListener);
+    else if (k.startsWith('on') && typeof v === 'function') on(el, k.slice(2), v as (e: Event) => void);
     else el.setAttribute(k, String(v));
   }
   for (const c of children) {
@@ -30,6 +30,54 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, props: Props = 
     el.append(typeof c === 'number' ? String(c) : c);
   }
   return el;
+}
+
+type Handlers = Record<string, (e: Event) => void>;
+const HANDLERS = '__af_on';
+
+/** Attach a handler through an indirection so morph() can swap it later. */
+function on(el: HTMLElement, type: string, fn: (e: Event) => void): void {
+  const host = el as unknown as Record<string, Handlers>;
+  if (!host[HANDLERS]) host[HANDLERS] = {};
+  if (!host[HANDLERS][type]) el.addEventListener(type, (e) => host[HANDLERS][type]?.(e));
+  host[HANDLERS][type] = fn;
+}
+
+/**
+ * Patch `old` in place to match `next` (same tags keep their DOM nodes), so
+ * live panels can refresh without losing taps, focus or scroll position.
+ */
+export function morph(old: Node, next: Node): Node {
+  if (old.nodeType !== next.nodeType || (old instanceof Element && next instanceof Element && old.tagName !== next.tagName)) {
+    old.parentNode?.replaceChild(next, old);
+    return next;
+  }
+  if (old.nodeType === Node.TEXT_NODE) {
+    if (old.nodeValue !== next.nodeValue) old.nodeValue = next.nodeValue;
+    return old;
+  }
+  if (!(old instanceof HTMLElement) || !(next instanceof HTMLElement)) return old;
+  for (const a of [...old.attributes]) if (!next.hasAttribute(a.name)) old.removeAttribute(a.name);
+  for (const a of [...next.attributes]) if (old.getAttribute(a.name) !== a.value) old.setAttribute(a.name, a.value);
+  if (old instanceof HTMLInputElement && next instanceof HTMLInputElement && old.value !== next.value && document.activeElement !== old) old.value = next.value;
+  const nh = (next as unknown as Record<string, Handlers>)[HANDLERS] ?? {};
+  const oh = (old as unknown as Record<string, Handlers>)[HANDLERS];
+  if (oh) for (const t in oh) if (!nh[t]) delete oh[t];
+  for (const t in nh) on(old, t, nh[t]);
+  const oc = [...old.childNodes], nc = [...next.childNodes];
+  for (let i = 0; i < nc.length; i++) {
+    if (i < oc.length) morph(oc[i], nc[i]);
+    else old.appendChild(nc[i]);
+  }
+  for (let i = nc.length; i < oc.length; i++) old.removeChild(oc[i]);
+  return old;
+}
+
+/** Replace a container's single child with `next`, morphing when possible. */
+export function setOnly(container: HTMLElement, next: HTMLElement): void {
+  const cur = container.firstElementChild;
+  if (cur && container.childElementCount === 1) morph(cur, next);
+  else { clear(container); container.append(next); }
 }
 
 export function img(src: string, cls = 'px', alt = ''): HTMLImageElement {
