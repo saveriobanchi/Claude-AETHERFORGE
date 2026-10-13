@@ -36,7 +36,14 @@ await Promise.all(Array.from({ length: n }, () => new Promise((res) => {
 })));
 // contact sheet on a warm sky background
 const pad = 24;
-const imgs = list.map((k) => results[k]).filter(Boolean);
+const S = Number(process.env.SCALE ?? 3);
+const up = (img) => {
+  if (S === 1) return img;
+  const w = img.w * S, h = img.h * S, d = new Uint8ClampedArray(w * h * 4);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const s = (((y / S) | 0) * img.w + ((x / S) | 0)) * 4, t = (y * w + x) * 4; d[t] = img.data[s]; d[t + 1] = img.data[s + 1]; d[t + 2] = img.data[s + 2]; d[t + 3] = img.data[s + 3]; }
+  return { w, h, data: d };
+};
+const imgs = list.map((k) => results[k]).filter(Boolean).map(up);
 const W = imgs.reduce((s, i) => s + i.w + pad, pad), H = Math.max(...imgs.map((i) => i.h)) + pad * 2;
 const sheet = new Uint8ClampedArray(W * H * 4);
 for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {

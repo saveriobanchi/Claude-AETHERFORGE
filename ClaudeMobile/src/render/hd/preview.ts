@@ -1,4 +1,5 @@
-import { sawmill, windmill, workbench } from './models/craft';
+import { sawmill, workbench } from './models/craft';
+import { windmill } from './models/aether';
 import { decor } from './models/terrain';
 import { tree } from './models/nature';
 import { composeIsland } from './compose';
@@ -8,7 +9,8 @@ import type { Model } from './sdf';
 
 /** Named render jobs for the preview / bake scripts. */
 export const JOBS: Record<string, () => Image> = {};
-const job = (name: string, make: () => Model, o: RenderOpts = {}) => { JOBS[name] = () => new Renderer(make(), o).render(); };
+export const PX: RenderOpts = { pixel: true, R: 2, aa: 1, glow: 0, shadowAlpha: 0.24 };
+const job = (name: string, make: () => Model, o: RenderOpts = {}) => { JOBS[name] = () => new Renderer(make(), { ...PX, ...o }).render(); };
 
 job('tree', () => tree(1, 0, 1, 10));
 job('workbench', () => workbench());
@@ -25,13 +27,13 @@ JOBS.island = () => {
   const busy = new Set(objs.map(([x, y]) => `${x},${y}`));
   for (const [x, y, f] of tiles) {
     if (f !== 'grass' || busy.has(`${x},${y}`)) continue;
-    for (let q = 0; q < 3; q++) {
+    for (let q = 0; q < 5; q++) {
       const h = Math.abs(Math.sin(x * 12.9 + y * 78.2 + q * 37.1) * 43758.5) % 1;
-      if (h > 0.75) continue;
+      if (h > 0.85) continue;
       const k = kinds[Math.floor(((h * 7.3) % 1) * 4)];
       const ox = ((h * 13.1) % 1) * 0.7 - 0.35, oy = ((h * 29.7) % 1) * 0.7 - 0.35;
       deco.push([x + ox, y + oy, () => decor(k, q + x * 3)]);
     }
   }
-  return composeIsland(tiles, [...deco, ...objs]);
+  return composeIsland(tiles, [...deco, ...objs], 2, PX);
 };

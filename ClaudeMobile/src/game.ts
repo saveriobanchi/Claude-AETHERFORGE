@@ -1,5 +1,5 @@
 import * as A from './core/actions';
-import { loadArtPack } from './render/artpack';
+import { art } from './render/artpack';
 import { BUILDINGS } from './core/content/buildings';
 import { DISCOVERIES } from './core/content/discoveries';
 import type { ItemId, Stack } from './core/content/items';
@@ -86,7 +86,7 @@ export class Game {
     rebuildCache(this.s);
 
     const stage = document.getElementById('stage')!;
-    if (!import.meta.env.DEV && !params.has('liveart')) await loadArtPack();
+    await art.load();
     await this.view.init(stage);
     this.applySettings();
     this.view.bloom = (this.s.forge.attune.bloom ?? 0) > 0;

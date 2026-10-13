@@ -1,8 +1,6 @@
 import { Container, Sprite, Texture, TilingSprite } from 'pixi.js';
 import { PixelCanvas, hash2, rgb } from './art/pixel';
-import { M } from './vox/mats';
-import { leafBlob, bakeFrames } from './vox/nature';
-import { Vol } from './vox/vox';
+import { art } from './artpack';
 
 // Time-of-day keyframes: [fraction, skyTop, skyHorizon, worldTint, night(0..1), cloudTint, sunGlow]
 type Key = [number, number, number, number, number, number, number];
@@ -101,36 +99,6 @@ function cloudCanvas(w: number, h: number, seed: number, flat: number): HTMLCanv
   return cv;
 }
 
-/** A distant floating islet as a little voxel model, with an optional waterfall. */
-function isletCanvas(seed: number, fall: boolean): HTMLCanvasElement {
-  const r = 5 + hash2(seed, 1) * 4;
-  const size = Math.ceil(r * 2 + 6), c = size / 2;
-  const depth = Math.round(r * 2.4 + 4);
-  const b = bakeFrames(() => {
-    const v = new Vol(size, size, depth + 16);
-    for (let k = 0; k < depth; k++) {
-      const t = 1 - k / depth;
-      const rr = r * Math.pow(t, 0.75) + (hash2(k, seed) - 0.5) * 1.2;
-      v.cyl(c, c, k, k, Math.max(0.6, rr), k > depth - 3 ? M.dirt : M.stone, (i, j, kk) => (hash2(i, j + kk, seed) - 0.5) * 0.2);
-    }
-    v.cyl(c, c, depth, depth, r + 0.3, M.grass, (i, j) => (hash2(i, j, seed) - 0.5) * 0.25);
-    const trees = 1 + Math.floor(hash2(seed, 2) * 3);
-    for (let q = 0; q < trees; q++) {
-      const a = hash2(q, seed, 3) * Math.PI * 2, d = hash2(q, seed, 4) * r * 0.6;
-      const ti = c + Math.cos(a) * d, tj = c + Math.sin(a) * d, th = 3 + Math.floor(hash2(q, seed, 5) * 4);
-      v.box(ti, tj, depth + 1, ti, tj, depth + th, M.bark);
-      leafBlob(v, ti, tj, depth + th + 2, 2.6 + hash2(q, seed, 6) * 1.5, M.leaf, seed + q, 0.85);
-    }
-    if (fall) {
-      const fj = Math.round(c + r);
-      for (let k = 0; k <= depth; k++) v.set(Math.round(c), fj, k, M.water, ((k * 7) % 5) * 0.06);
-      for (let k = depth - 4; k <= depth; k++) v.set(Math.round(c) + 1, fj, k, M.water, 0.15);
-    }
-    return v;
-  }, 1, { outline: false, ao: 0.05 });
-  return b.frames[0].toCanvas();
-}
-
 function starCanvas(): PixelCanvas {
   const c = new PixelCanvas(256, 160);
   for (let i = 0; i < 80; i++) {
@@ -226,9 +194,10 @@ export class Sky {
     }
     // distant islets (very slow parallax, hazy)
     for (let i = 0; i < 6; i++) {
-      const s = new Sprite(linearTex(isletCanvas(i * 13 + 1, i % 2 === 0)));
-      s.anchor.set(0.5, 0.35);
-      const sc = 0.8 + hash2(i, 7) * 0.9;
+      const im = art.img(`islet:${i % 5}`);
+      const s = new Sprite(im.tex);
+      s.anchor.set(0.5, 0.25);
+      const sc = 1 + Math.floor(hash2(i, 7) * 2);
       s.scale.set(sc);
       s.alpha = 0.55 + sc * 0.2;
       this.back.addChild(s);

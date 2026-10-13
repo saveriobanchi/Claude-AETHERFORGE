@@ -1,5 +1,5 @@
-import { MAT, leafDisp, mat, rock, rockDisp } from '../mats';
-import { clamp, fbm, hash3, lin, mix, smoothstep, tfbm, voronoi } from '../noise';
+import { MAT, leafDisp, mat, rockDisp, stoneBlock } from '../mats';
+import { clamp, fbm, hash3, lin, mix, noise3, smoothstep, tfbm, voronoi } from '../noise';
 import { Model, type RGB } from '../sdf';
 
 /**
@@ -15,17 +15,17 @@ export type Floor = 'grass' | 'stone' | 'sky';
 
 const lerp3 = (out: RGB, a: RGB, b: RGB, t: number) => { out[0] = mix(a[0], b[0], t); out[1] = mix(a[1], b[1], t); out[2] = mix(a[2], b[2], t); };
 
-const G1 = lin(0x64a23c), G2 = lin(0x86bf4e), G3 = lin(0xa6d062), GD = lin(0x52903a);
+const G1 = lin(0x3f6e2a), G2 = lin(0x5a8a34), G3 = lin(0x7aa040), GD = lin(0x2e5626);
 /** Tileable meadow grass colour. */
 const grassTop = mat((h, out) => {
   const u = h.x + 0.5, v = h.y + 0.5;
-  const n = tfbm(u, v, 3, 4, 1), m = tfbm(u, v, 1, 2, 2), f = tfbm(u, v, 16, 2, 3);
-  lerp3(out, G1, G2, smoothstep(-0.35, 0.35, n));
-  lerp3(out, out, G3, smoothstep(0.15, 0.45, m) * 0.4);
-  lerp3(out, out, GD, smoothstep(0.3, 0.6, -f) * 0.2);
-  // the sides of the turf lip turn deeper green
-  if (h.gz < 0.6) lerp3(out, out, lin(0x4a8434), clamp((0.6 - h.gz) * 2));
-}, { sss: 0.15 });
+  const n = tfbm(u, v, 2, 3, 1), f = tfbm(u, v, 24, 2, 3), g = tfbm(u, v, 48, 1, 7);
+  lerp3(out, G1, G2, clamp(0.5 + n * 0.7));
+  // fine blades: bright and dark pixels scattered through the turf
+  if (g > 0.32) lerp3(out, out, G3, 0.75); else if (g < -0.36) lerp3(out, out, GD, 0.7);
+  lerp3(out, out, GD, smoothstep(0.2, 0.5, -f) * 0.35);
+  if (h.gz < 0.6) lerp3(out, out, lin(0x2e5a26), clamp((0.6 - h.gz) * 2));
+}, { sss: 0.15, bump: (x, y) => tfbm(x + 0.5, y + 0.5, 48, 1, 7) * 0.004, bumpAmp: 1 });
 
 /** Flagstone paving: 2×2 irregular stones per tile (periodic). */
 const flagTop = mat((h, out) => {
@@ -34,9 +34,9 @@ const flagTop = mat((h, out) => {
   const su = Math.floor(u * 2), sv = Math.floor(v * 2);
   const tone = 0.9 + hash3(((su % 2) + 2) % 2, ((sv % 2) + 2) % 2, 3) * 0.16;
   const j = Math.min(smoothstep(0, 0.06, fu), smoothstep(1, 0.94, fu), smoothstep(0, 0.06, fv), smoothstep(1, 0.94, fv));
-  const base = lin(0xd2c4ac), mortar = lin(0x8a7a6a);
+  const base = lin(0xa8977e), mortar = lin(0x5a4c42);
   lerp3(out, mortar, base, j);
-  const t = 0.96 + tfbm(u, v, 2, 2, 5) * 0.08;
+  const t = 0.92 + tfbm(u, v, 3, 2, 5) * 0.12 + (tfbm(u, v, 40, 1, 9) > 0.35 ? 0.1 : 0);
   out[0] *= tone * t; out[1] *= tone * t; out[2] *= tone * t;
 }, { bump: (x, y) => { const u = (x + 0.5) * 2, v = (y + 0.5) * 2; const fu = u - Math.floor(u), fv = v - Math.floor(v); return Math.min(smoothstep(0, 0.06, fu), smoothstep(1, 0.94, fu), smoothstep(0, 0.06, fv), smoothstep(1, 0.94, fv)) * 0.008; }, bumpAmp: 1 });
 
@@ -59,8 +59,8 @@ const skyTop = mat((h, out) => {
 
 const soil = mat((h, out) => lerp3(out, lin(0x7a5034), lin(0x9c6c46), smoothstep(-0.3, 0.3, fbm(h.x * 4, h.y * 4, h.z * 4, 2))));
 
-const cliff = rock(0xb39a7e, 0.6);
-const cliffDeep = rock(0x9e8a78, 0.2);
+const block = stoneBlock(0x7e7064, 1);
+const blockDeep = stoneBlock(0x6c6058, 0.5);
 
 /** Top surface for one tile. */
 export function topPiece(floor: Floor, mask: number, variant: number): { m: Model; clip: (x: number, y: number, z: number) => boolean } {
@@ -83,6 +83,16 @@ export function topPiece(floor: Floor, mask: number, variant: number): { m: Mode
   // the prim's own frame is centred: shape above uses world coords, so undo by placing at origin
   m.prims[0].xf.cx = 0; m.prims[0].xf.cy = 0; m.prims[0].xf.cz = 0;
   if (floor === 'grass') {
+    // leafy overgrowth straddling open rims
+    for (const [b, ax, ay, ox, oy] of [[1, 0, 1, 0.5, 0], [2, 1, 0, 0, 0.5]] as [number, number, number, number, number][]) {
+      if (!open(b)) continue;
+      const nb = 1 + Math.floor(hash3(variant, b, 5) * 2.5);
+      for (let i = 0; i < nb; i++) {
+        const t = -0.35 + hash3(i, b, variant + 9) * 0.7;
+        const r = 0.07 + hash3(i, b, variant + 4) * 0.05;
+        m.blob([[ox * 0.96 + ax * t, oy * 0.96 + ay * t, 0.02, r], [ox * 0.96 + ax * (t + r), oy * 0.96 + ay * (t + r), 0.0, r * 0.75]], 0.04, MAT.leafDark, { disp: leafDisp(0.02, i + variant), dispAmp: 0.02 });
+      }
+    }
     // grass fringe hanging over open edges
     for (const [b, ax, ay, ox, oy] of [[1, 0, 1, 0.5, 0], [2, 1, 0, 0, 0.5], [4, 0, 1, -0.5, 0], [8, 1, 0, 0, -0.5]] as [number, number, number, number, number][]) {
       if (!open(b)) continue;
@@ -107,34 +117,32 @@ export function columnPiece(depth: number, variant: number): Model {
   const sx = variant * 13.7, sy = variant * 7.1;
   // soil band with roots
   m.box([0, 0, -0.14], [0.51, 0.51, 0.08], soil, 0.03, { disp: (x, y, z) => fbm(x * 5 + sx, y * 5 + sy, z * 5, 2) * 0.015, dispAmp: 0.015 });
-  // tapering rock body: square-ish near the top, narrowing toward a ragged point
-  const top = -0.2, bot = -depth;
-  const H = top - bot;
-  const mat = depth > 4 ? cliffDeep : cliff;
-  m.add((x, y, z) => {
-    const t = clamp((top - z) / H);
-    const hw = 0.5 - 0.22 * Math.pow(t, 1.4) - (t > 0.85 ? (t - 0.85) * 1.6 : 0);
-    const qx = Math.abs(x) - hw, qy = Math.abs(y) - hw, qz = Math.max(z - top, bot - z);
-    const ox = Math.max(qx, 0), oy = Math.max(qy, 0);
-    const d = Math.sqrt(ox * ox + oy * oy) + Math.min(Math.max(qx, qy), 0);
-    return Math.max(d, qz) - 0.03;
-  }, mat, [0, 0, 0], [0.56, 0.56, Math.max(Math.abs(top), Math.abs(bot)) + 0.1], {
-    disp: (x, y, z) => rockDisp(0.1, 2.6)(x + sx, y + sy, z) + (voronoi(x * 4 + sx, y * 4 + sy, z * 2.5) - 0.4) * 0.04,
-    dispAmp: 0.12,
-  });
+  // stacked cut-stone blocks, each course slightly offset and narrowing with depth
+  const course = 0.42;
+  const rows = Math.max(1, Math.round((depth - 0.2) / course));
+  for (let r = 0; r < rows; r++) {
+    const t = rows > 1 ? r / (rows - 1) : 0;
+    const zTop = -0.2 - r * course, zc = zTop - course / 2;
+    const hw = 0.5 - 0.16 * Math.pow(t, 1.3) + (hash3(r, variant, 1) - 0.5) * 0.05;
+    const ox = (hash3(r, variant, 2) - 0.5) * 0.06, oy = (hash3(r, variant, 3) - 0.5) * 0.06;
+    m.box([ox, oy, zc], [hw, hw, course / 2 - 0.004], depth > 4 && r > 2 ? blockDeep : block, 0.035, { disp: (x, y, z) => (voronoi(x * 6 + sx + r, y * 6 + sy, z * 6) - 0.45) * 0.03, dispAmp: 0.03 });
+  }
+  // a mossy skirt under the turf
+  m.box([0, 0, -0.1], [0.515, 0.515, 0.03], MAT.vine, 0.02, { disp: (x, y, z) => (noise3(x * 14 + sx, y * 14 + sy, z * 14) - 0.1) * 0.02 - Math.max(0, noise3(x * 5 + sx, y * 5, 3)) * 0.05, dispAmp: 0.06 });
   // hanging roots and vines on the visible faces
-  const nv = 2 + Math.floor(hash3(variant, 2, 9) * 3);
+  const nv = 4 + Math.floor(hash3(variant, 2, 9) * 4);
   for (let q = 0; q < nv; q++) {
     const face = hash3(q, variant, 1) < 0.5;
     const t = -0.4 + hash3(q, variant, 2) * 0.8;
     const len = 0.25 + hash3(q, variant, 3) * Math.min(1.2, depth * 0.4);
     const x = face ? 0.53 : t, y = face ? t : 0.53;
-    const isVine = hash3(q, variant, 4) < 0.6;
+    const isVine = hash3(q, variant, 4) < 0.75;
     const segs = 4;
     for (let k = 0; k < segs; k++) {
       const z0 = -0.1 - (len * k) / segs, z1 = -0.1 - (len * (k + 1)) / segs;
       const wob = (i: number) => (hash3(q, i, variant) - 0.5) * 0.03;
-      m.capsule([x + (face ? 0.01 : wob(k)), y + (face ? wob(k) : 0.01), z0], [x + (face ? 0.01 : wob(k + 1)), y + (face ? wob(k + 1) : 0.01), z1], isVine ? 0.008 : 0.011, isVine ? MAT.leafDark : MAT.bark);
+      m.capsule([x + (face ? 0.01 : wob(k)), y + (face ? wob(k) : 0.01), z0], [x + (face ? 0.01 : wob(k + 1)), y + (face ? wob(k + 1) : 0.01), z1], isVine ? 0.012 : 0.011, isVine ? MAT.vine : MAT.bark);
+      if (isVine) m.sphere([x + (face ? 0.02 : wob(k) + 0.01), y + (face ? wob(k) + 0.01 : 0.02), z1], 0.022, MAT.vine);
     }
   }
   return m;

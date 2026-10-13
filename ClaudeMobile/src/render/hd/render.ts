@@ -1,4 +1,5 @@
 import { clamp } from './noise';
+import { linToOklab, oklabToLin, posterize } from './color';
 import type { Hit, Mat, Model, Prim, RGB } from './sdf';
 
 /**
@@ -29,6 +30,17 @@ export const LIGHT: Light = {
   rim: [1.0, 0.82, 0.55],
 };
 
+/** Light rig for pixel-art mode (linear multipliers). */
+/** Ground shadows in pixel mode fall almost straight down, as in hand-made sprites. */
+const GROUND_SUN = n3(-0.22, 0.26, 0.94);
+
+export const PIX = {
+  sun: [1.95, 1.5, 0.98],
+  sky: [0.34, 0.36, 0.62],
+  bounce: [0.34, 0.27, 0.16],
+  rim: [1.0, 0.72, 0.45],
+};
+
 export interface RenderOpts {
   R?: number;          // pixels per 1× pixel
   shadow?: boolean;    // bake a contact/cast shadow onto the ground plane
@@ -41,6 +53,8 @@ export interface RenderOpts {
   ground?: number;     // z of the shadow-receiving plane
   outline?: number;    // darken silhouette edge (0..1)
   aa?: number;         // subsamples per edge pixel side (2 → 4 samples)
+  /** Pixel-art mode: physically lit, one sample per pixel, posterised palette, selective outlines. */
+  pixel?: boolean;
   /** Keep only surface points for which this returns true (others are see-through). */
   clip?: (x: number, y: number, z: number) => boolean;
 }
@@ -58,7 +72,7 @@ export class Renderer {
 
   constructor(m: Model, o: RenderOpts = {}) {
     this.prims = m.prims;
-    this.o = { R: 3, shadow: true, shadowAlpha: 0.42, light: LIGHT, t: 0, glow: 1, ground: 0, outline: 0.85, aa: 2, ...o };
+    this.o = { R: 3, shadow: true, shadowAlpha: 0.42, light: LIGHT, t: 0, glow: 1, ground: 0, outline: 0.85, aa: 2, pixel: false, ...o };
     this.bb = m.bounds();
   }
 
@@ -80,8 +94,8 @@ export class Renderer {
     return best;
   }
 
-  private shadowRay(x: number, y: number, z: number): number {
-    const [lx, ly, lz] = this.o.light.sun;
+  private shadowRay(x: number, y: number, z: number, dir?: [number, number, number]): number {
+    const [lx, ly, lz] = dir ?? this.o.light.sun;
     let res = 1, t = 0.012;
     for (let i = 0; i < 64 && t < 6; i++) {
       const px = x + lx * t, py = y + ly * t, pz = z + lz * t;
@@ -164,7 +178,7 @@ export class Renderer {
     // ground plane
     if (uGround < 0) return -1;
     ox -= uGround * V; oy -= uGround * V;
-    const sh = this.shadowRay(ox, oy, g + 0.002);
+    const sh = this.shadowRay(ox, oy, g + 0.002, this.o.pixel ? GROUND_SUN : undefined);
     const ao = this.groundAO(ox, oy, g);
     const dark = clamp(1 - sh * (0.35 + 0.65 * ao) - (1 - ao) * 0.5);
     if (dark < 0.02) return -1;
@@ -217,30 +231,58 @@ export class Renderer {
     const off = 0.004;
     const sh = ndl > 0 ? this.shadowRay(px + h.gx * off, py + h.gy * off, pz + h.gz * off) : 0;
     const ao = this.ao(px, py, pz, h.gx, h.gy, h.gz);
-    // Illustrated shading: a soft two-tone ramp (warm light, cool lavender
-    // shade), gentle occlusion in creases, a thin warm rim and crisp highlights.
-    const lit = clamp(ndl) * sh;
-    const band = smoothstep01(0.06, 0.3, lit) * 0.85 + clamp(lit) * 0.15;
-    const wrap = mat.sss ? clamp(ndl + 0.6) * mat.sss * 0.35 : 0;
-    const top = clamp(nz) * 0.1;
-    const occ = 0.62 + 0.38 * ao;
-    const vdn = (nx + ny + nz) * V;
-    const rim = Math.pow(1 - clamp(vdn), 4) * 0.5 * band;
-    const hx = lx + V, hy = ly + V, hz = lz + V, hl = Math.hypot(hx, hy, hz);
-    const ndh = clamp((nx * hx + ny * hy + nz * hz) / hl);
-    const spec = mat.spec > 0.3 ? smoothstep01(0.9, 0.95, Math.pow(ndh, mat.pow / 30)) * mat.spec * 0.5 * sh : 0;
-    const refl = mat.refl ?? 0;
-    for (let c = 0; c < 3; c++) {
-      const litC = alb[c] * L.sunCol[c];
-      const shdC = alb[c] * L.sky[c];
-      let v = (shdC + (litC - shdC) * Math.min(1, band + wrap)) * occ + alb[c] * top;
-      v += L.rim[c] * rim * 0.35;
-      v += spec;
-      if (refl) {
-        const skyRefl = [0.75, 0.82, 0.95][c] * (0.5 + 0.5 * nz);
-        v = v * (1 - refl * 0.5) + skyRefl * refl * 0.5 * occ;
+    if (this.o.pixel) {
+      // Physically-motivated light for pixel art: warm sun with soft shadows,
+      // cool sky dome, warm ground bounce, rim and highlights; the palette
+      // snap later turns the gradients into clean bands.
+      const diff = Math.max(ndl, 0) * sh;
+      const wrap = mat.sss ? Math.max(0, (ndl + 0.5) / 1.5) * (0.4 + 0.6 * sh) * mat.sss : 0;
+      const skyW = (0.5 + 0.5 * nz) * ao;
+      const bounceW = Math.max(0, -nz * 0.5 + 0.3) * ao;
+      const vdn = (nx + ny + nz) * V;
+      const rim = Math.pow(1 - clamp(vdn), 3) * (0.2 + 0.8 * clamp(ndl + 0.2)) * ao;
+      const hx = lx + V, hy = ly + V, hz = lz + V, hl = Math.hypot(hx, hy, hz);
+      const ndh = clamp((nx * hx + ny * hy + nz * hz) / hl);
+      const spec = mat.spec * Math.pow(ndh, mat.pow) * sh;
+      const refl = mat.refl ?? 0;
+      const P = PIX;
+      for (let c = 0; c < 3; c++) {
+        let v = alb[c] * (P.sun[c] * (diff + wrap * 0.5) + P.sky[c] * skyW + P.bounce[c] * bounceW);
+        v += P.rim[c] * rim * 0.18 * (0.4 + alb[c]);
+        v += spec * P.sun[c] * 0.4;
+        if (refl) {
+          const fres = 0.25 + 0.75 * Math.pow(1 - clamp(vdn), 3);
+          const sk = [0.7, 0.8, 0.98][c] * (0.6 + 0.4 * (1 - nz)) + [0.4, 0.3, 0.15][c] * clamp(ndl);
+          v = v * (1 - refl * fres) + sk * refl * fres * ao;
+        }
+        out[c] = v;
       }
-      out[c] = v;
+    } else {
+    // Illustrated shading: a soft two-tone ramp (warm light, cool lavender
+      // shade), gentle occlusion in creases, a thin warm rim and crisp highlights.
+      const lit = clamp(ndl) * sh;
+      const band = smoothstep01(0.06, 0.3, lit) * 0.85 + clamp(lit) * 0.15;
+      const wrap = mat.sss ? clamp(ndl + 0.6) * mat.sss * 0.35 : 0;
+      const top = clamp(nz) * 0.1;
+      const occ = 0.62 + 0.38 * ao;
+      const vdn = (nx + ny + nz) * V;
+      const rim = Math.pow(1 - clamp(vdn), 4) * 0.5 * band;
+      const hx = lx + V, hy = ly + V, hz = lz + V, hl = Math.hypot(hx, hy, hz);
+      const ndh = clamp((nx * hx + ny * hy + nz * hz) / hl);
+      const spec = mat.spec > 0.3 ? smoothstep01(0.9, 0.95, Math.pow(ndh, mat.pow / 30)) * mat.spec * 0.5 * sh : 0;
+      const refl = mat.refl ?? 0;
+      for (let c = 0; c < 3; c++) {
+        const litC = alb[c] * L.sunCol[c];
+        const shdC = alb[c] * L.sky[c];
+        let v = (shdC + (litC - shdC) * Math.min(1, band + wrap)) * occ + alb[c] * top;
+        v += L.rim[c] * rim * 0.35;
+        v += spec;
+        if (refl) {
+          const skyRefl = [0.75, 0.82, 0.95][c] * (0.5 + 0.5 * nz);
+          v = v * (1 - refl * 0.5) + skyRefl * refl * 0.5 * occ;
+        }
+        out[c] = v;
+      }
     }
     out[3] = 1;
     if (mat.emit) {
@@ -252,11 +294,9 @@ export class Renderer {
     }
   }
 
-  /** Render the whole model into an 8-bit image. */
-  render(): Image {
-    const R = this.o.R;
+  /** Screen bounds at 1× (relative to the anchor), including the cast shadow. */
+  bounds1x(): [number, number, number, number] {
     const bb = this.bb;
-    // screen bounds at 1× from the 8 box corners, plus the cast shadow on the ground
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     const corner = (x: number, y: number, z: number) => {
       const sx = (x - y) * 32, sy = (x + y) * 16 - z * 32;
@@ -264,11 +304,18 @@ export class Renderer {
     };
     for (const x of [bb[0], bb[3]]) for (const y of [bb[1], bb[4]]) for (const z of [this.o.shadow ? Math.max(bb[2], this.o.ground) : bb[2], bb[5]]) corner(x, y, z);
     if (this.o.shadow) {
-      const [lx, ly, lz] = this.o.light.sun;
+      const [lx, ly, lz] = this.o.pixel ? GROUND_SUN : this.o.light.sun;
       const hgt = bb[5] - this.o.ground;
       const sx = (-lx / lz) * hgt, sy = (-ly / lz) * hgt;
       for (const x of [bb[0], bb[3]]) for (const y of [bb[1], bb[4]]) { corner(x, y, this.o.ground); corner(x + sx, y + sy, this.o.ground); }
     }
+    return [x0, y0, x1, y1];
+  }
+
+  /** Render the whole model into an 8-bit image. */
+  render(): Image {
+    const R = this.o.R;
+    let [x0, y0, x1, y1] = this.bounds1x();
     if (this.o.box) [x0, y0, x1, y1] = this.o.box;
     x0 = Math.floor(x0 * R) - 3; y0 = Math.floor(y0 * R) - 3; x1 = Math.ceil(x1 * R) + 3; y1 = Math.ceil(y1 * R) + 3;
     const w = x1 - x0, h = y1 - y0;
@@ -349,6 +396,51 @@ export class Renderer {
         line[k] = e;
       }
     }
+    if (this.o.pixel) {
+      const px8 = new Uint8ClampedArray(N * 4);
+      const lab = new Float64Array(3), rgb = new Float64Array(3);
+      const solid = (q: number) => ids[q] >= 0;
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+        const k = j * w + i;
+        const a = col[k * 4 + 3];
+        if (a <= 0.003) continue;
+        if (ids[k] === -2) {
+          // ground shadow: a few flat alpha steps, no gradient mush
+          const st = Math.round(a * 6) / 6;
+          if (st <= 0) continue;
+          px8[k * 4] = 34; px8[k * 4 + 1] = 26; px8[k * 4 + 2] = 48; px8[k * 4 + 3] = Math.round(255 * st);
+          continue;
+        }
+        for (let c = 0; c < 3; c++) rgb[c] = filmic(col[k * 4 + c] / a);
+        linToOklab(rgb[0], rgb[1], rgb[2], lab);
+        posterize(lab, 15, (BAYER4[(j & 3) * 4 + (i & 3)] - 0.5) * 0.12);
+        // selective outline: silhouette pixels get a dark, hue-shifted line,
+        // softer where the light comes from (upper left); depth steps get a mid line
+        let e = 0;
+        const out = (ii: number, jj: number) => ii < 0 || jj < 0 || ii >= w || jj >= h || !solid(jj * w + ii);
+        if (out(i + 1, j) || out(i, j + 1)) e = 1;
+        else if (out(i - 1, j) || out(i, j - 1)) e = 0.55;
+        else {
+          for (const [di, dj] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+            const q = (j + dj) * w + i + di;
+            if (dep[q] - dep[k] > 0.05) { e = Math.max(e, 0.6); }
+          }
+        }
+        if (e > 0 && this.o.outline > 0) {
+          const k2 = e * this.o.outline;
+          lab[0] = lab[0] * (1 - 0.55 * k2);
+          const C = Math.hypot(lab[1], lab[2]) * (1 - 0.15 * k2);
+          let H = Math.atan2(lab[2], lab[1]);
+          H += Math.atan2(Math.sin(-1.9 - H), Math.cos(-1.9 - H)) * 0.3 * k2;
+          lab[1] = Math.cos(H) * C; lab[2] = Math.sin(H) * C;
+        }
+        oklabToLin(lab[0], lab[1], lab[2], rgb);
+        for (let c = 0; c < 3; c++) px8[k * 4 + c] = Math.round(255 * toSRGB(clamp(rgb[c])));
+        px8[k * 4 + 3] = a >= 0.5 ? 255 : 0;
+      }
+      // emissive halo for lamps and fire as stepped translucent pixels
+      return { w, h, data: px8, ax: -x0, ay: -y0 };
+    }
     const data = new Uint8ClampedArray(N * 4);
     for (let k = 0; k < N; k++) {
       const a = col[k * 4 + 3];
@@ -364,6 +456,14 @@ export class Renderer {
     }
     return { w, h, data, ax: -x0, ay: -y0 };
   }
+}
+
+const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
+
+/** Filmic curve for pixel mode (keeps rich colour, rolls off highlights). */
+function filmic(x: number): number {
+  x *= 0.9;
+  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14));
 }
 
 /** Keep authored colours; only roll off values above ~0.85 smoothly. */

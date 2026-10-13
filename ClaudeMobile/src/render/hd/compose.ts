@@ -1,4 +1,4 @@
-import { type Image, Renderer } from './render';
+import { type Image, Renderer, type RenderOpts } from './render';
 import type { Model } from './sdf';
 import { type Floor, columnPiece, hashDepth, topPiece } from './models/terrain';
 
@@ -21,7 +21,7 @@ export const DEPTHS = [1, 1.8, 2.6, 3.4, 4.2, 5, 5.8, 6.6];
 export const nearestDepth = (d: number) => DEPTHS.reduce((a, b) => (Math.abs(b - d) < Math.abs(a - d) ? b : a));
 
 /** Composite an island and some objects into one image (preview only). */
-export function composeIsland(tiles: [number, number, Floor][], objects: [number, number, () => Model][], R = 3): Image {
+export function composeIsland(tiles: [number, number, Floor][], objects: [number, number, () => Model][], R = 3, base: RenderOpts = {}): Image {
   const set = new Map(tiles.map(([x, y, f]) => [`${x},${y}`, f]));
   const has = (x: number, y: number) => set.has(`${x},${y}`);
   const cache = new Map<string, Image>();
@@ -32,13 +32,13 @@ export function composeIsland(tiles: [number, number, Floor][], objects: [number
     const v = (Math.abs(x * 7 + y * 13) % 3);
     const d = nearestDepth(hashDepth(gapDist(has, x, y), x, y));
     const mask = edgeMask(has, x, y);
-    const col = piece(`c${d}:${v}`, () => new Renderer(columnPiece(d, v), { R, shadow: false }).render());
+    const col = piece(`c${d}:${v}`, () => new Renderer(columnPiece(d, v), { ...base, R, shadow: false }).render());
     const tk = `t${f}:${mask}:${v % 2}`;
-    const top = piece(tk, () => { const t = topPiece(f, mask, v % 2); return new Renderer(t.m, { R, shadow: false, clip: t.clip, outline: 0 }).render(); });
+    const top = piece(tk, () => { const t = topPiece(f, mask, v % 2); return new Renderer(t.m, { ...base, R, shadow: false, clip: t.clip, outline: 0 }).render(); });
     const o = (x + y) * 10 + x * 0.01;
     draws.push({ img: col, x, y, order: o }, { img: top, x, y, order: o + 0.001 });
   }
-  for (const [x, y, make] of objects) draws.push({ img: new Renderer(make(), { R }).render(), x, y, order: 1e6 + (x + y) * 10 });
+  for (const [x, y, make] of objects) draws.push({ img: new Renderer(make(), { ...base, R }).render(), x, y, order: 1e6 + (x + y) * 10 });
   draws.sort((a, b) => a.order - b.order);
   // canvas bounds
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;

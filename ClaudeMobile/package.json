@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "npm run art && vite",
     "build": "tsc --noEmit && npm run art && vite build",
     "art": "node scripts/bake-art.mjs",
     "preview": "vite preview --port 4173 --strictPort",

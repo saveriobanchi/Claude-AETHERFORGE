@@ -1,42 +1,105 @@
-// Pre-bakes all voxel sprite/icon art into public/art (PNG sheets + manifest)
-// so devices load images instead of generating art on startup.
-// Usage: node scripts/bake-art.mjs
+// Bakes all game art (buildings, belts, terrain, decor, icons, sky islets)
+// with the offline renderer in src/render/hd into packed PNG sheets plus a
+// manifest in public/art. Skips work when the art sources are unchanged.
+// Usage: node scripts/bake-art.mjs [--force]
 import { build } from 'esbuild';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpus } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { deflateSync } from 'node:zlib';
+import { Worker } from 'node:worker_threads';
+import { encodePNG } from './png.mjs';
 
 const root = process.cwd();
-const tmp = join(root, 'node_modules', '.cache', 'bake-art');
-mkdirSync(tmp, { recursive: true });
-const entry = join(tmp, 'bake.mjs');
-await build({ entryPoints: [join(root, 'src/render/bake.ts')], bundle: true, format: 'esm', platform: 'node', outfile: entry, logLevel: 'warning' });
+const out = join(root, 'public', 'art');
+const force = process.argv.includes('--force');
 
-const t0 = Date.now();
-const { bakeArt } = await import(pathToFileURL(entry).href + '?t=' + t0);
-const { manifest, sheets } = bakeArt();
-
-const crcTable = new Uint32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
-const crc32 = (buf) => { let c = 0xffffffff; for (const b of buf) c = crcTable[(c ^ b) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
-const chunk = (type, data) => {
-  const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
-  const td = Buffer.concat([Buffer.from(type, 'ascii'), data]);
-  const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(td));
-  return Buffer.concat([len, td, crc]);
-};
-function png(w, h, rgba) {
-  const raw = Buffer.alloc((w * 4 + 1) * h);
-  for (let y = 0; y < h; y++) { raw[y * (w * 4 + 1)] = 0; Buffer.from(rgba.buffer, rgba.byteOffset + y * w * 4, w * 4).copy(raw, y * (w * 4 + 1) + 1); }
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 6; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0;
-  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw, { level: 9 })), chunk('IEND', Buffer.alloc(0))]);
+// cache key: every source file the art depends on
+const files = [];
+const walk = (d) => { for (const n of readdirSync(d)) { const p = join(d, n); if (statSync(p).isDirectory()) walk(p); else if (p.endsWith('.ts')) files.push(p); } };
+walk(join(root, 'src/render/hd'));
+files.push(join(root, 'src/core/content/items.ts'), join(root, 'scripts/bake-art.mjs'));
+const hash = createHash('sha256');
+for (const f of files.sort()) hash.update(f.slice(root.length)).update(readFileSync(f));
+const version = hash.digest('hex').slice(0, 16);
+const manifestPath = join(out, 'manifest.json');
+if (!force && existsSync(manifestPath)) {
+  try { if (JSON.parse(readFileSync(manifestPath, 'utf8')).version === version) { console.log('art up to date', version); process.exit(0); } } catch { /* rebake */ }
 }
 
-const out = join(root, 'public', 'art');
+const tmp = join(root, 'node_modules', '.cache', 'bake-art');
+mkdirSync(tmp, { recursive: true });
+const entry = join(tmp, 'catalog.mjs');
+await build({ entryPoints: [join(root, 'src/render/hd/catalog.ts')], bundle: true, format: 'esm', platform: 'node', outfile: entry, logLevel: 'warning' });
+const url = pathToFileURL(entry).href + '?' + version;
+const cat = await import(url);
+const jobs = Object.keys(cat.JOBS);
+// heaviest jobs first so workers finish together
+const weight = (k) => (k.startsWith('sprite:forge') || k.startsWith('sprite:windmill') || k.startsWith('sprite:tree') || k.startsWith('sprite:elder') ? 0 : k.startsWith('col') ? 1 : 2);
+jobs.sort((a, b) => weight(a) - weight(b));
+
+const wfile = join(tmp, 'worker.mjs');
+writeFileSync(wfile, `
+import { parentPort, workerData } from 'node:worker_threads';
+const { JOBS } = await import(workerData.url);
+parentPort.on('message', (k) => { const t = Date.now(); const r = JOBS[k](); parentPort.postMessage({ k, r, ms: Date.now() - t }); });
+`);
+const t0 = Date.now();
+const images = new Map();
+const queue = [...jobs];
+await Promise.all(Array.from({ length: Math.min(cpus().length, queue.length) }, () => new Promise((res, rej) => {
+  const w = new Worker(wfile, { workerData: { url } });
+  const next = () => { const k = queue.shift(); if (k) w.postMessage(k); else { w.terminate(); res(); } };
+  w.on('message', ({ k, r, ms }) => { for (const [name, img] of r) images.set(name, img); if (ms > 4000) console.log(`  ${k} ${ms} ms`); next(); });
+  w.on('error', rej);
+  next();
+})));
+
+// shelf-pack into 2048×2048 sheets, tallest first
+const SIZE = 2048, PAD = 2;
+const order = [...images.keys()].sort((a, b) => images.get(b).h - images.get(a).h || images.get(b).w - images.get(a).w);
+const sheets = [];
+let cur = null;
+const rects = {};
+for (const k of order) {
+  const im = images.get(k);
+  if (im.w + PAD > SIZE || im.h + PAD > SIZE) throw new Error(`${k} too large: ${im.w}×${im.h}`);
+  if (!cur || (cur.x + im.w + PAD > SIZE && cur.y + cur.rowH + im.h + PAD > SIZE) || (cur.x + im.w + PAD <= SIZE ? false : false)) {
+    cur = { items: [], x: 0, y: 0, rowH: 0 }; sheets.push(cur);
+  }
+  if (cur.x + im.w + PAD > SIZE) { cur.x = 0; cur.y += cur.rowH + PAD; cur.rowH = 0; }
+  if (cur.y + im.h + PAD > SIZE) { cur = { items: [], x: 0, y: 0, rowH: 0 }; sheets.push(cur); }
+  cur.items.push([k, cur.x, cur.y]);
+  rects[k] = [sheets.length - 1, cur.x, cur.y, im.w, im.h, im.ax, im.ay];
+  cur.x += im.w + PAD;
+  cur.rowH = Math.max(cur.rowH, im.h);
+}
+
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 let bytes = 0;
-sheets.forEach((s, i) => { const b = png(s.w, s.h, s.data); bytes += b.length; writeFileSync(join(out, `sheet${i}.png`), b); });
-writeFileSync(join(out, 'manifest.json'), JSON.stringify(manifest));
-console.log(`baked ${Object.keys(manifest.sprites).length} sprites into ${sheets.length} sheet(s), ${(bytes / 1024).toFixed(0)} KB, ${Date.now() - t0} ms`);
+sheets.forEach((sh, i) => {
+  const h = Math.min(SIZE, sh.y + sh.rowH);
+  const data = new Uint8ClampedArray(SIZE * h * 4);
+  for (const [k, x, y] of sh.items) {
+    const im = images.get(k);
+    for (let yy = 0; yy < im.h; yy++) data.set(im.data.subarray(yy * im.w * 4, (yy + 1) * im.w * 4), ((y + yy) * SIZE + x) * 4);
+  }
+  const png = encodePNG(SIZE, h, data, 9);
+  bytes += png.length;
+  writeFileSync(join(out, `sheet${i}.png`), png);
+});
+
+const sprites = {};
+for (const [type, sp] of Object.entries(cat.SPRITES)) {
+  sprites[type] = {
+    fps: sp.fps, main: sp.main ?? '_', lamp: !!sp.lamp,
+    variants: sp.variants ?? { _: sp.frames },
+    lights: (sp.lights ?? []).map(cat.lightPx),
+    smoke: sp.smoke ? cat.lightPx([...sp.smoke, 0, 0]).slice(0, 2) : undefined,
+  };
+}
+const manifest = { version, R: cat.ART_R, sheets: sheets.length, depths: cat.DEPTHS, colVariants: cat.COL_VARIANTS, decorKinds: cat.DECOR_KINDS, decorVariants: cat.DECOR_VARIANTS, sprites, rects };
+writeFileSync(manifestPath, JSON.stringify(manifest));
+console.log(`baked ${images.size} images into ${sheets.length} sheet(s), ${(bytes / 1024).toFixed(0)} KB, ${((Date.now() - t0) / 1000).toFixed(1)} s`);

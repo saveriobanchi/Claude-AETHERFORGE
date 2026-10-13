@@ -5,14 +5,10 @@ import { RECIPES } from '../core/content/recipes';
 import { ISLETS, SUMMON_TIME } from '../core/content/world';
 import { currentRecipe } from '../core/sim';
 import { type Building, type GameState, type SimEvent, DX, DY, dayFraction, key, stackTotal } from '../core/state';
-import { voxIconSmall as iconFor } from './vox/items';
-import { beltFrames } from './vox/buildings';
 import { P } from './art/palette';
-import { PixelCanvas, bayer, rgb } from './art/pixel';
-import { SPRITE_TYPES, spriteFor } from './art/registry';
-import type { SpriteDef } from './art/sprite';
-import { CHUNK, chunkOrigin, tileCenter } from './art/terrain';
-import { renderVoxChunk } from './vox/terrain';
+import { PixelCanvas, rgb } from './art/pixel';
+import { tileCenter } from './art/terrain';
+import { type ArtImage, type ArtSprite, art } from './artpack';
 import { Atlas } from './atlas';
 import { Camera } from './camera';
 import { Effects, glowTexture } from './effects';
@@ -35,10 +31,8 @@ export interface ViewOptions {
 }
 
 interface SpriteTex {
-  def: SpriteDef;
-  frames: Texture[];
-  variants: Record<string, Texture[]>;
-  top: number; // pixels from anchor to the top of the art
+  def: ArtSprite;
+  top: number; // world px from anchor to the top of the art
 }
 
 interface BView {
@@ -77,7 +71,7 @@ export class WorldView {
   private terrain = new Container();
   private shadows = new Container();
   private falls = new Container();
-  private fallFrames: Texture[] = [];
+  private fallFrames: ArtImage[] = [];
   private floor = new Container();
   private items = new Container();
   private objects = new Container();
@@ -85,13 +79,14 @@ export class WorldView {
   private overlay = new Container();
   private grid = new Graphics();
   private ghostLayer = new Container();
-  private chunks = new Map<string, Sprite>();
+  private tileSprites: Sprite[] = [];
+  private decorSprites: Sprite[] = [];
+  private decorSig = '';
   private tileRev = -1;
-  private floorSnapshot = new Map<number, string>();
   private views = new Map<number, BView>();
   private spr = new Map<string, SpriteTex>();
-  private belt: Texture[][] = [];
-  private express: Texture[][] = [];
+  private belt: ArtImage[][] = [];
+  private express: ArtImage[][] = [];
   private icons = new Map<ItemId, Texture>();
   private itemPool: Sprite[] = [];
   private itemUsed = 0;
@@ -102,7 +97,6 @@ export class WorldView {
   private bubbleTex!: Texture;
   private bubbleWarnTex!: Texture;
   private arrowTex: Texture[] = [];
-  private shadowTex!: Texture;
   private breezeTex!: Texture;
   private isletArrival: Sprite | null = null;
   private time = 0;
@@ -147,22 +141,13 @@ export class WorldView {
 
   private buildTextures(): void {
     const a = this.atlas;
-    for (const type of SPRITE_TYPES) {
-      const def = spriteFor(type);
-      const frames = def.frames.map((f) => a.add(f));
-      const variants: Record<string, Texture[]> = {};
-      if (def.variants) for (const k in def.variants) variants[k] = def.variants[k].map((f) => a.add(f));
-      // find top of the art for motes and bubbles
-      const f0 = def.frames[0];
-      let top = f0.h;
-      for (let y = 0; y < f0.h && top === f0.h; y++) for (let x = 0; x < f0.w; x++) if (f0.alpha(x, y) > 0) { top = y; break; }
-      this.spr.set(type, { def, frames, variants, top: def.ay - top });
-    }
+    for (const [type, def] of art.sprites) this.spr.set(type, { def, top: def.frames[0].ay / art.R });
     for (let d = 0; d < 4; d++) {
-      this.belt.push(beltFrames(d, false).map((f) => a.add(f)));
-      this.express.push(beltFrames(d, true).map((f) => a.add(f)));
+      this.belt.push([0, 1, 2, 3].map((i) => art.img(`belt:p:${d}:${i}`)));
+      this.express.push([0, 1, 2, 3].map((i) => art.img(`belt:x:${d}:${i}`)));
     }
-    for (const id of ITEM_IDS) this.icons.set(id, a.add(iconFor(id)));
+    for (const id of ITEM_IDS) this.icons.set(id, art.img(`iconw:${id}`).tex);
+    this.fallFrames = Array.from({ length: 6 }, (_, i) => art.img(`fall:${i}`));
     const mote = new PixelCanvas(3, 3);
     mote.set(1, 0, rgb(0xffffff)); mote.set(0, 1, rgb(0xffffff)); mote.set(1, 1, rgb(0xffffff)); mote.set(2, 1, rgb(0xffffff)); mote.set(1, 2, rgb(0xffffff));
     this.moteTex = a.add(mote);
@@ -187,9 +172,6 @@ export class WorldView {
       }
       this.arrowTex.push(a.add(c));
     }
-    const sh = new PixelCanvas(48, 24);
-    sh.ellipse(24, 12, 23, 11.5, (x, y, dd) => (bayer(x, y) > dd * 1.2 - 0.2 ? rgb(0x0a1418, 70) : 0));
-    this.shadowTex = a.add(sh);
     const br = new PixelCanvas(16, 16);
     for (let i = 0; i < 3; i++) { for (let x = 2; x < 13 - i * 2; x++) br.set(x, 4 + i * 4 + Math.round(Math.sin(x * 0.7 + i) * 1), P.lampBlue); }
     this.breezeTex = a.add(br);
@@ -218,63 +200,70 @@ export class WorldView {
 
   // ───────────────────────── terrain ─────────────────────────
 
-  private chunkQueue = new Set<string>();
-  private firstTerrain = true;
 
   private syncTerrain(s: GameState): void {
-    if (s.tileRev !== this.tileRev) {
-      this.tileRev = s.tileRev;
-      // underside depth depends on land up to 4 tiles away: mark that neighbourhood
-      const mark = (x: number, y: number) => {
-        for (let dy = -4; dy <= 4; dy += 4) for (let dx = -4; dx <= 4; dx += 4) this.chunkQueue.add(`${Math.floor((x + dx) / CHUNK)},${Math.floor((y + dy) / CHUNK)}`);
-      };
-      const seen = new Set<number>();
-      for (const [k, t] of s.tiles) {
-        seen.add(k);
-        if (this.floorSnapshot.get(k) !== t.floor) { this.floorSnapshot.set(k, t.floor); mark(t.x, t.y); }
+    if (s.tileRev === this.tileRev) return;
+    this.tileRev = s.tileRev;
+    for (const sp of this.tileSprites) sp.destroy();
+    this.tileSprites = [];
+    const has = (x: number, y: number) => s.tiles.has(key(x, y));
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    // painter's order: back to front; each tile draws its rock column, then its top
+    const tiles = [...s.tiles.values()].sort((a, b) => a.x + a.y - (b.x + b.y) || a.x - b.x);
+    for (const t of tiles) {
+      const [wx, wy] = tileCenter(t.x, t.y);
+      x0 = Math.min(x0, wx); x1 = Math.max(x1, wx); y0 = Math.min(y0, wy); y1 = Math.max(y1, wy);
+      const dist = gapDist(has, t.x, t.y);
+      const want = Math.max(1, Math.min(7.5, 0.9 + dist * 1.5 + (hashTile(t.x, t.y) - 0.5) * 1.2));
+      const depth = art.depths.reduce((p, d) => (Math.abs(d - want) < Math.abs(p - want) ? d : p), art.depths[0]);
+      const v = Math.floor(hashTile(t.y * 3 + 1, t.x * 7) * art.colVariants);
+      const mask = (has(t.x + 1, t.y) ? 0 : 1) | (has(t.x, t.y + 1) ? 0 : 2) | (has(t.x - 1, t.y) ? 0 : 4) | (has(t.x, t.y - 1) ? 0 : 8);
+      for (const k of [`col:${depth}:${v}`, `top:${t.floor}:${mask}`]) {
+        const sp = new Sprite();
+        setArt(sp, art.img(k));
+        sp.scale.set(1 / art.R);
+        sp.position.set(wx, wy);
+        this.terrain.addChild(sp);
+        this.tileSprites.push(sp);
       }
-      for (const k of [...this.floorSnapshot.keys()]) if (!seen.has(k)) { this.floorSnapshot.delete(k); mark(Math.floor(k / 4096) - 2048, (k % 4096) - 2048); }
-      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-      for (const t of s.tiles.values()) {
-        const [wx, wy] = tileCenter(t.x, t.y);
-        x0 = Math.min(x0, wx); x1 = Math.max(x1, wx); y0 = Math.min(y0, wy); y1 = Math.max(y1, wy);
-      }
-      this.cam.setBounds(x0, y0, x1, y1 + 80);
-      this.islandBottom = y1 + 120;
-      this.syncFalls(s);
     }
-    if (!this.chunkQueue.size) return;
-    // first build renders everything; afterwards one chunk per frame (no hitches)
-    const get = (x: number, y: number) => s.tiles.get(key(x, y));
-    const budget = this.firstTerrain ? Infinity : 1;
-    this.firstTerrain = false;
-    let n = 0;
-    // nearest-to-camera chunks first
-    const order = [...this.chunkQueue].sort((a, b) => this.chunkDist(a) - this.chunkDist(b));
-    for (const d of order) {
-      if (n++ >= budget) break;
-      this.chunkQueue.delete(d);
-      const [cx, cy] = d.split(',').map(Number);
-      const pc = renderVoxChunk(get, cx, cy, this.bloom);
-      const old = this.chunks.get(d);
-      if (old) { old.texture.destroy(true); old.destroy(); this.chunks.delete(d); }
-      if (!pc) continue;
-      const tex = Texture.from(pc.toCanvas());
-      tex.source.scaleMode = 'nearest';
-      const sp = new Sprite(tex);
-      const [ox, oy] = chunkOrigin(cx, cy);
-      sp.position.set(ox, oy);
-      sp.zIndex = cx + cy;
-      this.chunks.set(d, sp);
-      this.terrain.addChild(sp);
-    }
-    this.terrain.sortChildren();
+    this.cam.setBounds(x0, y0, x1, y1 + 80);
+    this.islandBottom = y1 + 200;
+    this.syncFalls(s);
+    this.decorSig = '';
   }
 
-  private chunkDist(d: string): number {
-    const [cx, cy] = d.split(',').map(Number);
-    const [wx, wy] = tileCenter(cx * CHUNK + 4, cy * CHUNK + 4);
-    return Math.hypot(wx - this.cam.x, wy - this.cam.y);
+  /** Bushes, flowers, tufts and stones scattered on free grass (stable per tile). */
+  private syncDecor(s: GameState): void {
+    const sig = `${s.tileRev}|${s.buildings.size}|${[...s.buildings.values()].reduce((h, b) => (h * 31 + b.x * 7 + b.y) | 0, 0)}`;
+    if (sig === this.decorSig) return;
+    this.decorSig = sig;
+    for (const sp of this.decorSprites) sp.destroy();
+    this.decorSprites = [];
+    const busy = new Set<number>();
+    for (const b of s.buildings.values()) {
+      const size = BUILDINGS[b.type].size;
+      for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) busy.add(key(b.x + x, b.y + y));
+    }
+    for (const t of s.tiles.values()) {
+      if (t.floor !== 'grass' || busy.has(key(t.x, t.y))) continue;
+      for (let q = 0; q < 3; q++) {
+        const h = hashTile(t.x * 5 + q * 31, t.y * 3 - q * 17);
+        if (h > 0.55) continue;
+        const kind = art.decorKinds[Math.floor(hashTile(t.x + q * 13, t.y * 11 + q) * art.decorKinds.length)];
+        const v = Math.floor(hashTile(t.y * 7 + q, t.x * 5 - q) * art.decorVariants);
+        const ox = hashTile(t.x * 13 + q, t.y * 7) - 0.5, oy = hashTile(t.x * 3, t.y * 17 + q) - 0.5;
+        const fx = t.x + ox * 0.7, fy = t.y + oy * 0.7;
+        const sp = new Sprite();
+        setArt(sp, art.img(`decor:${kind}:${v}`));
+        sp.scale.set(1 / art.R);
+        const [wx, wy] = tileCenter(fx, fy);
+        sp.position.set(wx, wy);
+        sp.zIndex = (fx + fy) * 512 + fx + 256;
+        this.objects.addChild(sp);
+        this.decorSprites.push(sp);
+      }
+    }
   }
 
   islandBottom = 0;
@@ -285,7 +274,6 @@ export class WorldView {
    */
   private syncFalls(s: GameState): void {
     for (const c of this.falls.removeChildren()) c.destroy();
-    if (!this.fallFrames.length) this.fallFrames = waterfallFrames().map((f) => this.atlas.add(f));
     const sites: [number, number, number][] = [];
     const centres = [...s.tiles.values()].map((t) => tileCenter(t.x, t.y));
     for (const t of s.tiles.values()) {
@@ -305,9 +293,10 @@ export class WorldView {
     const picked: [number, number, number][] = [];
     for (const site of sites) if (picked.length < 3 && picked.every(([x, y]) => Math.hypot(x - site[0], y - site[1]) > 120)) picked.push(site);
     for (const [fx, fy] of picked) {
-      const sp = new Sprite(this.fallFrames[0]);
-      sp.anchor.set(0.5, 0);
-      sp.position.set(fx, fy - 3);
+      const sp = new Sprite();
+      setArt(sp, this.fallFrames[0]);
+      sp.scale.set(1 / art.R);
+      sp.position.set(fx, fy - 2);
       this.falls.addChild(sp);
     }
   }
@@ -343,8 +332,6 @@ export class WorldView {
 
   forceTerrain(): void {
     this.tileRev = -1;
-    this.floorSnapshot.clear();
-    this.firstTerrain = true;
   }
 
   // ───────────────────────── buildings ─────────────────────────
@@ -354,9 +341,9 @@ export class WorldView {
     const root = new Container();
     const isBelt = def.kind === 'belt';
     const st = isBelt ? null : this.spr.get(b.type)!;
-    const sprite = new Sprite(isBelt ? this.belt[b.dir][0] : st!.frames[0]);
-    if (isBelt) sprite.anchor.set(0.5, 24 / 40);
-    else sprite.anchor.set(st!.def.ax / sprite.texture.width, st!.def.ay / sprite.texture.height);
+    const sprite = new Sprite();
+    setArt(sprite, isBelt ? this.belt[b.dir][0] : st!.def.frames[0]);
+    sprite.scale.set(1 / art.R);
     root.addChild(sprite);
     const v: BView = {
       id: b.id, type: b.type, root, sprite, mote: null, bubble: null, bubbleIcon: null, lights: [], lightOff: [], shadow: null, arrow: null,
@@ -371,12 +358,6 @@ export class WorldView {
         v.mote.anchor.set(0.5);
         root.addChild(v.mote);
         v.mote.y = -st!.top - 5;
-      }
-      if (def.kind !== 'tuft' && def.kind !== 'sapling' && def.kind !== 'node') {
-        v.shadow = new Sprite(this.shadowTex);
-        v.shadow.anchor.set(0.5);
-        v.shadow.scale.set(def.size * (def.kind === 'tree' ? 0.7 : 1));
-        this.shadows.addChild(v.shadow);
       }
       if (def.rotatable && def.kind !== 'belt') {
         v.arrow = new Sprite(this.arrowTex[b.dir]);
@@ -396,6 +377,7 @@ export class WorldView {
       if (def.kind === 'splitter' || def.kind === 'sorter') {
         v.hold = new Sprite(this.icons.get('wood')!);
         v.hold.anchor.set(0.5, 1);
+        v.hold.scale.set(1 / art.R);
         v.hold.visible = false;
         v.hold.y = -6;
         root.addChild(v.hold);
@@ -518,7 +500,9 @@ export class WorldView {
     // pixel into an offscreen texture, then that image is scaled smoothly to
     // the exact zoom. Pixels stay even-sized and pans/zooms glide sub-pixel.
     const res = this.app.renderer.resolution;
-    const k = Math.max(1, Math.round(z * res));
+    // whole device pixels per art pixel (art is baked at art.R texels per world px)
+    const zr = z * res;
+    const k = zr >= 1.5 ? art.R * Math.max(1, Math.round(zr / art.R)) : Math.max(1, Math.round(zr));
     const rw = Math.ceil(this.vw * k / z) + 4, rh = Math.ceil(this.vh * k / z) + 4;
     this.ensureRT(rw, rh);
     const px = rw / 2 - (this.cam.x - shx / z) * k, py = rh / 2 - (this.cam.y - shy / z) * k;
@@ -536,9 +520,8 @@ export class WorldView {
     const margin = 140;
     const vx0 = this.cam.x - this.vw / 2 / z - margin, vx1 = this.cam.x + this.vw / 2 / z + margin;
     const vy0 = this.cam.y - this.vh / 2 / z - margin, vy1 = this.cam.y + this.vh / 2 / z + margin * 2;
-    for (const c of this.chunks.values()) {
-      c.visible = c.x < vx1 && c.x + c.width > vx0 && c.y < vy1 && c.y + c.height > vy0;
-    }
+    for (const c of this.tileSprites) c.visible = c.x > vx0 - 120 && c.x < vx1 + 120 && c.y > vy0 - 40 && c.y < vy1 + 260;
+    this.syncDecor(s);
 
     // how full the stash is drives storage visuals (0 empty-ish, 1 half, 2 nearly full)
     if (Math.floor(this.time * 2) !== this.fillTick) {
@@ -564,7 +547,6 @@ export class WorldView {
       const cy = wy + (def.size - 1) * 16;
       const visible = wx > vx0 && wx < vx1 && cy > vy0 && cy < vy1;
       v.root.visible = visible;
-      if (v.shadow) v.shadow.visible = visible;
       if (v.arrow) v.arrow.visible = visible && !o.observe;
       for (const l of v.lights) l.visible = visible && this.night > 0.03;
       if (!visible) continue;
@@ -572,7 +554,6 @@ export class WorldView {
         v.x = b.x; v.y = b.y; v.dir = b.dir;
         v.root.position.set(wx, cy);
         v.root.zIndex = (b.x + b.y + (def.size - 1)) * 512 + b.x + 256;
-        if (v.shadow) v.shadow.position.set(wx, cy + 1);
         if (v.arrow) { v.arrow.texture = this.arrowTex[b.dir]; v.arrow.position.set(wx, cy); }
       }
       this.updateView(s, b, v, def.kind, animT, dt, o);
@@ -592,7 +573,7 @@ export class WorldView {
     this.fx.update(dt);
     if (this.falls.children.length) {
       const fi = Math.floor(this.time * 12) % this.fallFrames.length;
-      for (const c of this.falls.children) (c as Sprite).texture = this.fallFrames[fi];
+      for (const c of this.falls.children) setArt(c as Sprite, this.fallFrames[fi]);
     }
     const t1 = performance.now();
     this.app.renderer.render({ container: this.world, target: this.rt!, clear: true });
@@ -608,31 +589,32 @@ export class WorldView {
     if (v.bounce > 0) {
       v.bounce = Math.max(0, v.bounce - dt * 3.2);
       const k = Math.sin(v.bounce * Math.PI) * 0.08 * (o.reduced ? 0.3 : 1);
-      v.sprite.scale.set(1 + k, 1 - k);
-    } else if (v.sprite.scale.x !== 1) v.sprite.scale.set(1, 1);
+      v.sprite.scale.set((1 + k) / art.R, (1 - k) / art.R);
+    } else if (v.sprite.scale.x !== 1 / art.R) v.sprite.scale.set(1 / art.R);
 
     if (kind === 'belt') {
       const set = b.type === 'express' ? this.express : this.belt;
       const spd = def.speed ?? 1.25;
-      v.sprite.texture = set[b.dir][Math.floor(t * spd * 4) % 4];
+      setArt(v.sprite, set[b.dir][Math.floor(t * spd * 4) % 4]);
       this.renderBeltItems(b, v, s);
       return;
     }
     const st = this.spr.get(b.type)!;
-    let frames = st.frames;
+    const vars = st.def.variants;
+    let frames = st.def.frames;
     if (kind === 'tree') {
-      if (b.type === 'tree') frames = st.variants['s' + Math.max(0, Math.min(5, Math.floor(b.stock)))] ?? frames;
+      if (b.type === 'tree') frames = vars[b.stock >= 4 ? 's5' : b.stock >= 1 ? 's3' : 's0'] ?? frames;
     } else if (kind === 'sapling') {
       const stage = Math.min(2, Math.floor((b.progress / 45) * 3));
-      frames = st.variants['g' + stage] ?? frames;
-    } else if (kind === 'storage' && st.variants) {
-      frames = st.variants['f' + this.fillLevel] ?? frames;
+      frames = vars['g' + stage] ?? frames;
+    } else if (kind === 'storage') {
+      frames = vars['f' + this.fillLevel] ?? frames;
     } else if (kind === 'forge') {
-      frames = st.variants['st' + Math.max(0, Math.min(3, s.forge.stage))] ?? frames;
+      frames = vars['st' + Math.max(0, Math.min(3, s.forge.stage))] ?? frames;
     }
     const animated = b.status === 'working' || ['tree', 'tuft', 'node', 'pylon', 'beacon', 'sapling', 'forge', 'elder'].includes(kind) || b.type === 'elder_tree';
     const fi = animated && frames.length > 1 ? Math.floor((t + v.phase) * st.def.fps) % frames.length : 0;
-    if (v.sprite.texture !== frames[fi]) v.sprite.texture = frames[fi];
+    if (v.sprite.texture !== frames[fi].tex) setArt(v.sprite, frames[fi]);
 
     // status mote
     const status = b.status;
@@ -718,6 +700,7 @@ export class WorldView {
     if (!sp) {
       sp = new Sprite(this.icons.get('wood')!);
       sp.anchor.set(0.5, 0.8);
+      sp.scale.set(1 / art.R);
       this.items.addChild(sp);
       this.itemPool.push(sp);
     }
@@ -817,13 +800,11 @@ export class WorldView {
         const sp = this.ghostSprite(gi++);
         const [wx, wy] = tileCenter(c.x, c.y);
         if (def.kind === 'belt') {
-          sp.texture = (gh.type === 'express' ? this.express : this.belt)[c.dir][0];
-          sp.anchor.set(0.5, 24 / 40);
+          setArt(sp, (gh.type === 'express' ? this.express : this.belt)[c.dir][0]);
         } else {
-          const st = this.spr.get(gh.type)!;
-          sp.texture = st.frames[0];
-          sp.anchor.set(st.def.ax / sp.texture.width, st.def.ay / sp.texture.height);
+          setArt(sp, this.spr.get(gh.type)!.def.frames[0]);
         }
+        sp.scale.set(1 / art.R);
         sp.position.set(wx, wy + (def.size - 1) * 16);
         sp.alpha = 0.7;
         sp.tint = c.ok ? 0xe8ffe0 : 0xff9a8a;
@@ -867,7 +848,7 @@ export class WorldView {
 
   /** For dev overlays. */
   stats(): { sprites: number; items: number; particles: number; chunks: number } {
-    return { sprites: this.views.size, items: this.itemUsed, particles: this.fx.count, chunks: this.chunks.size };
+    return { sprites: this.views.size, items: this.itemUsed, particles: this.fx.count, chunks: this.tileSprites.length };
   }
 
   recipeName(id: string): string {
@@ -889,28 +870,21 @@ function hashTile(x: number, y: number): number {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
-/** A falling ribbon of water: streaks scroll down, foam at the lip, fading into mist. */
-function waterfallFrames(): PixelCanvas[] {
-  const W = 20, H = 300, N = 8;
-  const ramp = [0x1f5288, 0x2a6ea6, 0x3c8dc2, 0x5fb0da, 0x8dd2ec, 0xc6eef8, 0xffffff];
-  const out: PixelCanvas[] = [];
-  for (let f = 0; f < N; f++) {
-    const c = new PixelCanvas(W, H);
-    for (let y = 0; y < H; y++) {
-      const spread = Math.min(3, y / 60);
-      const x0 = Math.round(2 - spread * 0.6), x1 = Math.round(W - 3 + spread * 0.6);
-      const fade = y < H * 0.45 ? 1 : Math.max(0, 1 - (y - H * 0.45) / (H * 0.55));
-      for (let x = x0; x <= x1; x++) {
-        const edge = x === x0 || x === x1;
-        const streak = Math.sin(x * 2.3 + Math.floor((y - f * 6) / 9) * 1.7) * 0.5 + 0.5;
-        let l = 2.4 + streak * 2.2 - (edge ? 1.2 : 0) + (x < W / 2 ? 0.4 : -0.3);
-        if (y < 4) l = 5.5 - y * 0.4;
-        const a = Math.round(255 * fade * (edge ? 0.7 : 0.92));
-        if (a < 8 || bayer(x, y) * 255 > a + 40) continue;
-        c.set(x, y, rgb(ramp[Math.max(0, Math.min(ramp.length - 1, Math.round(l)))], a));
-      }
+
+/** Point a sprite at a baked art image, keeping its anchor on the image's ground point. */
+function setArt(sp: Sprite, a: ArtImage | undefined): void {
+  if (!a) return;
+  sp.texture = a.tex;
+  sp.anchor.set(a.ax / a.w, a.ay / a.h);
+}
+
+/** Chebyshev distance (in tiles, capped at 4) to the nearest missing tile. */
+function gapDist(has: (x: number, y: number) => boolean, x: number, y: number): number {
+  for (let r = 1; r <= 4; r++) {
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+      if (!has(x + dx, y + dy)) return r - 1;
     }
-    out.push(c);
   }
-  return out;
+  return 4;
 }
