@@ -1,5 +1,5 @@
 import type { ItemId } from '../core/content/items';
-import { iconFor } from '../render/art/icons';
+import { voxIcon as iconFor } from '../render/vox/items';
 import { P } from '../render/art/palette';
 import { PixelCanvas, rgb, type RGBA } from '../render/art/pixel';
 import { spriteFor } from '../render/art/registry';

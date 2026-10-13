@@ -1,20 +1,23 @@
 import { Container, Sprite, Texture, TilingSprite } from 'pixi.js';
-import { P } from './art/palette';
-import { PixelCanvas, hash2, mix, noise2, rgb, shadeRamp, bayer } from './art/pixel';
-import type { Atlas } from './atlas';
+import { PixelCanvas, hash2, rgb } from './art/pixel';
+import { M } from './vox/mats';
+import { leafBlob, bakeFrames } from './vox/nature';
+import { Vol } from './vox/vox';
 
-// Time-of-day keyframes: [fraction, skyTop, skyHorizon, worldTint, night(0..1)]
-const KEYS: [number, number, number, number, number][] = [
-  [0.0, 0x1c2c4c, 0xd8a07c, 0xe8c8b8, 0.5],
-  [0.07, 0x23566a, 0xf0d6b0, 0xfff0e0, 0.05],
-  [0.18, 0x1d5866, 0xcfe4d4, 0xffffff, 0],
-  [0.5, 0x1f5f6e, 0xd6e8d6, 0xffffff, 0],
-  [0.6, 0x26506a, 0xf2c48c, 0xfff0d8, 0],
-  [0.67, 0x22304e, 0xd07a62, 0xe8b8a8, 0.35],
-  [0.73, 0x0e1730, 0x2c3c66, 0x8a96c8, 0.9],
-  [0.9, 0x0b1228, 0x26365e, 0x8090c4, 1],
-  [0.97, 0x162240, 0x6a5a80, 0xb0a8c8, 0.75],
-  [1.0, 0x1c2c4c, 0xd8a07c, 0xe8c8b8, 0.5],
+// Time-of-day keyframes: [fraction, skyTop, skyHorizon, worldTint, night(0..1), cloudTint, sunGlow]
+type Key = [number, number, number, number, number, number, number];
+const KEYS: Key[] = [
+  [0.0, 0x34417e, 0xf2a88a, 0xf4d6cc, 0.35, 0xffc4b8, 0xff9a6a],
+  [0.07, 0x4a74b4, 0xf8d4ac, 0xfff2e2, 0.02, 0xfff0e4, 0xffd090],
+  [0.2, 0x4d88c8, 0xf3e4cc, 0xffffff, 0, 0xffffff, 0xfff0c0],
+  [0.48, 0x4d88c8, 0xf3e4cc, 0xffffff, 0, 0xffffff, 0xfff0c0],
+  [0.58, 0x5476b8, 0xffcc94, 0xfff0d6, 0, 0xffe6cc, 0xffc070],
+  [0.65, 0x4a4c92, 0xff9a78, 0xffd8c2, 0.08, 0xffb4a2, 0xff8a50],
+  [0.71, 0x262a5e, 0xb45c7a, 0xb8a6d0, 0.6, 0xa47eac, 0xd05a60],
+  [0.77, 0x0d1432, 0x2a3468, 0x8292c6, 1, 0x4c567e, 0x000000],
+  [0.9, 0x0b1228, 0x26345e, 0x8090c4, 1, 0x48527a, 0x000000],
+  [0.97, 0x1c2450, 0x7a5a8a, 0xb4aaca, 0.65, 0x8a7a9e, 0xa0607a],
+  [1.0, 0x34417e, 0xf2a88a, 0xf4d6cc, 0.35, 0xffc4b8, 0xff9a6a],
 ];
 
 function lerpHex(a: number, b: number, t: number): number {
@@ -24,7 +27,7 @@ function lerpHex(a: number, b: number, t: number): number {
   return (Math.round(r) << 16) | (Math.round(g) << 8) | Math.round(bb);
 }
 
-export interface SkyState { top: number; horizon: number; tint: number; night: number }
+export interface SkyState { top: number; horizon: number; tint: number; night: number; cloud: number; glow: number }
 
 export function skyAt(dayFrac: number): SkyState {
   const f = ((dayFrac % 1) + 1) % 1;
@@ -33,67 +36,104 @@ export function skyAt(dayFrac: number): SkyState {
     if (f >= a[0] && f <= b[0]) {
       const t = (f - a[0]) / (b[0] - a[0]);
       const s = t * t * (3 - 2 * t);
-      return { top: lerpHex(a[1], b[1], s), horizon: lerpHex(a[2], b[2], s), tint: lerpHex(a[3], b[3], s), night: a[4] + (b[4] - a[4]) * s };
+      return { top: lerpHex(a[1], b[1], s), horizon: lerpHex(a[2], b[2], s), tint: lerpHex(a[3], b[3], s), night: a[4] + (b[4] - a[4]) * s, cloud: lerpHex(a[5], b[5], s), glow: lerpHex(a[6], b[6], s) };
     }
   }
-  return { top: KEYS[0][1], horizon: KEYS[0][2], tint: KEYS[0][3], night: KEYS[0][4] };
+  const k = KEYS[0];
+  return { top: k[1], horizon: k[2], tint: k[3], night: k[4], cloud: k[5], glow: k[6] };
 }
 
-function cloudCanvas(w: number, h: number, seed: number, haze: number): PixelCanvas {
-  const c = new PixelCanvas(w, h);
+const hex = (n: number) => '#' + n.toString(16).padStart(6, '0');
+
+function linearTex(cv: HTMLCanvasElement): Texture {
+  const t = Texture.from(cv);
+  t.source.scaleMode = 'linear';
+  return t;
+}
+
+/**
+ * A soft painterly cumulus: overlapping puffs, lit from above with a warm
+ * rim and a cool lavender underside. Drawn white so the time-of-day tint
+ * colours it (pink at sunset, silver at night).
+ */
+function cloudCanvas(w: number, h: number, seed: number, flat: number): HTMLCanvasElement {
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  const ctx = cv.getContext('2d')!;
   const puffs: [number, number, number][] = [];
-  const n = 4 + Math.floor(w / 26);
+  const n = 6 + Math.floor(w / 40);
   for (let i = 0; i < n; i++) {
     const t = i / (n - 1);
-    const r = (h * 0.32) * (0.55 + Math.sin(t * Math.PI) * 0.6) * (0.8 + hash2(i, seed) * 0.4);
-    puffs.push([w * 0.1 + t * w * 0.8 + (hash2(i, seed, 2) - 0.5) * 10, h - r - 3 - hash2(i, seed, 3) * h * 0.15, r]);
+    const r = h * 0.3 * (0.5 + Math.sin(t * Math.PI) * 0.7) * (0.75 + hash2(i, seed) * 0.5);
+    puffs.push([w * 0.12 + t * w * 0.76 + (hash2(i, seed, 2) - 0.5) * w * 0.06, h * (1 - flat) - r * 0.6 - hash2(i, seed, 3) * h * 0.12, r]);
   }
-  const ramp = P.cloud;
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    let inside = 0, top = 1;
-    for (const [px, py, r] of puffs) {
-      const dx = (x + 0.5 - px) / r, dy = (y + 0.5 - py) / (r * 0.82);
-      const d = dx * dx + dy * dy;
-      if (d < 1) { inside = 1; top = Math.min(top, (y - (py - r * 0.82)) / (r * 1.64)); }
-    }
-    if (!inside) continue;
-    const flatBottom = y > h - 4;
-    let l = 0.95 - top * 0.75 + (noise2(x / 6, y / 4, seed) - 0.5) * 0.18;
-    if (flatBottom) l -= 0.25;
-    const col = mix(shadeRamp(ramp, l, x, y, 0.55), rgb(0x3f7f84), haze);
-    c.set(x, y, col);
+  // second row of smaller puffs on top for a billowy silhouette
+  for (let i = 0; i < n / 2; i++) {
+    const [x, y, r] = puffs[1 + Math.floor(hash2(i, seed, 4) * (n - 2))];
+    puffs.push([x + (hash2(i, seed, 5) - 0.5) * r, y - r * 0.55, r * (0.5 + hash2(i, seed, 6) * 0.3)]);
   }
-  return c;
+  // shadow body
+  for (const [x, y, r] of puffs) {
+    const g = ctx.createRadialGradient(x, y + r * 0.3, r * 0.2, x, y + r * 0.2, r * 1.05);
+    g.addColorStop(0, 'rgba(206,198,226,1)');
+    g.addColorStop(0.85, 'rgba(180,170,210,1)');
+    g.addColorStop(1, 'rgba(180,170,210,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, r * 1.05, 0, Math.PI * 2); ctx.fill();
+  }
+  // lit tops
+  for (const [x, y, r] of puffs) {
+    const g = ctx.createRadialGradient(x - r * 0.25, y - r * 0.45, r * 0.05, x, y - r * 0.1, r * 0.95);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.55, 'rgba(250,246,248,0.9)');
+    g.addColorStop(1, 'rgba(236,230,242,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y - r * 0.1, r * 0.95, 0, Math.PI * 2); ctx.fill();
+  }
+  // flatten the base
+  ctx.globalCompositeOperation = 'destination-out';
+  const fg = ctx.createLinearGradient(0, h * (1 - flat) - 6, 0, h);
+  fg.addColorStop(0, 'rgba(0,0,0,0)');
+  fg.addColorStop(0.5, 'rgba(0,0,0,0.6)');
+  fg.addColorStop(1, 'rgba(0,0,0,1)');
+  ctx.fillStyle = fg;
+  ctx.fillRect(0, 0, w, h);
+  return cv;
 }
 
-function isletCanvas(w: number, seed: number, haze: number): PixelCanvas {
-  const h = Math.round(w * 1.1);
-  const c = new PixelCanvas(w, h);
-  const topY = Math.round(h * 0.22);
-  const sky = rgb(0x3a7680);
-  // top surface
-  c.ellipse(w / 2, topY, w * 0.48, w * 0.12, (x, y) => mix(shadeRamp(P.grass, 0.6 + (x < w / 2 ? 0.1 : -0.1), x, y, 0.3), sky, haze));
-  // tapering rock
-  for (let y = topY; y < h; y++) {
-    const t = (y - topY) / (h - topY);
-    const half = w * 0.47 * (1 - t) * (1 - t * 0.2) + (noise2(y / 3, seed) - 0.5) * 5 * (1 - t);
-    for (let x = Math.round(w / 2 - half); x <= w / 2 + half; x++) {
-      const l = 0.55 - (x - w / 2) / (w * 1.2) - t * 0.3;
-      c.set(x, y, mix(shadeRamp(P.rock, l, x, y, 0.4), sky, haze + t * 0.2));
+/** A distant floating islet as a little voxel model, with an optional waterfall. */
+function isletCanvas(seed: number, fall: boolean): HTMLCanvasElement {
+  const r = 5 + hash2(seed, 1) * 4;
+  const size = Math.ceil(r * 2 + 6), c = size / 2;
+  const depth = Math.round(r * 2.4 + 4);
+  const b = bakeFrames(() => {
+    const v = new Vol(size, size, depth + 16);
+    for (let k = 0; k < depth; k++) {
+      const t = 1 - k / depth;
+      const rr = r * Math.pow(t, 0.75) + (hash2(k, seed) - 0.5) * 1.2;
+      v.cyl(c, c, k, k, Math.max(0.6, rr), k > depth - 3 ? M.dirt : M.stone, (i, j, kk) => (hash2(i, j + kk, seed) - 0.5) * 0.2);
     }
-  }
-  // tiny trees
-  for (let i = 0; i < 3; i++) {
-    const tx = Math.round(w * (0.3 + hash2(i, seed) * 0.4)), ty = topY - 1;
-    const th = 4 + Math.round(hash2(i, seed, 2) * w * 0.12);
-    c.ellipse(tx, ty - th, th * 0.6, th * 0.7, (x, y) => mix(shadeRamp(P.leaf, 0.6 - (x - tx) / 10, x, y, 0.3), sky, haze));
-  }
-  return c;
+    v.cyl(c, c, depth, depth, r + 0.3, M.grass, (i, j) => (hash2(i, j, seed) - 0.5) * 0.25);
+    const trees = 1 + Math.floor(hash2(seed, 2) * 3);
+    for (let q = 0; q < trees; q++) {
+      const a = hash2(q, seed, 3) * Math.PI * 2, d = hash2(q, seed, 4) * r * 0.6;
+      const ti = c + Math.cos(a) * d, tj = c + Math.sin(a) * d, th = 3 + Math.floor(hash2(q, seed, 5) * 4);
+      v.box(ti, tj, depth + 1, ti, tj, depth + th, M.bark);
+      leafBlob(v, ti, tj, depth + th + 2, 2.6 + hash2(q, seed, 6) * 1.5, M.leaf, seed + q, 0.85);
+    }
+    if (fall) {
+      const fj = Math.round(c + r);
+      for (let k = 0; k <= depth; k++) v.set(Math.round(c), fj, k, M.water, ((k * 7) % 5) * 0.06);
+      for (let k = depth - 4; k <= depth; k++) v.set(Math.round(c) + 1, fj, k, M.water, 0.15);
+    }
+    return v;
+  }, 1, { outline: false, ao: 0.05 });
+  return b.frames[0].toCanvas();
 }
 
 function starCanvas(): PixelCanvas {
   const c = new PixelCanvas(256, 160);
-  for (let i = 0; i < 70; i++) {
+  for (let i = 0; i < 80; i++) {
     const x = Math.floor(hash2(i, 1, 99) * 256), y = Math.floor(hash2(i, 2, 99) * 160);
     const b = hash2(i, 3, 99);
     c.set(x, y, b > 0.85 ? rgb(0xfff6d8) : b > 0.5 ? rgb(0xc8d4f0, 220) : rgb(0x8ea0d0, 160));
@@ -102,26 +142,40 @@ function starCanvas(): PixelCanvas {
   return c;
 }
 
-function discCanvas(r: number, ramp: number[], glow: number): PixelCanvas {
-  const s = Math.ceil(r * 2 + glow * 2 + 2);
-  const c = new PixelCanvas(s, s);
-  const cx = s / 2, cy = s / 2;
-  for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
-    const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
-    if (d <= r) c.set(x, y, rgb(ramp[Math.max(0, Math.min(ramp.length - 1, Math.floor((1 - d / r) * ramp.length * 0.999 + (bayer(x, y) - 0.5) * 0.6)))]));
-    else if (d < r + glow) {
-      const a = (1 - (d - r) / glow) * 90;
-      if (bayer(x, y) * 90 < a) c.set(x, y, rgb(ramp[ramp.length - 1], Math.round(a)));
-    }
-  }
-  return c;
+/** Radial glow, white, for tinting. */
+function glowCanvas(size: number, core: number): HTMLCanvasElement {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  const ctx = cv.getContext('2d')!;
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(core, 'rgba(255,255,255,0.55)');
+  g.addColorStop(0.45, 'rgba(255,255,255,0.18)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  return cv;
 }
 
-interface Drifter { s: Sprite; px: number; py: number; speed: number; par: number; w: number; bob: number }
+function discCanvas(r: number, inner: string, outer: string): HTMLCanvasElement {
+  const s = Math.ceil(r * 2 + 4);
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = s;
+  const ctx = cv.getContext('2d')!;
+  const g = ctx.createRadialGradient(s / 2 - r * 0.3, s / 2 - r * 0.3, 0, s / 2, s / 2, r);
+  g.addColorStop(0, inner);
+  g.addColorStop(1, outer);
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(s / 2, s / 2, r, 0, Math.PI * 2); ctx.fill();
+  return cv;
+}
+
+interface Drifter { s: Sprite; px: number; py: number; speed: number; par: number; w: number; bob: number; haze: number }
 
 /**
- * Background: gradient sky, sun/moon, stars, distant islets and parallax
- * cloud layers; plus a foreground cloud sea that passes below the island.
+ * Background: graded sky with a sun bloom, stars, hazy voxel islets with
+ * waterfalls, painterly cloud banks at three depths, and a cloud sea below
+ * the island. Everything here is filtered smoothly; only the world is pixel art.
  */
 export class Sky {
   readonly back = new Container();
@@ -129,21 +183,22 @@ export class Sky {
   private grad: HTMLCanvasElement;
   private gradTex: Texture;
   private gradSprite: Sprite;
+  private bloom: Sprite;
   private stars: TilingSprite;
   private sun: Sprite;
   private moon: Sprite;
   private far: Drifter[] = [];
   private near: Drifter[] = [];
   private lastGrad = '';
-  readonly pixel = 3;
+  readonly pixel = 2;
   /** Light quality: skip every other cloud to cut overdraw. */
   lite = false;
 
-  constructor(atlas: Atlas) {
+  constructor() {
     this.grad = document.createElement('canvas');
     this.grad.width = 1;
-    this.grad.height = 128;
-    this.gradTex = Texture.from(this.grad);
+    this.grad.height = 256;
+    this.gradTex = linearTex(this.grad);
     this.gradSprite = new Sprite(this.gradTex);
     this.back.addChild(this.gradSprite);
 
@@ -152,43 +207,51 @@ export class Sky {
     this.stars = new TilingSprite({ texture: starTex, width: 100, height: 100 });
     this.back.addChild(this.stars);
 
-    this.sun = new Sprite(atlas.add(discCanvas(9, [0xf4b860, 0xffd890, 0xfff2c8], 10)));
-    this.moon = new Sprite(atlas.add(discCanvas(7, [0x9aa6c8, 0xc8d0e8, 0xeef0f8], 8)));
-    for (const s of [this.sun, this.moon]) { s.anchor.set(0.5); s.scale.set(this.pixel); this.back.addChild(s); }
+    this.bloom = new Sprite(linearTex(glowCanvas(256, 0.08)));
+    this.bloom.anchor.set(0.5);
+    this.bloom.blendMode = 'add';
+    this.back.addChild(this.bloom);
+    this.sun = new Sprite(linearTex(discCanvas(26, '#fffbe8', '#ffd88a')));
+    this.moon = new Sprite(linearTex(discCanvas(18, '#f4f2ff', '#a8b0d4')));
+    for (const s of [this.sun, this.moon]) { s.anchor.set(0.5); this.back.addChild(s); }
 
+    // far cloud bank hugging the horizon
+    for (let i = 0; i < 5; i++) {
+      const w = 420 + Math.floor(hash2(i, 41) * 260);
+      const s = new Sprite(linearTex(cloudCanvas(w, Math.round(w * 0.28), i * 5 + 90, 0.15)));
+      s.anchor.set(0.5, 1);
+      s.alpha = 0.55;
+      this.back.addChild(s);
+      this.far.push({ s, px: i / 5 + hash2(i, 42) * 0.1, py: 0.62 + hash2(i, 43) * 0.06, speed: 0.002, par: 0.02, w: w / this.pixel, bob: 0, haze: 0.5 });
+    }
     // distant islets (very slow parallax, hazy)
     for (let i = 0; i < 6; i++) {
-      const w = 22 + Math.floor(hash2(i, 5) * 40);
-      const tex = atlas.add(isletCanvas(w, i * 13 + 1, 0.45 + hash2(i, 6) * 0.25));
-      const s = new Sprite(tex);
-      s.anchor.set(0.5, 0.3);
-      s.scale.set(this.pixel * (0.6 + hash2(i, 7) * 0.5));
+      const s = new Sprite(linearTex(isletCanvas(i * 13 + 1, i % 2 === 0)));
+      s.anchor.set(0.5, 0.35);
+      const sc = 0.8 + hash2(i, 7) * 0.9;
+      s.scale.set(sc);
+      s.alpha = 0.55 + sc * 0.2;
       this.back.addChild(s);
-      this.far.push({ s, px: hash2(i, 8) * 1.4 - 0.2, py: 0.22 + hash2(i, 9) * 0.38, speed: 0.002 + hash2(i, 10) * 0.003, par: 0.03 + hash2(i, 11) * 0.04, w, bob: hash2(i, 12) * 6 });
+      this.far.push({ s, px: hash2(i, 8) * 1.4 - 0.2, py: 0.24 + hash2(i, 9) * 0.34, speed: 0.0015 + hash2(i, 10) * 0.002, par: 0.03 + hash2(i, 11) * 0.04, w: s.width / this.pixel, bob: 3 + hash2(i, 12) * 5, haze: 0.45 });
     }
-    // background clouds: three depths
-    for (let i = 0; i < 14; i++) {
+    // mid-sky clouds: three depths
+    for (let i = 0; i < 12; i++) {
       const depth = i % 3;
-      const w = 70 + Math.floor(hash2(i, 21) * 120) + depth * 30;
-      const tex = atlas.add(cloudCanvas(w, Math.round(w * 0.38), i * 7 + 3, 0.5 - depth * 0.18));
-      const s = new Sprite(tex);
+      const w = 220 + Math.floor(hash2(i, 21) * 260) + depth * 90;
+      const s = new Sprite(linearTex(cloudCanvas(w, Math.round(w * 0.45), i * 7 + 3, 0.05)));
       s.anchor.set(0.5, 1);
-      s.scale.set(this.pixel);
-      s.alpha = 0.75 + depth * 0.08;
+      s.alpha = 0.7 + depth * 0.1;
       this.back.addChild(s);
-      this.far.push({ s, px: hash2(i, 22) * 1.6 - 0.3, py: 0.35 + depth * 0.18 + hash2(i, 23) * 0.15, speed: 0.004 + depth * 0.004, par: 0.06 + depth * 0.06, w, bob: 0 });
+      this.far.push({ s, px: hash2(i, 22) * 1.6 - 0.3, py: 0.3 + depth * 0.16 + hash2(i, 23) * 0.12, speed: 0.003 + depth * 0.003, par: 0.06 + depth * 0.06, w: w / this.pixel, bob: 0, haze: 0.3 - depth * 0.12 });
     }
-    // cloud sea far below the island, and a few thin wisps drifting in front
-    for (let i = 0; i < 7; i++) {
-      const w = 160 + Math.floor(hash2(i, 31) * 160);
-      const front = false;
-      const tex = atlas.add(cloudCanvas(w, Math.round(w * 0.32), i * 11 + 50, front ? 0 : 0.12));
-      const s = new Sprite(tex);
+    // cloud sea far below the island
+    for (let i = 0; i < 8; i++) {
+      const w = 520 + Math.floor(hash2(i, 31) * 380);
+      const s = new Sprite(linearTex(cloudCanvas(w, Math.round(w * 0.4), i * 11 + 50, 0.1)));
       s.anchor.set(0.5, 1);
-      s.scale.set(this.pixel);
-      s.alpha = front ? 0.32 : 0.95;
-      (front ? this.front : this.back).addChild(s);
-      this.near.push({ s, px: hash2(i, 32) * 1.6 - 0.3, py: front ? 0.2 + hash2(i, 33) * 0.4 : hash2(i, 33) * 0.5, speed: 0.006 + hash2(i, 34) * 0.006, par: front ? 0.9 : 0.35, w, bob: 0 });
+      s.alpha = 0.96;
+      this.back.addChild(s);
+      this.near.push({ s, px: hash2(i, 32) * 1.6 - 0.3, py: hash2(i, 33) * 0.5, speed: 0.004 + hash2(i, 34) * 0.004, par: 0.35, w: w / this.pixel, bob: 0, haze: 0 });
     }
   }
 
@@ -199,13 +262,13 @@ export class Sky {
     if (key !== this.lastGrad) {
       this.lastGrad = key;
       const ctx = this.grad.getContext('2d')!;
-      const g = ctx.createLinearGradient(0, 0, 0, 128);
-      const hex = (n: number) => '#' + n.toString(16).padStart(6, '0');
+      const g = ctx.createLinearGradient(0, 0, 0, 256);
       g.addColorStop(0, hex(st.top));
-      g.addColorStop(0.62, hex(lerpHex(st.top, st.horizon, 0.55)));
-      g.addColorStop(1, hex(st.horizon));
+      g.addColorStop(0.45, hex(lerpHex(st.top, st.horizon, 0.45)));
+      g.addColorStop(0.68, hex(st.horizon));
+      g.addColorStop(1, hex(lerpHex(st.horizon, st.top, 0.25)));
       ctx.fillStyle = g;
-      ctx.fillRect(0, 0, 1, 128);
+      ctx.fillRect(0, 0, 1, 256);
       this.gradTex.source.update();
     }
     this.gradSprite.width = vw;
@@ -213,33 +276,46 @@ export class Sky {
 
     this.stars.width = vw;
     this.stars.height = vh * 0.75;
-    this.stars.tileScale.set(this.pixel);
+    this.stars.tileScale.set(2);
     this.stars.alpha = Math.max(0, st.night - 0.2) * 1.2 * (reduced ? 1 : 0.85 + 0.15 * Math.sin(t * 1.3));
     this.stars.tilePosition.set(-camX * 0.01, -camY * 0.01);
     this.stars.visible = this.stars.alpha > 0.01;
 
-    // sun arcs during the day, moon at night
-    const arc = (f: number) => [vw * (0.12 + f * 0.76), vh * (0.5 - Math.sin(f * Math.PI) * 0.38)];
+    // sun arcs low and slow so the day reads as a long golden afternoon
+    const arc = (f: number) => [vw * (0.1 + f * 0.8), vh * (0.62 - Math.sin(f * Math.PI) * 0.42)];
     const df = ((dayFrac % 1) + 1) % 1;
-    const sunF = df / 0.7;
+    const sunF = df / 0.72;
     this.sun.visible = sunF >= 0 && sunF <= 1;
-    if (this.sun.visible) { const [x, y] = arc(sunF); this.sun.position.set(x, y); this.sun.alpha = Math.min(1, Math.sin(sunF * Math.PI) * 3); }
-    const moonF = (df - 0.66 + (df < 0.3 ? 1 : 0)) / 0.36;
+    if (this.sun.visible) {
+      const [x, y] = arc(sunF);
+      this.sun.position.set(x, y);
+      this.sun.alpha = Math.min(1, Math.sin(sunF * Math.PI) * 4);
+      this.sun.tint = lerpHex(0xffffff, st.glow, 0.35);
+    }
+    this.bloom.visible = this.sun.visible && st.glow !== 0;
+    if (this.bloom.visible) {
+      this.bloom.position.copyFrom(this.sun.position);
+      const low = 1 - Math.sin(sunF * Math.PI);
+      this.bloom.width = this.bloom.height = Math.max(vw, vh) * (0.9 + low * 0.6);
+      this.bloom.tint = st.glow;
+      this.bloom.alpha = (0.35 + low * 0.45) * this.sun.alpha;
+    }
+    const moonF = (df - 0.68 + (df < 0.3 ? 1 : 0)) / 0.34;
     this.moon.visible = moonF >= 0 && moonF <= 1;
     if (this.moon.visible) { const [x, y] = arc(moonF); this.moon.position.set(x, y); this.moon.alpha = Math.min(1, Math.sin(moonF * Math.PI) * 3); }
 
-    const place = (d: Drifter, layerTint: number) => {
+    const place = (d: Drifter) => {
       const span = vw + d.w * this.pixel * 2;
       let x = (d.px * vw + (reduced ? 0 : t * d.speed * vw) - camX * d.par * 0.6) % span;
       if (x < 0) x += span;
       d.s.x = x - d.w * this.pixel;
       d.s.y = d.py * vh - camY * d.par * 0.4 + (d.bob ? Math.sin(t * 0.2 + d.bob) * d.bob : 0);
-      d.s.tint = layerTint;
+      d.s.tint = lerpHex(st.cloud, st.horizon, d.haze);
     };
-    this.far.forEach((d, i) => { d.s.visible = !this.lite || i % 2 === 0 || i < 6; if (d.s.visible) place(d, st.tint); });
+    this.far.forEach((d, i) => { d.s.visible = !this.lite || i % 2 === 0 || i < 11; if (d.s.visible) place(d); });
     for (const d of this.near) {
-      place(d, st.tint);
-      d.s.y = seaY + d.py * vh * 0.35 + (d.par > 0.5 ? -vh * 0.15 : 40);
+      place(d);
+      d.s.y = seaY + d.py * vh * 0.35 + 60;
     }
     this.front.visible = showFront;
     return st;

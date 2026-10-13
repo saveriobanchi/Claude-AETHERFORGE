@@ -1,11 +1,11 @@
-import { Application, Container, Graphics, Sprite, Texture, TextureSource } from 'pixi.js';
+import { Application, Container, Graphics, Rectangle, RenderTexture, Sprite, Texture, TextureSource } from 'pixi.js';
 import { BUILDINGS } from '../core/content/buildings';
 import { ITEM_IDS, type ItemId } from '../core/content/items';
 import { RECIPES } from '../core/content/recipes';
 import { ISLETS, SUMMON_TIME } from '../core/content/world';
 import { currentRecipe } from '../core/sim';
 import { type Building, type GameState, type SimEvent, DX, DY, dayFraction, key, stackTotal } from '../core/state';
-import { iconFor } from './art/icons';
+import { voxIconSmall as iconFor } from './vox/items';
 import { beltFrames } from './vox/buildings';
 import { P } from './art/palette';
 import { PixelCanvas, bayer, rgb } from './art/pixel';
@@ -131,7 +131,7 @@ export class WorldView {
     this.app.ticker.stop(); // the game loop drives rendering
 
     this.glow = glowTexture();
-    this.sky = new Sky(this.atlas);
+    this.sky = new Sky();
     this.fx = new Effects(this.atlas);
     this.buildTextures();
     this.atlas.flush();
@@ -139,7 +139,8 @@ export class WorldView {
     this.objects.sortableChildren = true;
     this.lights.blendMode = 'add';
     this.world.addChild(this.terrain, this.shadows, this.floor, this.items, this.grid, this.objects, this.fx.layer, this.lights, this.ghostLayer, this.overlay);
-    this.app.stage.addChild(this.sky.back, this.world, this.sky.front);
+    this.worldView.roundPixels = false;
+    this.app.stage.addChild(this.sky.back, this.worldView, this.sky.front);
   }
 
   private buildTextures(): void {
@@ -274,6 +275,25 @@ export class WorldView {
   }
 
   islandBottom = 0;
+
+  private rt: RenderTexture | null = null;
+  private readonly worldView = new Sprite();
+  private rtW = 0;
+  private rtH = 0;
+
+  /** Grow-only offscreen target; the view samples just the used corner. */
+  private ensureRT(w: number, h: number): void {
+    if (!this.rt || w > this.rt.width || h > this.rt.height) {
+      const old = this.rt;
+      this.rt = RenderTexture.create({ width: Math.ceil(Math.max(w, this.rt?.width ?? 0) / 64) * 64, height: Math.ceil(Math.max(h, this.rt?.height ?? 0) / 64) * 64, resolution: 1, scaleMode: 'linear', antialias: false });
+      this.rtW = this.rtH = 0;
+      old?.destroy(true);
+    }
+    if (w !== this.rtW || h !== this.rtH) {
+      this.rtW = w; this.rtH = h;
+      this.worldView.texture = new Texture({ source: this.rt.source, frame: new Rectangle(0, 0, w, h) });
+    }
+  }
 
   setQuality(q: 'high' | 'low'): void {
     const res = q === 'low' ? 1 : Math.min(window.devicePixelRatio || 1, 2);
@@ -458,8 +478,19 @@ export class WorldView {
       shy = (Math.random() - 0.5) * 3;
     }
     const z = this.cam.zoom;
-    this.world.scale.set(z);
-    this.world.position.set(Math.round(this.vw / 2 - this.cam.x * z + shx), Math.round(this.vh / 2 - this.cam.y * z + shy));
+    // The world is drawn crisp at a whole number of device pixels per art
+    // pixel into an offscreen texture, then that image is scaled smoothly to
+    // the exact zoom. Pixels stay even-sized and pans/zooms glide sub-pixel.
+    const res = this.app.renderer.resolution;
+    const k = Math.max(1, Math.round(z * res));
+    const rw = Math.ceil(this.vw * k / z) + 4, rh = Math.ceil(this.vh * k / z) + 4;
+    this.ensureRT(rw, rh);
+    const px = rw / 2 - (this.cam.x - shx / z) * k, py = rh / 2 - (this.cam.y - shy / z) * k;
+    const rx = Math.round(px), ry = Math.round(py);
+    this.world.scale.set(k);
+    this.world.position.set(rx, ry);
+    this.worldView.scale.set(z / k);
+    this.worldView.position.set(this.vw / 2 - (this.cam.x - shx / z) * z - rx * z / k, this.vh / 2 - (this.cam.y - shy / z) * z - ry * z / k);
 
     const sky = this.sky.update(dayFraction(s), this.time, this.cam.x * z, this.cam.y * z, this.vw, this.vh, o.reduced, !o.observe || true, (this.islandBottom - this.cam.y) * z + this.vh / 2);
     this.night = sky.night;
@@ -524,6 +555,7 @@ export class WorldView {
     }
     this.fx.update(dt);
     const t1 = performance.now();
+    this.app.renderer.render({ container: this.world, target: this.rt!, clear: true });
     this.app.renderer.render(this.app.stage);
     const t2 = performance.now();
     this.frameMs = this.frameMs * 0.9 + (t2 - t0) * 0.1;

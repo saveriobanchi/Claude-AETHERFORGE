@@ -58,13 +58,13 @@ if (params.has('sprites')) {
 }
 
 import { ITEM_IDS } from '../core/content/items';
-import { iconFor } from '../render/art/icons';
+import { voxIcon as iconFor, voxIconSmall } from '../render/vox/items';
 if (params.has('icons')) {
   ctx.fillStyle = '#1c2a2e'; ctx.fillRect(0, 0, cv.width, cv.height);
   ITEM_IDS.forEach((id, i) => {
     const x = 10 + (i % 9) * 150, y = 10 + Math.floor(i / 9) * 90;
     ctx.drawImage(iconFor(id).toCanvas(), x, y, 64, 64);
-    ctx.drawImage(iconFor(id).toCanvas(), x + 72, y + 24, 16, 16);
+    ctx.drawImage(voxIconSmall(id).toCanvas(), x + 72, y + 24, 32, 32);
     ctx.fillStyle = '#ddd'; ctx.font = '11px monospace'; ctx.fillText(id, x, y + 78);
   });
 }

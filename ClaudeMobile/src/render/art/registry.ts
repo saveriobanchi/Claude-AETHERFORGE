@@ -1,6 +1,7 @@
 import * as M from '../vox/buildings';
 import * as N from '../vox/nature';
 import type { SpriteDef } from './sprite';
+import { pack } from '../artpack';
 
 const makers: Record<string, () => SpriteDef> = {
   tree: N.treeSprite,
@@ -49,12 +50,17 @@ const cache = new Map<string, SpriteDef>();
 export function spriteFor(type: string): SpriteDef {
   let s = cache.get(type);
   if (!s) {
-    const mk = makers[type];
-    if (!mk) throw new Error('No sprite for ' + type);
-    s = mk();
+    s = pack.sprites.get(type) ?? makeSprite(type);
     cache.set(type, s);
   }
   return s;
+}
+
+/** Generate a sprite from its voxel model (ignores the pre-baked pack). */
+export function makeSprite(type: string): SpriteDef {
+  const mk = makers[type];
+  if (!mk) throw new Error('No sprite for ' + type);
+  return mk();
 }
 
 export function hasSprite(type: string): boolean {

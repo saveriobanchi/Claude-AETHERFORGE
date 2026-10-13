@@ -1,4 +1,5 @@
 import * as A from './core/actions';
+import { loadArtPack } from './render/artpack';
 import { BUILDINGS } from './core/content/buildings';
 import { DISCOVERIES } from './core/content/discoveries';
 import type { ItemId, Stack } from './core/content/items';
@@ -85,6 +86,7 @@ export class Game {
     rebuildCache(this.s);
 
     const stage = document.getElementById('stage')!;
+    if (!import.meta.env.DEV && !params.has('liveart')) await loadArtPack();
     await this.view.init(stage);
     this.applySettings();
     this.view.bloom = (this.s.forge.attune.bloom ?? 0) > 0;
@@ -94,6 +96,7 @@ export class Game {
     }
     if (params.has('zoom')) this.view.cam.jump(this.view.cam.x, this.view.cam.y, +(params.get('zoom') ?? 2));
     if (params.has('night')) this.s.time = 0.8 * 600;
+    if (params.has('t')) this.s.time = Number(params.get('t')) * 600;
     this.ui = new UI(this, document.getElementById('ui')!);
     attachGestures(this.view.app.canvas, {
       tap: (x, y) => this.onTap(x, y),

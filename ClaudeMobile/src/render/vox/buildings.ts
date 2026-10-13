@@ -1,5 +1,6 @@
 import { hash2 } from '../art/pixel';
 import { PixelCanvas as PixelCanvasCtor } from '../art/pixel';
+import { pack } from '../artpack';
 import type { SpriteDef } from '../art/sprite';
 import { M } from './mats';
 import { bakeFrames } from './nature';
@@ -804,6 +805,8 @@ export type { Mat };
 
 /** Belt frames on the fixed 64×40 canvas (ground centre at 32,24) the renderer expects. */
 export function beltFrames(dir: number, express: boolean): import('../art/pixel').PixelCanvas[] {
+  const packed = (express ? pack.express : pack.belt)[dir];
+  if (packed) return packed;
   const b = beltVox(dir, express);
   return b.frames.map((f) => {
     const out = new PixelCanvasCtor(64, 40);
