@@ -119,7 +119,7 @@ export class WorldView {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     await this.app.init({
       resizeTo: host,
-      background: 0x1f5f6e,
+      background: 0x6a5a90,
       antialias: false,
       resolution: dpr,
       autoDensity: true,

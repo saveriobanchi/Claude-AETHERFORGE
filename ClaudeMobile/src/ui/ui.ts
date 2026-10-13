@@ -8,7 +8,7 @@ import type { OfflineReport } from '../core/offline';
 import { flowRates } from '../core/offline';
 import { buildingUnlocked, landUnlocked, recipeUnlocked, teasers } from '../core/progression';
 import { currentRecipe, forgeNeeds } from '../core/sim';
-import { type Building, type Dir, capacity, isNight, stackTotal } from '../core/state';
+import { type Building, type Dir, capacity, dayFraction, isNight, stackTotal } from '../core/state';
 import type { Game } from '../game';
 import { audio } from '../platform/audio';
 import { clear, duration, fmt, h, img, setOnly } from './dom';
@@ -35,6 +35,10 @@ export class UI {
   private root: HTMLElement;
   private res!: HTMLElement;
   private note!: HTMLElement;
+  private quest!: HTMLElement;
+  private lvlEl!: HTMLElement;
+  private lvlBar!: HTMLElement;
+  private clockEl!: HTMLElement;
   private btnBuild!: HTMLButtonElement;
   private btnCraft!: HTMLButtonElement;
   private btnStash!: HTMLButtonElement;
@@ -78,19 +82,28 @@ export class UI {
   private mount(): void {
     const r = this.root;
     clear(r);
-    // HUD
+    // HUD — top-left banner (island, level), quest card, top-right resources
+    // and day clock, bottom-centre nav with the big Build button.
     this.res = h('div', { class: 'res-strip panel', onclick: () => this.openStash() });
-    this.btnJournal = this.iconBtn('journal', 'Journal', () => this.openJournal());
-    const obs = this.iconBtn('eye', 'Observe', () => this.g.toggleObserve());
+    this.lvlEl = h('span', { class: 'lvl num' });
+    this.lvlBar = h('i');
+    const banner = h('div', { class: 'banner panel', onclick: () => this.openJournal() },
+      h('div', { class: 'crest' }, img(glyph('spark'))),
+      h('div', { class: 't' }, h('div', { class: 'isle' }, h('span', { class: 'title', text: 'Emberleaf Isle' }), this.lvlEl), h('div', { class: 'bar xp' }, this.lvlBar)));
+    this.clockEl = h('div', { class: 'clock', title: 'Time of day' }, h('div', { class: 'dial' }, h('i', { class: 'hand' })), h('span', { class: 'time num' }));
     const menu = this.iconBtn('menu', 'Menu', () => this.openSettings());
-    const top = h('div', { class: 'hud-top' }, this.res, h('div', { class: 'hud-right' }, this.btnJournal, obs, menu));
-    this.note = h('div', { class: 'note hide' });
+    const top = h('div', { class: 'hud-top' }, banner, this.res, h('div', { class: 'hud-right' }, this.clockEl, menu));
+    this.note = h('div', { class: 'qtext' });
+    this.quest = h('div', { class: 'quest panel hide' }, h('div', { class: 'caps', text: 'Next' }), this.note);
     this.btnBuild = this.mainBtn('build', 'Build', () => this.toggleBuild());
+    this.btnBuild.classList.add('big');
     this.btnCraft = this.mainBtn('craft', 'Craft', () => this.toggleCraft());
     this.btnStash = this.mainBtn('stash', 'Stash', () => this.openStash());
-    const bottom = h('div', { class: 'hud-bottom' }, this.btnBuild, this.btnCraft, this.btnStash);
+    this.btnJournal = this.mainBtn('journal', 'Journal', () => this.openJournal());
+    const obs = this.mainBtn('eye', 'Observe', () => this.g.toggleObserve());
+    const bottom = h('div', { class: 'hud-bottom nav' }, this.btnStash, this.btnCraft, this.btnBuild, this.btnJournal, obs);
     this.savedEl = h('div', { class: 'saved' }, h('i'), 'SAVED');
-    const hud = h('div', { class: 'hud passthrough' }, top, this.note, bottom, this.savedEl);
+    const hud = h('div', { class: 'hud passthrough' }, top, this.quest, bottom, this.savedEl);
     hud.style.position = 'absolute';
     hud.style.inset = '0';
     this.build = h('div', { class: 'sheet' });
@@ -200,8 +213,25 @@ export class UI {
     const n = this.g.observe ? null : guideNote(s);
     if ((n ?? '') !== this.lastNote) {
       this.lastNote = n ?? '';
-      if (n) { this.note.textContent = n; this.note.classList.remove('hide'); }
-      else this.note.classList.add('hide');
+      if (n) { this.note.textContent = n; this.quest.classList.remove('hide'); }
+      else this.quest.classList.add('hide');
+    }
+    // level = discoveries made; the bar shows how much of the world is known
+    const lvl = s.known.size;
+    if (this.lvlEl.textContent !== `Lv ${lvl}`) {
+      this.lvlEl.textContent = `Lv ${lvl}`;
+      this.lvlBar.style.width = `${Math.round((lvl / DISCOVERY_LIST.length) * 100)}%`;
+    }
+    // day clock: daylight (0–0.68 of a cycle) spans 05:00–20:00, night the rest
+    const df = dayFraction(s);
+    const hours = df < 0.68 ? 5 + (df / 0.68) * 15 : 20 + ((df - 0.68) / 0.32) * 9;
+    const mins = Math.floor((hours % 24) * 60);
+    const hh = String(Math.floor(mins / 60)).padStart(2, '0'), mm = String(Math.floor((mins % 60) / 10) * 10).padStart(2, '0');
+    const time = this.clockEl.querySelector('.time')!;
+    if (time.textContent !== `${hh}:${mm}`) {
+      time.textContent = `${hh}:${mm}`;
+      (this.clockEl.querySelector('.hand') as HTMLElement).style.transform = `rotate(${Math.round(df * 360)}deg)`;
+      this.clockEl.classList.toggle('night', isNight(s));
     }
     // main buttons
     const craftVisible = A.hasWorkbench(s);
@@ -281,6 +311,7 @@ export class UI {
   }
 
   private renderBuild(): void {
+    this.build.classList.remove('placing-mode');
     const s = this.g.s;
     const sTab = this.tab;
     this.buildSig = sTab + '|' + this.availableCats().join() + '|' + ITEM_IDS.map((i) => s.stash[i]).join(',') + '|' + s.tiles.size;
@@ -376,6 +407,7 @@ export class UI {
       h('div', { class: 't' }, h('div', { class: 'nm', text: name }), cost ? this.costEl(cost) : null, h('div', { class: 'hint', text: hint })),
       rot ? h('button', { class: 'btn', onclick: () => this.g.rotateMode(), 'aria-label': 'Rotate' }, img(glyph('rotate')), dirArrow) : null,
       h('button', { class: 'btn primary', onclick: () => { this.g.setMode({ kind: 'play' }); this.closeBuild(); audio.play('close'); } }, img(glyph('check')), 'Done'));
+    this.build.classList.add('placing-mode');
     setOnly(this.build, bar);
   }
 
@@ -474,7 +506,7 @@ export class UI {
     const s = this.g.s;
     const b = id !== null ? s.buildings.get(id) : undefined;
     if (!b) {
-      if (this.side.classList.contains('open')) this.side.classList.remove('open');
+      if (this.side.classList.contains('open')) { this.side.classList.remove('open'); document.body.classList.remove('side-open'); }
       this.panelSig = '';
       this.panelBar = null;
       return;
@@ -512,6 +544,7 @@ export class UI {
     // keep the live progress bar pointing at the node actually in the DOM
     if (prevBar) this.panelBar = this.side.querySelector('.bar > i') ?? prevBar;
     this.side.classList.add('open');
+    document.body.classList.add('side-open');
   }
 
   private bar(cls = ''): HTMLElement {
