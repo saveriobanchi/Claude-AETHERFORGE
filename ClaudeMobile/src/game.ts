@@ -22,13 +22,15 @@ export interface Settings {
   haptics: boolean;
   reduced: boolean;
   quality: 'high' | 'low';
+  /** True once the player picks a quality themselves (disables auto-tuning). */
+  qualityChosen: boolean;
   ui: number;
   bubbles: boolean;
   dev: boolean;
   fps: boolean;
 }
 
-const DEFAULT_SETTINGS: Settings = { master: 0.8, sfx: 0.8, ambience: 0.6, haptics: true, reduced: false, quality: 'high', ui: 1, bubbles: true, dev: false, fps: false };
+const DEFAULT_SETTINGS: Settings = { master: 0.8, sfx: 0.8, ambience: 0.6, haptics: true, reduced: false, quality: 'high', qualityChosen: false, ui: 1, bubbles: true, dev: false, fps: false };
 
 export type Mode =
   | { kind: 'play' }
@@ -134,7 +136,7 @@ export class Game {
     audio.applyVolumes();
     document.documentElement.style.setProperty('--ui', String(st.ui));
     document.body.classList.toggle('reduced', st.reduced);
-    if (this.view.fx) this.view.fx.max = st.quality === 'low' ? 120 : 500;
+    if (this.view.fx) this.view.setQuality(st.quality);
   }
 
   saveSettings(): void {
@@ -148,6 +150,7 @@ export class Game {
     requestAnimationFrame((t) => this.frame(t));
     let dt = (now - this.last) / 1000;
     this.last = now;
+    this.autoQuality(dt);
     if (dt > 0.25) dt = 0.25;
     // fixed-step simulation
     this.acc += dt * this.speed;
@@ -241,6 +244,23 @@ export class Game {
     const d = Math.hypot((sx - vw / 2) / vw, (sy - vh / 2) / vh);
     const zoom = Math.min(1, this.view.cam.zoom / 3);
     return Math.max(0, (1 - d * 1.3) * zoom);
+  }
+
+  private perf = { t: 0, slow: 0, done: false };
+  /** If the device cannot hold ~40 fps, quietly switch to light effects once. */
+  private autoQuality(dt: number): void {
+    const p = this.perf;
+    if (p.done || this.settings.qualityChosen || this.settings.quality === 'low' || document.hidden) return;
+    p.t += dt;
+    if (p.t < 3) return;
+    if (dt > 1 / 38) p.slow += dt; else p.slow = Math.max(0, p.slow - dt * 0.5);
+    if (p.slow > 4) {
+      p.done = true;
+      this.settings.quality = 'low';
+      this.saveSettings();
+      this.ui.hint('Switched to light effects for smoother play.', false, 3000);
+    }
+    if (p.t > 40) p.done = true;
   }
 
   // ───────────────────────── input ─────────────────────────

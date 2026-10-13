@@ -1,0 +1,13 @@
+{
+  "appId": "dev.aetherforge.mobile",
+  "appName": "Aetherforge",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#14232a",
+    "allowMixedContent": false
+  },
+  "ios": {
+    "backgroundColor": "#14232a",
+    "contentInset": "never"
+  }
+}

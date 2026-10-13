@@ -11,6 +11,7 @@ export default defineConfig({
     assetsInlineLimit: 0,
     chunkSizeWarningLimit: 1200,
     rollupOptions: {
+      input: { main: 'index.html' },
       output: { manualChunks: { pixi: ['pixi.js'] } },
     },
   },

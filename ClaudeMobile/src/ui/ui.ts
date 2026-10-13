@@ -17,8 +17,8 @@ import { guideNote } from './guide';
 
 const CATS: { id: BuildCategory | 'land'; name: string }[] = [
   { id: 'land', name: 'Land' },
-  { id: 'nature', name: 'Nature' },
   { id: 'craft', name: 'Make' },
+  { id: 'nature', name: 'Nature' },
   { id: 'logistics', name: 'Move' },
   { id: 'power', name: 'Power' },
   { id: 'storage', name: 'Store' },
@@ -239,7 +239,8 @@ export class UI {
     // start on the most relevant tab
     const avail = this.availableCats();
     if (!avail.includes(this.tab)) this.tab = avail[0] ?? 'craft';
-    const unseen = this.unseenBuildables();
+    const order = CATS.map((c) => c.id);
+    const unseen = this.unseenBuildables().sort((a, b) => order.indexOf(a.cat) - order.indexOf(b.cat));
     if (unseen.length) this.tab = unseen[0].cat;
     this.renderBuild();
     this.build.classList.add('open');
@@ -849,7 +850,7 @@ export class UI {
       h('div', { class: 'caps', text: 'Feel' }), toggle('Vibration', 'haptics'), toggle('Reduce motion', 'reduced'), toggle('Machine status bubbles', 'bubbles'),
       h('div', { class: 'caps', text: 'Display' }),
       seg('Interface size', [[0.9, 'S'], [1, 'M'], [1.15, 'L']] as [number, string][], st.ui, (v) => { st.ui = v; }),
-      seg('Effects quality', [['low', 'Light'], ['high', 'Full']] as ['low' | 'high', string][], st.quality, (v) => { st.quality = v; }),
+      seg('Effects quality', [['low', 'Light'], ['high', 'Full']] as ['low' | 'high', string][], st.quality, (v) => { st.quality = v; st.qualityChosen = true; }),
       st.dev ? toggle('Show frame rate', 'fps', () => this.fpsEl.classList.toggle('show', st.fps)) : null,
       h('div', { class: 'caps', text: 'Your world' }),
       h('div', { class: 'actions' },

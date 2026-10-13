@@ -136,6 +136,8 @@ export class Sky {
   private near: Drifter[] = [];
   private lastGrad = '';
   readonly pixel = 3;
+  /** Light quality: skip every other cloud to cut overdraw. */
+  lite = false;
 
   constructor(atlas: Atlas) {
     this.grad = document.createElement('canvas');
@@ -214,6 +216,7 @@ export class Sky {
     this.stars.tileScale.set(this.pixel);
     this.stars.alpha = Math.max(0, st.night - 0.2) * 1.2 * (reduced ? 1 : 0.85 + 0.15 * Math.sin(t * 1.3));
     this.stars.tilePosition.set(-camX * 0.01, -camY * 0.01);
+    this.stars.visible = this.stars.alpha > 0.01;
 
     // sun arcs during the day, moon at night
     const arc = (f: number) => [vw * (0.12 + f * 0.76), vh * (0.5 - Math.sin(f * Math.PI) * 0.38)];
@@ -233,7 +236,7 @@ export class Sky {
       d.s.y = d.py * vh - camY * d.par * 0.4 + (d.bob ? Math.sin(t * 0.2 + d.bob) * d.bob : 0);
       d.s.tint = layerTint;
     };
-    for (const d of this.far) place(d, st.tint);
+    this.far.forEach((d, i) => { d.s.visible = !this.lite || i % 2 === 0 || i < 6; if (d.s.visible) place(d, st.tint); });
     for (const d of this.near) {
       place(d, st.tint);
       d.s.y = seaY + d.py * vh * 0.35 + (d.par > 0.5 ? -vh * 0.15 : 40);

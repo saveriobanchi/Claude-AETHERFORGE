@@ -3,18 +3,33 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "scripts": {},
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src tests",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "icons": "node scripts/make-icons.mjs",
+    "check": "npm run lint && npm run typecheck && npm test"
+  },
   "dependencies": {
-    "pixi.js": "^8.21.0"
+    "@capacitor/core": "7.4.4",
+    "pixi.js": "8.21.0"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.5",
-    "@playwright/test": "^1.56.1",
-    "@types/node": "^22.20.5",
-    "eslint": "^9.39.5",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.46.4",
-    "vite": "^7.3.7",
-    "vitest": "^4.0.18"
-  }
+    "@capacitor/android": "7.4.4",
+    "@capacitor/cli": "7.4.4",
+    "@eslint/js": "9.39.5",
+    "@playwright/test": "1.56.1",
+    "@types/node": "22.20.5",
+    "eslint": "9.39.5",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.46.4",
+    "vite": "7.3.7",
+    "vitest": "4.0.18"
+  },
+  "description": "Aetherforge — a mobile-first isometric floating-world builder (independent Claude one-shot implementation)."
 }

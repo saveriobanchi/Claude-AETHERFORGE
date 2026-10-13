@@ -259,6 +259,16 @@ export class WorldView {
 
   islandBottom = 0;
 
+  setQuality(q: 'high' | 'low'): void {
+    const res = q === 'low' ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+    if (this.app.renderer && this.app.renderer.resolution !== res) {
+      this.app.renderer.resolution = res;
+      this.app.renderer.resize(this.app.screen.width, this.app.screen.height, res);
+    }
+    this.sky.lite = q === 'low';
+    this.fx.max = q === 'low' ? 120 : 500;
+  }
+
   forceTerrain(): void {
     this.tileRev = -1;
     this.floorSnapshot.clear();

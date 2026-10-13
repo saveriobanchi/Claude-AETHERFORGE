@@ -60,6 +60,9 @@ html, body {
 #ui .sheet:not(.open) *, #ui .side:not(.open) *, #ui .modal-wrap:not(.open) * { pointer-events: none !important; }
 #ui .modal-wrap.open { pointer-events: auto; }
 #ui .dev:not(.open) { display: none; }
+#ui .observe-exit { pointer-events: none; }
+body.observe #ui .observe-exit { pointer-events: auto; }
+body.observe #ui .hud button, body.observe #ui .hud .res-strip, body.observe #ui .sheet *, body.observe #ui .side * { pointer-events: none !important; }
 
 img.px, canvas.px { image-rendering: pixelated; image-rendering: crisp-edges; }
 
@@ -71,7 +74,7 @@ img.px, canvas.px { image-rendering: pixelated; image-rendering: crisp-edges; }
   transition: opacity 600ms var(--ease);
 }
 #boot.gone { opacity: 0; pointer-events: none; }
-.boot-mark { width: 64px; height: 64px; image-rendering: pixelated; background-size: contain; background-repeat: no-repeat; animation: bob 2.4s ease-in-out infinite; }
+.boot-mark { width: 96px; height: 96px; image-rendering: pixelated; border-radius: 18px; box-shadow: 0 12px 40px rgba(0,0,0,0.4); animation: bob 2.4s ease-in-out infinite; }
 .boot-title { font-family: 'Pixelify', monospace; font-size: 26px; letter-spacing: 0.12em; color: var(--text); }
 .boot-bar { width: 160px; height: 3px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
 .boot-bar i { display: block; height: 100%; width: 30%; background: var(--accent); animation: load 1.2s var(--ease) infinite; }
