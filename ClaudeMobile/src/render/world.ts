@@ -110,6 +110,8 @@ export class WorldView {
   night = 0;
   frameMs = 16;
   updateMs = 0;
+  private fillLevel = 0;
+  private fillTick = -1;
 
   async init(host: HTMLElement): Promise<void> {
     TextureSource.defaultOptions.scaleMode = 'nearest';
@@ -457,6 +459,14 @@ export class WorldView {
       c.visible = c.x < vx1 && c.x + c.width > vx0 && c.y < vy1 && c.y + c.height > vy0;
     }
 
+    // how full the stash is drives storage visuals (0 empty-ish, 1 half, 2 nearly full)
+    if (Math.floor(this.time * 2) !== this.fillTick) {
+      this.fillTick = Math.floor(this.time * 2);
+      let mx = 0;
+      const cap = s.cache.capacity || 1;
+      for (const id of ITEM_IDS) mx = Math.max(mx, s.stash[id] / cap);
+      this.fillLevel = mx > 0.85 ? 2 : mx > 0.35 ? 1 : 0;
+    }
     // sync building views
     for (const [id, v] of this.views) {
       const b = s.buildings.get(id);
@@ -529,6 +539,8 @@ export class WorldView {
     } else if (kind === 'sapling') {
       const stage = Math.min(2, Math.floor((b.progress / 45) * 3));
       frames = st.variants['g' + stage] ?? frames;
+    } else if (kind === 'storage' && st.variants) {
+      frames = st.variants['f' + this.fillLevel] ?? frames;
     } else if (kind === 'forge') {
       frames = st.variants['st' + Math.max(0, Math.min(3, s.forge.stage))] ?? frames;
     }

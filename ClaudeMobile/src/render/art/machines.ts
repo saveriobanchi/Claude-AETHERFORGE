@@ -563,24 +563,37 @@ export function splitter(sorter: boolean): SpriteDef {
 
 export function storage(kind: 'crate' | 'silo' | 'warehouse'): SpriteDef {
   if (kind === 'crate') {
-    return make(72, 1, (c, o) => {
+    const level = (fill: number): SpriteDef => make(80, 1, (c, o) => {
       box(c, o, -3, -3, 10, 10, 0, 14, woodBox(41, 3));
       box(c, o, 7, 7, 6, 6, 0, 9, woodBox(43, 2));
-      box(c, o, -3, -3, 6, 6, 14, 8, woodBox(45, 2));
-      // cross braces on big crate
       const [a, b] = [iso(o, -13, 7, 14), iso(o, 7, 7, 0)];
       c.line(a[0], a[1], b[0], b[1], P.wood[1]);
+      if (fill >= 1) box(c, o, -3, -3, 6, 6, 14, 8, woodBox(45, 2));
+      if (fill >= 2) {
+        // sacks and a third crate piled on top
+        box(c, o, 7, 7, 5, 5, 9, 7, woodBox(47, 2));
+        const [sx, sy] = iso(o, -6, 4, 22);
+        c.ellipse(sx, sy, 5, 3.5, (x, y) => shadeRamp(P.cream, 0.6 - (x - sx) / 12 - (y - sy) / 10, x, y, 0.3));
+        c.line(sx - 2, sy - 3, sx + 1, sy - 4, P.wood[2]);
+      }
     }, { fps: 1 });
+    const v0 = level(0), v1 = level(1), v2 = level(2);
+    return { ...v1, variants: { f0: v0.frames, f1: v1.frames, f2: v2.frames } };
   }
   if (kind === 'silo') {
-    return make(128, 1, (c, o) => {
+    const level = (fill: number): SpriteDef => make(128, 1, (c, o) => {
       plinth(c, o, 3);
       cylinder(c, o, 0, 0, 12, 3, 46, P.brick);
       for (const z of [12, 26, 40]) {
         const [cx, cy] = iso(o, 0, 0, z);
         for (let x = -17; x <= 17; x++) { const t = x / 17; c.set(cx + x, Math.round(cy + 8.5 * Math.sqrt(Math.max(0, 1 - t * t))), P.iron[x < 0 ? 4 : 2]); }
       }
-      // conical copper roof
+      // glass gauge window showing how full the stash is
+      const [gx, gy] = iso(o, -6, 9, 8);
+      for (let y = 0; y < 30; y++) for (let x = 0; x < 3; x++) {
+        const filled = y < Math.round((fill / 2) * 28) + 1;
+        c.set(gx + x, gy - y, filled ? (y % 4 === 0 ? P.gold[4] : P.gold[3]) : P.glass[1]);
+      }
       const [rx, ry] = iso(o, 0, 0, 49);
       for (let y = 0; y < 16; y++) {
         const w = Math.round(18 * (y / 16));
@@ -588,6 +601,8 @@ export function storage(kind: 'crate' | 'silo' | 'warehouse'): SpriteDef {
       }
       c.ellipse(rx, ry, 18, 8, (x, y, d) => (d > 0.75 ? shadeRamp(P.copper, 0.4, x, y, 0) : 0));
     }, { fps: 1 });
+    const v0 = level(0), v1 = level(1), v2 = level(2);
+    return { ...v1, variants: { f0: v0.frames, f1: v1.frames, f2: v2.frames } };
   }
   return make(104, 2, (c, o, f) => {
     box(c, o, 0, 0, 14, 14, 0, 24, stoneBox(4, 3, P.stone));
