@@ -189,6 +189,7 @@ export function expand(s: GameState, land: string, x: number, y: number): Result
     if (o && o.type === 'tuft') { stashAdd(s, 'fiber', TUFT.yield); removeBuildingRaw(s, o); }
     tileAt(s, x, y)!.floor = def.floor;
     s.topoDirty = true;
+    s.tileRev++;
   }
   sync(s);
   checkDiscoveries(s);
@@ -397,3 +398,4 @@ export function attune(s: GameState, id: string): Result {
   sync(s);
   return OK;
 }
+export { canAfford } from './state';

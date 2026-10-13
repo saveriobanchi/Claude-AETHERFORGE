@@ -500,7 +500,6 @@ export class Bot {
 
   landCost(land: string): Partial<Record<ItemId, number>> {
     // mirrors content/world.landCost through the public API
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     return land === 'plot' ? plotCostFor(this.s.tiles.size) : land === 'flagstone' ? { stone: 2 } : { skystone: 3 };
   }
 

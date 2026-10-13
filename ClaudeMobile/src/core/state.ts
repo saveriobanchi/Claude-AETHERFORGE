@@ -111,6 +111,8 @@ export interface GameState {
   /** Developer/test capacity bonus (not saved). */
   extraCapacity: number;
   // transient
+  /** Increments whenever ground changes (renderer redraws terrain chunks). */
+  tileRev: number;
   events: SimEvent[];
   topoDirty: boolean;
   cache: SimCache;
@@ -179,6 +181,7 @@ export function createState(seed = 1234567): GameState {
     tuftTimer: 0,
     savedAt: 0,
     extraCapacity: 0,
+    tileRev: 0,
     events: [],
     topoDirty: true,
     cache: emptyCache(),
@@ -196,6 +199,7 @@ export function addTile(s: GameState, x: number, y: number, floor: Floor, islet?
   const t: Tile = { x, y, floor, seed: hashSeed(x, y), islet };
   s.tiles.set(key(x, y), t);
   s.topoDirty = true;
+  s.tileRev++;
   return t;
 }
 
