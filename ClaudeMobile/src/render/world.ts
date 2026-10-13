@@ -6,12 +6,13 @@ import { ISLETS, SUMMON_TIME } from '../core/content/world';
 import { currentRecipe } from '../core/sim';
 import { type Building, type GameState, type SimEvent, DX, DY, dayFraction, key, stackTotal } from '../core/state';
 import { iconFor } from './art/icons';
-import { beltFrames } from './art/machines';
+import { beltFrames } from './vox/buildings';
 import { P } from './art/palette';
 import { PixelCanvas, bayer, rgb } from './art/pixel';
 import { SPRITE_TYPES, spriteFor } from './art/registry';
 import type { SpriteDef } from './art/sprite';
-import { CHUNK, chunkOrigin, renderChunk, tileCenter } from './art/terrain';
+import { CHUNK, chunkOrigin, tileCenter } from './art/terrain';
+import { renderVoxChunk } from './vox/terrain';
 import { Atlas } from './atlas';
 import { Camera } from './camera';
 import { Effects, glowTexture } from './effects';
@@ -214,29 +215,43 @@ export class WorldView {
 
   // ───────────────────────── terrain ─────────────────────────
 
+  private chunkQueue = new Set<string>();
+  private firstTerrain = true;
+
   private syncTerrain(s: GameState): void {
-    if (s.tileRev === this.tileRev) return;
-    this.tileRev = s.tileRev;
-    const dirty = new Set<string>();
-    const mark = (x: number, y: number) => {
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) dirty.add(`${Math.floor((x + dx) / CHUNK)},${Math.floor((y + dy) / CHUNK)}`);
-    };
-    const seen = new Set<number>();
-    for (const [k, t] of s.tiles) {
-      seen.add(k);
-      const sig = t.floor;
-      if (this.floorSnapshot.get(k) !== sig) { this.floorSnapshot.set(k, sig); mark(t.x, t.y); }
+    if (s.tileRev !== this.tileRev) {
+      this.tileRev = s.tileRev;
+      // underside depth depends on land up to 4 tiles away: mark that neighbourhood
+      const mark = (x: number, y: number) => {
+        for (let dy = -4; dy <= 4; dy += 4) for (let dx = -4; dx <= 4; dx += 4) this.chunkQueue.add(`${Math.floor((x + dx) / CHUNK)},${Math.floor((y + dy) / CHUNK)}`);
+      };
+      const seen = new Set<number>();
+      for (const [k, t] of s.tiles) {
+        seen.add(k);
+        if (this.floorSnapshot.get(k) !== t.floor) { this.floorSnapshot.set(k, t.floor); mark(t.x, t.y); }
+      }
+      for (const k of [...this.floorSnapshot.keys()]) if (!seen.has(k)) { this.floorSnapshot.delete(k); mark(Math.floor(k / 4096) - 2048, (k % 4096) - 2048); }
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const t of s.tiles.values()) {
+        const [wx, wy] = tileCenter(t.x, t.y);
+        x0 = Math.min(x0, wx); x1 = Math.max(x1, wx); y0 = Math.min(y0, wy); y1 = Math.max(y1, wy);
+      }
+      this.cam.setBounds(x0, y0, x1, y1 + 80);
+      this.islandBottom = y1 + 120;
     }
-    for (const k of [...this.floorSnapshot.keys()]) if (!seen.has(k)) { this.floorSnapshot.delete(k); const x = Math.floor(k / 4096) - 2048, y = (k % 4096) - 2048; mark(x, y); }
-    // undersides depend on land several tiles behind: widen dirty region diagonally
-    for (const d of [...dirty]) {
-      const [cx, cy] = d.split(',').map(Number);
-      dirty.add(`${cx + 1},${cy + 1}`);
-    }
+    if (!this.chunkQueue.size) return;
+    // first build renders everything; afterwards one chunk per frame (no hitches)
     const get = (x: number, y: number) => s.tiles.get(key(x, y));
-    for (const d of dirty) {
+    const budget = this.firstTerrain ? Infinity : 1;
+    this.firstTerrain = false;
+    let n = 0;
+    // nearest-to-camera chunks first
+    const order = [...this.chunkQueue].sort((a, b) => this.chunkDist(a) - this.chunkDist(b));
+    for (const d of order) {
+      if (n++ >= budget) break;
+      this.chunkQueue.delete(d);
       const [cx, cy] = d.split(',').map(Number);
-      const pc = renderChunk(get, cx, cy, this.bloom);
+      const pc = renderVoxChunk(get, cx, cy, this.bloom);
       const old = this.chunks.get(d);
       if (old) { old.texture.destroy(true); old.destroy(); this.chunks.delete(d); }
       if (!pc) continue;
@@ -250,14 +265,12 @@ export class WorldView {
       this.terrain.addChild(sp);
     }
     this.terrain.sortChildren();
-    // camera bounds follow the island
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (const t of s.tiles.values()) {
-      const [wx, wy] = tileCenter(t.x, t.y);
-      x0 = Math.min(x0, wx); x1 = Math.max(x1, wx); y0 = Math.min(y0, wy); y1 = Math.max(y1, wy);
-    }
-    this.cam.setBounds(x0, y0, x1, y1 + 80);
-    this.islandBottom = y1 + 60;
+  }
+
+  private chunkDist(d: string): number {
+    const [cx, cy] = d.split(',').map(Number);
+    const [wx, wy] = tileCenter(cx * CHUNK + 4, cy * CHUNK + 4);
+    return Math.hypot(wx - this.cam.x, wy - this.cam.y);
   }
 
   islandBottom = 0;
@@ -275,6 +288,7 @@ export class WorldView {
   forceTerrain(): void {
     this.tileRev = -1;
     this.floorSnapshot.clear();
+    this.firstTerrain = true;
   }
 
   // ───────────────────────── buildings ─────────────────────────

@@ -1,15 +1,15 @@
-import * as M from './machines';
-import * as N from './nature';
+import * as M from '../vox/buildings';
+import * as N from '../vox/nature';
 import type { SpriteDef } from './sprite';
 
 const makers: Record<string, () => SpriteDef> = {
   tree: N.treeSprite,
   elder_tree: N.elderTreeSprite,
-  sapling: N.saplingSprite,
-  tuft: N.tuftSprite,
-  node_vein: () => N.nodeSprite('node_vein'),
-  node_spring: () => N.nodeSprite('node_spring'),
-  node_shard: () => N.nodeSprite('node_shard'),
+  sapling: M.sapling,
+  tuft: M.tuft,
+  node_vein: () => M.node('node_vein'),
+  node_spring: () => M.node('node_spring'),
+  node_shard: () => M.node('node_shard'),
   workbench: M.workbench,
   composter: M.composter,
   sieve: M.sieve,

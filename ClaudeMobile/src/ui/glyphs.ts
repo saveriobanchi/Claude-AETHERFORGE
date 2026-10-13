@@ -3,7 +3,7 @@ import { iconFor } from '../render/art/icons';
 import { P } from '../render/art/palette';
 import { PixelCanvas, rgb, type RGBA } from '../render/art/pixel';
 import { spriteFor } from '../render/art/registry';
-import { beltFrames } from '../render/art/machines';
+import { beltFrames } from '../render/vox/buildings';
 
 const cache = new Map<string, string>();
 

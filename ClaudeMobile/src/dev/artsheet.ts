@@ -1,5 +1,6 @@
 import { addTile, createState, key } from '../core/state';
-import { CHUNK, chunkOrigin, renderChunk } from '../render/art/terrain';
+import { CHUNK, chunkOrigin } from '../render/art/terrain';
+import { renderVoxChunk as renderChunk } from '../render/vox/terrain';
 
 const s = createState();
 s.tiles.clear();
@@ -39,6 +40,7 @@ for (const [cx, cy] of list) {
 import { SPRITE_TYPES, spriteFor } from '../render/art/registry';
 const params = new URLSearchParams(location.search);
 if (params.has('sprites')) {
+  const t0 = performance.now();
   ctx.fillStyle = '#2c6470'; ctx.fillRect(0, 0, cv.width, cv.height);
   let gx = 10, gy = 10, rowH = 0;
   const sc = Number(params.get('scale') ?? 2);
@@ -52,6 +54,7 @@ if (params.has('sprites')) {
     ctx.fillStyle = '#fff'; ctx.font = '11px monospace'; ctx.fillText(t, gx + 2, gy + h + 10);
     gx += w + 8; rowH = Math.max(rowH, h);
   }
+  ctx.fillStyle = '#fff'; ctx.font = '14px monospace'; ctx.fillText(`${(performance.now() - t0).toFixed(0)} ms`, 10, cv.height - 10);
 }
 
 import { ITEM_IDS } from '../core/content/items';
@@ -64,4 +67,18 @@ if (params.has('icons')) {
     ctx.drawImage(iconFor(id).toCanvas(), x + 72, y + 24, 16, 16);
     ctx.fillStyle = '#ddd'; ctx.font = '11px monospace'; ctx.fillText(id, x, y + 78);
   });
+}
+
+import * as VN from '../render/vox/nature';
+if (params.has('vox')) {
+  ctx.fillStyle = '#5a7f9a'; ctx.fillRect(0, 0, cv.width, cv.height);
+  const sc = Number(params.get('scale') ?? 3);
+  let x = 20;
+  const t0 = performance.now();
+  for (const sp of [VN.treeSprite(), VN.elderTreeSprite()]) {
+    const f = sp.frames[0];
+    ctx.drawImage(f.toCanvas(), x, 20, f.w * sc, f.h * sc);
+    x += f.w * sc + 30;
+  }
+  ctx.fillStyle = '#fff'; ctx.font = '14px monospace'; ctx.fillText(`${(performance.now() - t0).toFixed(0)} ms`, 10, cv.height - 10);
 }

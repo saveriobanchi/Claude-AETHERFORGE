@@ -5,7 +5,7 @@ import { type RGBA, PixelCanvas, bayer, hash2, mix, noise2, rgb, shadeRamp } fro
 export const TILE_W = 64;
 export const TILE_H = 32;
 export const CHUNK = 8;
-export const CHUNK_DEPTH = 150; // extra pixels below for undersides
+export const CHUNK_DEPTH = 360; // extra pixels below for undersides
 export const CHUNK_W = (CHUNK * 2 - 1) * 32 + 64 + 2;
 export const CHUNK_H = (CHUNK * 2 - 2) * 16 + 32 + CHUNK_DEPTH;
 

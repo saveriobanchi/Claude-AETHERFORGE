@@ -1,0 +1,93 @@
+import { ramp } from '../art/pixel';
+import type { Mat } from './vox';
+
+/**
+ * Warm, saturated ramps (dark → light) for the voxel world. Shadows lean
+ * violet-blue, lights lean gold, so everything sits in a golden-hour sky.
+ */
+export const R = {
+  grass: ramp(0x1a3324, 0x22462a, 0x2c5c2e, 0x3b7432, 0x518c36, 0x6ba23c, 0x8ab646, 0xaec95a),
+  leaf: ramp(0x16301f, 0x1f4527, 0x2c5f2c, 0x3f7a30, 0x569636, 0x75b03e, 0x9cc94c, 0xc4de64),
+  leafDeep: ramp(0x10241c, 0x183622, 0x224a28, 0x2f612d, 0x3f7a32, 0x5a9438),
+  autumn: ramp(0x3a1c14, 0x5e2a16, 0x8a3f18, 0xb5591c, 0xd97b26, 0xf0a33a, 0xffcc5a),
+  dirt: ramp(0x241411, 0x371d16, 0x4d2a1b, 0x653a22, 0x7d4c2b, 0x966036, 0xb07a46),
+  stone: ramp(0x1f1d26, 0x2c2a35, 0x3c3a46, 0x4f4d59, 0x65636e, 0x7d7b84, 0x98959b, 0xb7b3b3),
+  cobble: ramp(0x2a2630, 0x3b3640, 0x4f4952, 0x655e65, 0x7d757a, 0x978e8f, 0xb3a9a5),
+  sand: ramp(0x6a4a2a, 0x8c6638, 0xae8448, 0xcaa25c, 0xe0be76, 0xf2d898),
+  wood: ramp(0x2a1610, 0x3e2114, 0x572f19, 0x713f1f, 0x8c5226, 0xa8662f, 0xc47f3c, 0xdc9c52),
+  plank: ramp(0x3a2216, 0x52301c, 0x6c4123, 0x87542b, 0xa26a35, 0xbd8243, 0xd59d58),
+  bark: ramp(0x1e130f, 0x2d1c14, 0x3f281a, 0x523421, 0x67432a, 0x7d5434),
+  iron: ramp(0x1b1c24, 0x272a34, 0x363a46, 0x474c5a, 0x5c6271, 0x747b8a, 0x9098a5, 0xb2b9c2),
+  copper: ramp(0x3d1a12, 0x5c2617, 0x7e361b, 0xa24a20, 0xc4612a, 0xdf7f39, 0xf2a253, 0xffc97a),
+  gold: ramp(0x4a2c0e, 0x6e4512, 0x965f16, 0xbd801c, 0xdea42a, 0xf4c645, 0xffe27a, 0xfff2b8),
+  brick: ramp(0x34140f, 0x4f1d14, 0x6c2a19, 0x8a3a20, 0xa54d29, 0xbf6434, 0xd47e45),
+  clay: ramp(0x5a2f1d, 0x7a4026, 0x995432, 0xb56a40, 0xcd8452, 0xe0a06a),
+  water: ramp(0x11264a, 0x173a66, 0x1f5288, 0x2a6ea6, 0x3c8dc2, 0x5fb0da, 0x8dd2ec, 0xc6eef8),
+  aether: ramp(0x10284a, 0x163e72, 0x1f589c, 0x2c76c4, 0x4697e0, 0x6cb8f2, 0x9cd8fc, 0xd6f2ff),
+  crystal: ramp(0x1a2a6a, 0x23409a, 0x2d5cc4, 0x4182e6, 0x66a8f6, 0x96cafc, 0xc8e8ff, 0xf2fbff),
+  glass: ramp(0x2a4a5a, 0x3e6c7e, 0x5a909e, 0x82b6c0, 0xb2dade, 0xe2f6f4),
+  fire: ramp(0x6a1a0e, 0xa82e12, 0xd8501a, 0xf27a24, 0xffa63a, 0xffcf62, 0xfff09e),
+  lamp: ramp(0x8a4a12, 0xc8761a, 0xf2a22a, 0xffc84a, 0xffe48a, 0xfff6cc),
+  cloth: ramp(0x5a4632, 0x7e6446, 0xa2845c, 0xc2a576, 0xdcc394, 0xf0dcb4),
+  red: ramp(0x4a1018, 0x6e1820, 0x942228, 0xb83032, 0xd64640, 0xee6a58),
+  flowerY: ramp(0x8a5a10, 0xc8901a, 0xf0c22a, 0xffe060, 0xfff2a8),
+  flowerP: ramp(0x5a1a4a, 0x8a2a6a, 0xb4448a, 0xd86aa6, 0xf09ac4),
+  flowerB: ramp(0x1e2a6a, 0x2a44a0, 0x4068cc, 0x6a92ec, 0xa2c2fc),
+  flowerW: ramp(0x8a8a8a, 0xb4b0aa, 0xd8d2c8, 0xf2eee4, 0xffffff),
+  mush: ramp(0x5a1410, 0x8a1e16, 0xb42e1e, 0xd8462a, 0xf06a44),
+  snow: ramp(0x8aa0b8, 0xaec0d2, 0xd0dcea, 0xeef4fa, 0xffffff),
+  ink: ramp(0x0e0a10, 0x1a1418, 0x261e22),
+  star: ramp(0x8a5a1a, 0xc8901e, 0xf2c23a, 0xffe478, 0xfff6c8),
+  amber: ramp(0x5a2408, 0x8e3c0e, 0xc25c14, 0xec8622, 0xffb648, 0xffde88),
+  moss: ramp(0x1c3420, 0x284a26, 0x36622c, 0x467a32, 0x5a9238),
+  skystone: ramp(0x3a4256, 0x4e586e, 0x667288, 0x8290a4, 0xa2b0c0, 0xc4d0dc, 0xe4ecf2),
+};
+
+const m = (ramp: Mat['ramp'], l: number, v = 0.12, d = 0.35): Mat => ({ ramp, l, v, d });
+const g = (ramp: Mat['ramp'], l: number): Mat => ({ ramp, l, glow: true, d: 0.25 });
+
+export const M = {
+  grass: m(R.grass, 0.44, 0.16),
+  grassLight: m(R.grass, 0.7, 0.12),
+  leaf: m(R.leaf, 0.56, 0.2, 0.45),
+  leafDark: m(R.leafDeep, 0.5, 0.18, 0.45),
+  autumn: m(R.autumn, 0.6, 0.2, 0.45),
+  dirt: m(R.dirt, 0.52, 0.16),
+  stone: m(R.stone, 0.56, 0.14),
+  cobble: m(R.cobble, 0.55, 0.22),
+  sand: m(R.sand, 0.55, 0.12),
+  wood: m(R.wood, 0.55, 0.1),
+  woodDark: m(R.wood, 0.36, 0.08),
+  plank: m(R.plank, 0.56, 0.1),
+  bark: m(R.bark, 0.56, 0.18),
+  log: m(R.wood, 0.62, 0.06),
+  iron: m(R.iron, 0.55, 0.06, 0.25),
+  ironDark: m(R.iron, 0.34, 0.06, 0.25),
+  copper: m(R.copper, 0.55, 0.06, 0.25),
+  gold: m(R.gold, 0.6, 0.06, 0.25),
+  brass: m(R.gold, 0.48, 0.06, 0.25),
+  brick: m(R.brick, 0.52, 0.12),
+  clay: m(R.clay, 0.55, 0.1),
+  water: m(R.water, 0.6, 0.08, 0.5),
+  glass: m(R.glass, 0.62, 0.04, 0.2),
+  cloth: m(R.cloth, 0.62, 0.08),
+  red: m(R.red, 0.55, 0.08),
+  moss: m(R.moss, 0.55, 0.2),
+  skystone: m(R.skystone, 0.56, 0.1),
+  ink: m(R.ink, 0.5, 0),
+  snow: m(R.snow, 0.7, 0.05),
+  // emissive
+  fire: g(R.fire, 0.7),
+  lamp: g(R.lamp, 0.75),
+  aether: g(R.aether, 0.7),
+  crystal: g(R.crystal, 0.62),
+  star: g(R.star, 0.72),
+  amber: g(R.amber, 0.65),
+  hot: g(R.fire, 0.5),
+  // decorative flowers
+  flowerY: m(R.flowerY, 0.7, 0.1),
+  flowerP: m(R.flowerP, 0.66, 0.1),
+  flowerB: m(R.flowerB, 0.66, 0.1),
+  flowerW: m(R.flowerW, 0.78, 0.06),
+  mush: m(R.mush, 0.6, 0.06),
+};
