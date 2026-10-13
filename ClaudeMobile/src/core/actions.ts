@@ -1,0 +1,399 @@
+import { BUILDINGS, TUFT } from './content/buildings';
+import { ITEMS, type ItemId, type Stack } from './content/items';
+import { FUEL_VALUE, RECIPES } from './content/recipes';
+import { ATTUNE, ISLETS, LAND, SUMMON_TIME, landCost, summonCost } from './content/world';
+import { buildingUnlocked, checkDiscoveries, landUnlocked, recipeUnlocked } from './progression';
+import { currentRecipe, defaultRecipe, forgeAccept, forgeNeeds, harvestTree, rebuildCache, salvage } from './sim';
+import {
+  type Building, type Dir, type GameState, DX, DY, addBuilding, addTile, addTo, buildingAt, canAfford, key,
+  pay, refund, room, stashAdd, tileAt, isEdgeTile, stackTotal, removeBuildingRaw, rand,
+} from './state';
+
+export interface Result {
+  ok: boolean;
+  reason?: string;
+  got?: Stack;
+}
+const OK: Result = { ok: true };
+const fail = (reason: string): Result => ({ ok: false, reason });
+
+function sync(s: GameState): void {
+  if (s.topoDirty) rebuildCache(s);
+}
+
+export function missing(s: GameState, cost: Stack): string {
+  const parts: string[] = [];
+  for (const k in cost) {
+    const item = k as ItemId;
+    const need = (cost[item] ?? 0) - s.stash[item];
+    if (need > 0) parts.push(`${need} ${ITEMS[item].name}`);
+  }
+  return parts.length ? 'Need ' + parts.join(', ') : '';
+}
+
+// ───────────────────────── placement ─────────────────────────
+
+export function canPlace(s: GameState, type: string, x: number, y: number, ignore?: Building, checkCost = true): Result {
+  const def = BUILDINGS[type];
+  if (!def) return fail('Unknown');
+  if (!ignore && !buildingUnlocked(s, type)) return fail('Not discovered');
+  let edge = false;
+  for (let dy = 0; dy < def.size; dy++) for (let dx = 0; dx < def.size; dx++) {
+    const t = tileAt(s, x + dx, y + dy);
+    if (!t) return fail('Needs ground');
+    if (def.floors && !def.floors.includes(t.floor)) {
+      return fail(def.floors.includes('grass') ? 'Needs grass' : 'Needs flagstone or skystone');
+    }
+    const o = buildingAt(s, x + dx, y + dy);
+    if (o && o !== ignore && o.type !== 'tuft') return fail('Occupied');
+    if (isEdgeTile(s, x + dx, y + dy)) edge = true;
+  }
+  if (def.edge && !edge) return fail('Must touch the edge');
+  if (def.nearNode) {
+    let near = false;
+    for (let d = 0; d < 4; d++) {
+      const n = buildingAt(s, x + DX[d], y + DY[d]);
+      if (n && BUILDINGS[n.type].kind === 'node') near = true;
+    }
+    if (!near) return fail('Place beside an islet heart');
+  }
+  if (def.kind === 'forge' && !ignore && [...s.buildings.values()].some((b) => b.type === 'forge')) return fail('Only one');
+  if (checkCost && !ignore && !canAfford(s, def.cost)) return fail(missing(s, def.cost));
+  return OK;
+}
+
+function clearTufts(s: GameState, type: string, x: number, y: number): void {
+  const size = BUILDINGS[type].size;
+  for (let dy = 0; dy < size; dy++) for (let dx = 0; dx < size; dx++) {
+    const o = buildingAt(s, x + dx, y + dy);
+    if (o && o.type === 'tuft') {
+      stashAdd(s, 'fiber', TUFT.yield);
+      removeBuildingRaw(s, o);
+    }
+  }
+}
+
+export function place(s: GameState, type: string, x: number, y: number, dir: Dir = 0): Result & { id?: number } {
+  const r = canPlace(s, type, x, y);
+  if (!r.ok) return r;
+  const def = BUILDINGS[type];
+  pay(s, def.cost);
+  clearTufts(s, type, x, y);
+  const b = addBuilding(s, type, x, y, def.rotatable ? dir : 0);
+  b.recipe = defaultRecipe(type);
+  if (type === 'sapling') b.progress = 0;
+  if (def.kind === 'forge') {
+    s.forge.id = b.id;
+    s.forge.stage = 0;
+    s.forge.progress = {};
+  }
+  s.stats.built++;
+  sync(s);
+  checkDiscoveries(s);
+  return { ok: true, id: b.id };
+}
+
+/** Lay a run of conveyors; each segment points toward the next. */
+export function placeLine(s: GameState, type: string, cells: { x: number; y: number; dir: Dir }[]): number {
+  let n = 0;
+  for (const c of cells) {
+    const existing = buildingAt(s, c.x, c.y);
+    if (existing && existing.type === type) {
+      if (existing.dir !== c.dir) { existing.dir = c.dir; s.topoDirty = true; }
+      continue;
+    }
+    if (place(s, type, c.x, c.y, c.dir).ok) n++;
+    else if (!canAfford(s, BUILDINGS[type].cost)) break;
+  }
+  sync(s);
+  return n;
+}
+
+export function removeAt(s: GameState, x: number, y: number): Result {
+  const b = buildingAt(s, x, y);
+  if (!b) return fail('Nothing here');
+  return remove(s, b.id);
+}
+
+export function remove(s: GameState, id: number): Result {
+  const b = s.buildings.get(id);
+  if (!b) return fail('Nothing here');
+  const def = BUILDINGS[b.type];
+  if (def.removable === false) return fail('It will not move');
+  if (b.type === 'tuft') return harvestAt(s, b.x, b.y);
+  salvage(s, b);
+  if (def.kind === 'tree') refund(s, { wood: 2, sapling: 1 });
+  else refund(s, def.cost);
+  sync(s);
+  return OK;
+}
+
+export function move(s: GameState, id: number, x: number, y: number, dir?: Dir): Result {
+  const b = s.buildings.get(id);
+  if (!b) return fail('Nothing here');
+  const def = BUILDINGS[b.type];
+  if (def.removable === false || def.kind === 'tree') return fail('It will not move');
+  const r = canPlace(s, b.type, x, y, b);
+  if (!r.ok) return r;
+  for (let dy = 0; dy < def.size; dy++) for (let dx = 0; dx < def.size; dx++) s.occ.delete(key(b.x + dx, b.y + dy));
+  clearTufts(s, b.type, x, y);
+  b.x = x;
+  b.y = y;
+  if (dir !== undefined && def.rotatable) b.dir = dir;
+  for (let dy = 0; dy < def.size; dy++) for (let dx = 0; dx < def.size; dx++) s.occ.set(key(x + dx, y + dy), b.id);
+  b.items = b.items.filter((it) => { s.stash[it.item]++; return false; });
+  s.topoDirty = true;
+  sync(s);
+  return OK;
+}
+
+export function rotate(s: GameState, id: number): Result {
+  const b = s.buildings.get(id);
+  if (!b || !BUILDINGS[b.type].rotatable) return fail('Cannot rotate');
+  b.dir = ((b.dir + 1) % 4) as Dir;
+  s.topoDirty = true;
+  sync(s);
+  return OK;
+}
+
+// ───────────────────────── land ─────────────────────────
+
+export function canExpand(s: GameState, land: string, x: number, y: number, checkCost = true): Result {
+  const def = LAND[land];
+  if (!def || !landUnlocked(s, land)) return fail('Not discovered');
+  const t = tileAt(s, x, y);
+  if (def.mode === 'new') {
+    if (t) return fail('Already ground');
+    let adj = false;
+    for (let d = 0; d < 4; d++) if (s.tiles.has(key(x + DX[d], y + DY[d]))) adj = true;
+    if (!adj) return fail('Must join the island');
+  } else {
+    if (!t) return fail('Needs ground');
+    if (t.floor !== 'grass') return fail('Already paved');
+    const o = buildingAt(s, x, y);
+    if (o && o.type !== 'tuft' && BUILDINGS[o.type].floors?.includes('grass')) return fail('Clear it first');
+  }
+  const cost = landCost(land, s.tiles.size);
+  if (checkCost && !canAfford(s, cost)) return fail(missing(s, cost));
+  return OK;
+}
+
+export function expand(s: GameState, land: string, x: number, y: number): Result {
+  const r = canExpand(s, land, x, y);
+  if (!r.ok) return r;
+  const def = LAND[land];
+  pay(s, landCost(land, s.tiles.size));
+  if (def.mode === 'new') addTile(s, x, y, def.floor);
+  else {
+    const o = buildingAt(s, x, y);
+    if (o && o.type === 'tuft') { stashAdd(s, 'fiber', TUFT.yield); removeBuildingRaw(s, o); }
+    tileAt(s, x, y)!.floor = def.floor;
+    s.topoDirty = true;
+  }
+  sync(s);
+  checkDiscoveries(s);
+  return OK;
+}
+
+// ───────────────────────── hands ─────────────────────────
+
+/** Tap on the world: gather from trees and tufts. */
+export function harvestAt(s: GameState, x: number, y: number): Result {
+  const b = buildingAt(s, x, y);
+  if (!b) return fail('');
+  if (b.type === 'tuft') {
+    const n = stashAdd(s, 'fiber', TUFT.yield);
+    removeBuildingRaw(s, b);
+    sync(s);
+    checkDiscoveries(s);
+    return { ok: true, got: n ? { fiber: n } : {} };
+  }
+  if (BUILDINGS[b.type].kind !== 'tree') return fail('');
+  if (b.stock < 1) return fail('Regrowing');
+  const got = harvestTree(s, b, (item, n) => stashAdd(s, item, n));
+  checkDiscoveries(s);
+  return { ok: true, got };
+}
+
+export const SIEVE_TAPS = 3;
+
+export function tapManual(s: GameState, id: number): Result {
+  const b = s.buildings.get(id);
+  if (!b || BUILDINGS[b.type].kind !== 'manual') return fail('');
+  const r = RECIPES[b.recipe ?? 'sift_loam'];
+  if (!b.working) {
+    if (!canAfford(s, r.inputs)) return fail(missing(s, r.inputs));
+    pay(s, r.inputs);
+    b.working = true;
+    b.progress = 0;
+  }
+  b.progress += r.time / SIEVE_TAPS + 1e-9;
+  b.status = 'working';
+  if (b.progress >= r.time) {
+    b.working = false;
+    b.progress = 0;
+    b.cycles++;
+    const got: Stack = {};
+    for (const k in r.outputs) { const n = stashAdd(s, k as ItemId, r.outputs[k as ItemId] ?? 0); if (n) got[k as ItemId] = n; }
+    if (r.chance) for (const k in r.chance) {
+      if (rand(s) < (r.chance[k as ItemId] ?? 0) && stashAdd(s, k as ItemId, 1)) got[k as ItemId] = 1;
+    }
+    b.status = 'idle';
+    checkDiscoveries(s);
+    return { ok: true, got };
+  }
+  return OK;
+}
+
+export function hasWorkbench(s: GameState): boolean {
+  for (const b of s.buildings.values()) if (b.type === 'workbench') return true;
+  return false;
+}
+
+export function maxCraftable(s: GameState, recipe: string): number {
+  const r = RECIPES[recipe];
+  let n = Infinity;
+  for (const k in r.inputs) n = Math.min(n, Math.floor(s.stash[k as ItemId] / (r.inputs[k as ItemId] ?? 1)));
+  for (const k in r.outputs) n = Math.min(n, Math.floor(room(s, k as ItemId) / (r.outputs[k as ItemId] ?? 1)));
+  return n === Infinity ? 0 : n;
+}
+
+export function craft(s: GameState, recipe: string, times = 1): Result {
+  const r = RECIPES[recipe];
+  if (!r || !r.stations.includes('hand')) return fail('Cannot craft by hand');
+  if (!recipeUnlocked(s, recipe)) return fail('Not discovered');
+  if (!hasWorkbench(s)) return fail('Build a workbench');
+  const n = Math.min(times, maxCraftable(s, recipe));
+  if (n < 1) {
+    const m = missing(s, scale(r.inputs, 1));
+    return fail(m || 'Stash is full');
+  }
+  pay(s, scale(r.inputs, n));
+  for (const k in r.outputs) stashAdd(s, k as ItemId, (r.outputs[k as ItemId] ?? 0) * n);
+  s.stats.crafted += n;
+  checkDiscoveries(s);
+  return { ok: true, got: scale(r.outputs, n) };
+}
+
+export function scale(st: Stack, n: number): Stack {
+  const o: Stack = {};
+  for (const k in st) o[k as ItemId] = (st[k as ItemId] ?? 0) * n;
+  return o;
+}
+
+// ───────────────────────── machine controls ─────────────────────────
+
+export function setRecipe(s: GameState, id: number, recipe: string): Result {
+  const b = s.buildings.get(id);
+  if (!b) return fail('');
+  const r = RECIPES[recipe];
+  if (!r || !r.stations.includes(b.type)) return fail('Wrong station');
+  if (!recipeUnlocked(s, recipe)) return fail('Not discovered');
+  if (b.recipe === recipe) return OK;
+  for (const k in b.inBuf) s.stash[k as ItemId] += b.inBuf[k as ItemId] ?? 0;
+  b.inBuf = {};
+  if (b.working) {
+    const cur = currentRecipe(b);
+    if (cur) for (const k in cur.inputs) s.stash[k as ItemId] += cur.inputs[k as ItemId] ?? 0;
+  }
+  b.working = false;
+  b.progress = 0;
+  b.recipe = recipe;
+  return OK;
+}
+
+export function setFilter(s: GameState, id: number, item: ItemId | null): Result {
+  const b = s.buildings.get(id);
+  if (!b) return fail('');
+  b.filter = item;
+  return OK;
+}
+
+/** Hand-feed a machine from the stash (before conveyors exist). */
+export function load(s: GameState, id: number): Result {
+  const b = s.buildings.get(id);
+  if (!b) return fail('');
+  const def = BUILDINGS[b.type];
+  let moved = 0;
+  if (def.kind === 'engine') {
+    const n = Math.min(s.stash.aether, (def.bufferCap ?? 10) - (b.inBuf.aether ?? 0));
+    if (n > 0) { s.stash.aether -= n; addTo(b.inBuf, 'aether', n); moved += n; }
+    return moved ? OK : fail('Need Aether');
+  }
+  const r = currentRecipe(b);
+  if (!r) return fail('');
+  const cap = def.bufferCap ?? 12;
+  for (const k in r.inputs) {
+    const item = k as ItemId;
+    const want = Math.max(cap, (r.inputs[item] ?? 0) * 2) - (b.inBuf[item] ?? 0);
+    const n = Math.max(0, Math.min(want, s.stash[item]));
+    if (n > 0) { s.stash[item] -= n; addTo(b.inBuf, item, n); moved += n; }
+  }
+  if (r.fuel) {
+    for (const f of ['charcoal', 'wood'] as ItemId[]) {
+      if (r.inputs[f]) continue;
+      while (b.fuel < 12 && s.stash[f] > 0) { s.stash[f]--; b.fuel += FUEL_VALUE[f] ?? 0; moved++; }
+    }
+  }
+  return moved ? OK : fail(missing(s, r.inputs) || 'Already full');
+}
+
+export function collect(s: GameState, id: number): Result {
+  const b = s.buildings.get(id);
+  if (!b) return fail('');
+  const got: Stack = {};
+  for (const k in b.outBuf) {
+    const item = k as ItemId;
+    const n = stashAdd(s, item, b.outBuf[item] ?? 0);
+    if (n) { addTo(b.outBuf, item, -n); got[item] = n; }
+  }
+  checkDiscoveries(s);
+  return stackTotal(got) ? { ok: true, got } : fail(stackTotal(b.outBuf) ? 'Stash is full' : 'Nothing yet');
+}
+
+// ───────────────────────── islets & forge ─────────────────────────
+
+export function canSummon(s: GameState): Result {
+  if (s.islets.summon) return fail('An islet is already on its way');
+  if (s.islets.docked >= ISLETS.length) return fail('No more drifters answer');
+  const cost = summonCost(s.islets.docked);
+  if (!canAfford(s, cost)) return fail(missing(s, cost));
+  return OK;
+}
+
+export function summon(s: GameState, beacon: number): Result {
+  const r = canSummon(s);
+  if (!r.ok) return r;
+  pay(s, summonCost(s.islets.docked));
+  s.islets.summon = { beacon, t: SUMMON_TIME, index: s.islets.docked };
+  return OK;
+}
+
+export function contribute(s: GameState): Result {
+  const need = forgeNeeds(s);
+  let moved = 0;
+  for (const k in need) {
+    const item = k as ItemId;
+    const n = Math.min(s.stash[item], need[item] ?? 0);
+    if (n > 0) {
+      s.stash[item] -= n;
+      moved += forgeAccept(s, item, n);
+    }
+  }
+  checkDiscoveries(s);
+  return moved ? OK : fail('Nothing it needs is in your stash');
+}
+
+export function attune(s: GameState, id: string): Result {
+  const a = ATTUNE[id];
+  if (!a) return fail('');
+  const rank = s.forge.attune[id] ?? 0;
+  if (rank >= a.max) return fail('Fully attuned');
+  const cost = a.cost(rank);
+  if (s.forge.sparks < cost) return fail(`Need ${cost} sparks`);
+  s.forge.sparks -= cost;
+  s.forge.attune[id] = rank + 1;
+  s.topoDirty = true;
+  sync(s);
+  return OK;
+}
