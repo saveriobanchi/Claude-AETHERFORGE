@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
+import type { Game } from '../../src/game';
 
 declare global {
-  interface Window { gameReady?: boolean; game?: any }
+  interface Window { gameReady?: boolean; game: Game }
 }
 
 async function fresh(page: Page) {
@@ -13,7 +14,7 @@ async function fresh(page: Page) {
 
 async function tapTile(page: Page, x: number, y: number, dy = -6) {
   const [sx, sy] = await page.evaluate(([x, y]) => window.game.view.tileToScreen(x, y), [x, y]);
-  const touch = (page.context() as any)._options?.hasTouch;
+  const touch = await page.evaluate(() => matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0);
   if (touch) await page.touchscreen.tap(sx, sy + dy);
   else await page.mouse.click(sx, sy + dy);
   await page.waitForTimeout(80);
@@ -44,12 +45,12 @@ test('gather, build a workbench, and the world survives a reload', async ({ page
   await page.click('.tab:has-text("Make")');
   await page.click('.card:has-text("Workbench")');
   await tapTile(page, 1, 0);
-  await expect.poll(() => page.evaluate(() => [...window.game.s.buildings.values()].some((b: any) => b.type === 'workbench'))).toBe(true);
+  await expect.poll(() => page.evaluate(() => [...window.game.s.buildings.values()].some((b) => b.type === 'workbench'))).toBe(true);
   await expect(page.locator('.main-btn[aria-label=Craft]')).toBeVisible();
   await page.evaluate(() => window.game.save());
   await page.reload();
   await page.waitForFunction(() => window.gameReady === true);
-  const types = await page.evaluate(() => [...window.game.s.buildings.values()].map((b: any) => b.type));
+  const types = await page.evaluate(() => [...window.game.s.buildings.values()].map((b) => b.type));
   expect(types).toContain('workbench');
 });
 
