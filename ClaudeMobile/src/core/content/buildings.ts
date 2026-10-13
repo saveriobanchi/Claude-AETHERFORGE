@@ -1,0 +1,139 @@
+import type { ItemId, Stack } from './items';
+
+export type BuildingKind =
+  | 'tree'        // harvestable, regrowing
+  | 'sapling'     // grows into a tree
+  | 'tuft'        // natural fiber tuft (spawns by itself)
+  | 'workbench'   // unlocks hand crafting
+  | 'crafter'     // automatic recipe station
+  | 'manual'      // tap-driven recipe station drawing from the stash
+  | 'generator'   // produces items from nothing (dew, mist, stardust)
+  | 'harvester'   // harvests adjacent trees
+  | 'drill'       // extracts from adjacent islet nodes
+  | 'node'        // islet resource node (not removable)
+  | 'belt'
+  | 'splitter'
+  | 'sorter'
+  | 'depot'       // delivers into the stash
+  | 'dispatcher'  // pulls one item type out of the stash
+  | 'storage'     // raises stash capacity
+  | 'windmill'    // power
+  | 'engine'      // fuel-burning power
+  | 'pylon'       // resonance field (speed aura)
+  | 'beacon'      // summons islets
+  | 'roost'       // wisp logistics
+  | 'forge';      // the great work
+
+export type Floor = 'grass' | 'stone' | 'sky';
+export type BuildCategory = 'nature' | 'craft' | 'logistics' | 'power' | 'storage' | 'aether' | 'wonder';
+
+export interface BuildingDef {
+  id: string;
+  name: string;
+  desc: string;
+  kind: BuildingKind;
+  category: BuildCategory;
+  size: number; // square footprint
+  cost: Stack;
+  /** Floors this building may stand on. Undefined = any. */
+  floors?: Floor[];
+  edge?: boolean;          // must touch the island edge
+  nearNode?: boolean;      // must be adjacent to an islet node
+  rotatable?: boolean;
+  draggable?: boolean;
+  removable?: boolean;     // default true
+  unlock: string;          // discovery id ('' = always)
+  power?: number;          // breeze drawn while working
+  powerGen?: number;       // breeze produced
+  speed?: number;          // belts: tiles/s; crafters: multiplier
+  capacity?: number;       // storage: stash capacity bonus per item
+  produces?: { item: ItemId; every: number; nightOnly?: boolean }; // generators
+  radius?: number;
+  bufferCap?: number;      // input/output buffer cap per item
+}
+
+const B: BuildingDef[] = [
+  // ── Nature ──
+  { id: 'tree', name: 'Islet Tree', desc: 'Tap to gather timber and leaves. It regrows.', kind: 'tree', category: 'nature', size: 1, cost: {}, floors: ['grass'], unlock: '_never' },
+  { id: 'sapling', name: 'Sapling', desc: 'Plant on grass. Grows into a tree.', kind: 'sapling', category: 'nature', size: 1, cost: { sapling: 1 }, floors: ['grass'], unlock: 'sapling' },
+  { id: 'tuft', name: 'Tall Grass', desc: 'Tap to pull fiber.', kind: 'tuft', category: 'nature', size: 1, cost: {}, floors: ['grass'], unlock: '_never' },
+  { id: 'elder_tree', name: 'Elder Tree', desc: 'Ancient and generous.', kind: 'tree', category: 'nature', size: 1, cost: {}, unlock: '_never', removable: false },
+
+  // ── Crafting / production ──
+  { id: 'workbench', name: 'Workbench', desc: 'Lets you craft by hand.', kind: 'workbench', category: 'craft', size: 1, cost: { wood: 6 }, unlock: '' },
+  { id: 'composter', name: 'Compost Bin', desc: 'Leaves slowly become loam.', kind: 'crafter', category: 'craft', size: 1, cost: { wood: 8 }, unlock: 'compost', rotatable: true, bufferCap: 12 },
+  { id: 'sieve', name: 'Sifting Frame', desc: 'Tap to sift loam from your stash.', kind: 'manual', category: 'craft', size: 1, cost: { wood: 8, twine: 2 }, unlock: 'sieve' },
+  { id: 'dew_catcher', name: 'Dew Catcher', desc: 'A mesh that drinks the air.', kind: 'generator', category: 'craft', size: 1, cost: { wood: 6, twine: 2, plank: 2 }, floors: ['grass'], unlock: 'clay', rotatable: true, produces: { item: 'dew', every: 10 }, bufferCap: 10 },
+  { id: 'clay_tub', name: 'Clay Tub', desc: 'Loam and dew, stirred into clay.', kind: 'crafter', category: 'craft', size: 1, cost: { plank: 4, stone: 2 }, unlock: 'clay', rotatable: true, bufferCap: 12 },
+  { id: 'kiln', name: 'Kiln', desc: 'Fire for charcoal, brick and metal. Needs fuel.', kind: 'crafter', category: 'craft', size: 1, cost: { stone: 8, clay: 3 }, unlock: 'kiln', rotatable: true, bufferCap: 12 },
+  { id: 'harvester', name: 'Treewright', desc: 'Harvests the trees around it.', kind: 'harvester', category: 'craft', size: 1, cost: { plank: 6, gear: 3, twine: 2 }, unlock: 'automation', rotatable: true, radius: 1, bufferCap: 24 },
+  { id: 'wind_sifter', name: 'Wind Sifter', desc: 'Sifts on its own while the wind blows.', kind: 'crafter', category: 'craft', size: 1, cost: { plank: 8, gear: 4, copper: 2 }, floors: ['stone', 'sky'], unlock: 'wind', rotatable: true, power: 2, bufferCap: 12 },
+  { id: 'sawmill', name: 'Sawmill', desc: 'Cuts timber into planks, wastefully less.', kind: 'crafter', category: 'craft', size: 1, cost: { plank: 6, gear: 3, stone: 4 }, floors: ['stone', 'sky'], unlock: 'wind', rotatable: true, power: 2, bufferCap: 12 },
+  { id: 'press', name: 'Stone Press', desc: 'Packs pebbles into stone. Twists twine.', kind: 'crafter', category: 'craft', size: 1, cost: { stone: 10, gear: 4 }, floors: ['stone', 'sky'], unlock: 'wind', rotatable: true, power: 2, bufferCap: 16 },
+  { id: 'millstone', name: 'Millstone', desc: 'Grinds stone down.', kind: 'crafter', category: 'craft', size: 1, cost: { stone: 16, gear: 6, plank: 4 }, floors: ['stone', 'sky'], unlock: 'mill', rotatable: true, power: 3, bufferCap: 12 },
+  { id: 'furnace', name: 'Bellows Furnace', desc: 'A wind-fed furnace, hot enough for iron.', kind: 'crafter', category: 'craft', size: 1, cost: { brick: 16, copper: 8, gear: 4 }, floors: ['stone', 'sky'], unlock: 'iron', rotatable: true, power: 4, bufferCap: 12 },
+  { id: 'assembler', name: 'Assembler', desc: 'Builds components on its own.', kind: 'crafter', category: 'craft', size: 1, cost: { iron: 8, gear: 8, brick: 8 }, floors: ['stone', 'sky'], unlock: 'assembler', rotatable: true, power: 3, bufferCap: 12 },
+  { id: 'condenser', name: 'Mist Condenser', desc: 'Combs passing clouds. Must touch the edge.', kind: 'generator', category: 'aether', size: 1, cost: { glass: 6, copper: 8, plate: 4 }, edge: true, unlock: 'aether', rotatable: true, power: 3, produces: { item: 'mist', every: 3 }, bufferCap: 16 },
+  { id: 'distiller', name: 'Distiller', desc: 'Separates mist.', kind: 'crafter', category: 'aether', size: 1, cost: { glass: 8, iron: 8, brick: 10 }, floors: ['stone', 'sky'], unlock: 'distill', rotatable: true, power: 4, bufferCap: 16 },
+  { id: 'star_net', name: 'Star Net', desc: 'Catches what falls at night. Must touch the edge.', kind: 'generator', category: 'aether', size: 1, cost: { twine: 16, lens: 2, wire: 6 }, edge: true, unlock: 'night', rotatable: true, produces: { item: 'stardust', every: 12, nightOnly: true }, bufferCap: 12 },
+  { id: 'resonator', name: 'Resonator', desc: 'Sings matter into new shapes.', kind: 'crafter', category: 'aether', size: 1, cost: { iron: 10, lens: 4, mechanism: 2 }, floors: ['stone', 'sky'], unlock: 'resonance', rotatable: true, power: 6, bufferCap: 12 },
+  { id: 'crucible', name: 'Sunforge Crucible', desc: 'Melts metals together with aether.', kind: 'crafter', category: 'aether', size: 1, cost: { brick: 30, plate: 12, crystal: 3 }, floors: ['stone', 'sky'], unlock: 'alloy', rotatable: true, power: 10, bufferCap: 12 },
+  { id: 'drill', name: 'Core Drill', desc: 'Taps an islet heart. Place beside a node.', kind: 'drill', category: 'aether', size: 1, cost: { plate: 10, mechanism: 4, crystal: 1 }, nearNode: true, unlock: 'drill', rotatable: true, power: 5, bufferCap: 16 },
+
+  // ── Logistics ──
+  { id: 'belt', name: 'Conveyor', desc: 'Moves items. Drag to lay a line.', kind: 'belt', category: 'logistics', size: 1, cost: { plank: 1 }, unlock: 'belts', rotatable: true, draggable: true, speed: 1.25 },
+  { id: 'express', name: 'Sky Conveyor', desc: 'A faster, floating conveyor.', kind: 'belt', category: 'logistics', size: 1, cost: { skystone: 1, gear: 1 }, unlock: 'skystone', rotatable: true, draggable: true, speed: 2.5 },
+  { id: 'depot', name: 'Depot', desc: 'Anything delivered here joins your stash.', kind: 'depot', category: 'logistics', size: 1, cost: { stone: 6, plank: 4 }, unlock: 'belts' },
+  { id: 'dispatcher', name: 'Dispatcher', desc: 'Sends one chosen item out of your stash.', kind: 'dispatcher', category: 'logistics', size: 1, cost: { gear: 4, plank: 4, stone: 4 }, unlock: 'dispatch', rotatable: true },
+  { id: 'splitter', name: 'Splitter', desc: 'Shares items between left, front and right.', kind: 'splitter', category: 'logistics', size: 1, cost: { plank: 2, gear: 2 }, unlock: 'routing', rotatable: true },
+  { id: 'sorter', name: 'Sorter', desc: 'One chosen item goes straight on; the rest turn aside.', kind: 'sorter', category: 'logistics', size: 1, cost: { plank: 2, gear: 2, wire: 4 }, unlock: 'routing', rotatable: true },
+  { id: 'roost', name: 'Wisp Roost', desc: 'Wisps ferry items between your stash and nearby machines.', kind: 'roost', category: 'logistics', size: 1, cost: { coil: 2, skystone: 8, plate: 6 }, unlock: 'wisps', power: 4, radius: 5 },
+
+  // ── Storage ──
+  { id: 'crate', name: 'Storage Crate', desc: 'Your stash holds 50 more of everything.', kind: 'storage', category: 'storage', size: 1, cost: { plank: 8, stone: 2 }, unlock: 'storage', capacity: 50 },
+  { id: 'silo', name: 'Silo', desc: 'Your stash holds 250 more of everything.', kind: 'storage', category: 'storage', size: 1, cost: { brick: 20, iron: 6, plank: 10 }, unlock: 'routing', capacity: 250 },
+  { id: 'warehouse', name: 'Sky Vault', desc: 'Your stash holds 1000 more of everything.', kind: 'storage', category: 'storage', size: 1, cost: { skystone: 16, plate: 8, mechanism: 2 }, unlock: 'skystone', capacity: 1000 },
+
+  // ── Power ──
+  { id: 'windmill', name: 'Windmill', desc: 'Makes breeze for machines. Stronger at the edge.', kind: 'windmill', category: 'power', size: 1, cost: { plank: 12, gear: 4, twine: 4 }, unlock: 'wind', powerGen: 6 },
+  { id: 'engine', name: 'Storm Engine', desc: 'Burns aether into a gale.', kind: 'engine', category: 'power', size: 1, cost: { mechanism: 6, plate: 12, crystal: 2 }, floors: ['stone', 'sky'], unlock: 'pylon', powerGen: 50, bufferCap: 10 },
+  { id: 'pylon', name: 'Resonance Pylon', desc: 'Machines nearby work faster.', kind: 'pylon', category: 'power', size: 1, cost: { crystal: 2, plate: 4, wire: 6 }, unlock: 'pylon', radius: 2 },
+
+  // ── Aether / wonder ──
+  { id: 'beacon', name: 'Lodestone Beacon', desc: 'Calls drifting islets. Must touch the edge.', kind: 'beacon', category: 'aether', size: 1, cost: { skystone: 12, crystal: 4, mechanism: 4 }, edge: true, unlock: 'beacon' },
+  { id: 'forge', name: 'The Aetherforge', desc: 'The great work.', kind: 'forge', category: 'wonder', size: 3, cost: { skystone: 40, crystal: 10 }, floors: ['stone', 'sky'], unlock: 'forge', removable: false },
+
+  // ── Islet nodes ──
+  { id: 'node_vein', name: 'Ore Heart', desc: 'Copper and iron run through it.', kind: 'node', category: 'nature', size: 1, cost: {}, unlock: '_never', removable: false },
+  { id: 'node_spring', name: 'Cloud Spring', desc: 'Water and mist well up endlessly.', kind: 'node', category: 'nature', size: 1, cost: {}, unlock: '_never', removable: false },
+  { id: 'node_shard', name: 'Fallen Star', desc: 'It still sheds dust.', kind: 'node', category: 'nature', size: 1, cost: {}, unlock: '_never', removable: false },
+];
+
+export const BUILDINGS: Record<string, BuildingDef> = Object.fromEntries(B.map((b) => [b.id, b]));
+export const BUILDING_LIST = B;
+
+/** Drill yields per node type: rolled per cycle. */
+export const NODE_YIELD: Record<string, { every: number; table: { item: ItemId; weight: number }[] }> = {
+  node_vein: { every: 1.5, table: [{ item: 'iron_grit', weight: 6 }, { item: 'copper_grit', weight: 4 }] },
+  node_spring: { every: 1.5, table: [{ item: 'mist', weight: 5 }, { item: 'dew', weight: 5 }] },
+  node_shard: { every: 5, table: [{ item: 'stardust', weight: 1 }] },
+};
+
+/** Tree yields. */
+export const TREE = {
+  maxStock: 5,
+  regrow: 5, // seconds per stock
+  yield: { wood: 1, leaf: 2 } as Stack,
+  saplingChance: 0.05,
+  fiberChance: 0.2,
+  saplingPity: 12,
+  elderMaxStock: 20,
+  elderRegrow: 1.5,
+  elderYield: { wood: 2, leaf: 3 } as Stack,
+  amberChance: 0.12,
+  saplingGrowTime: 45,
+};
+
+export const HARVESTER_INTERVAL = 1.5; // seconds per harvest
+export const DISPATCH_INTERVAL = 0.4;
+export const TUFT = { every: 18, yield: 2 };

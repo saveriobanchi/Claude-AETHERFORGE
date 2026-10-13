@@ -1,0 +1,11 @@
+import { chromium } from '@playwright/test';
+const [url, out, tx, ty, zoom, night] = process.argv.slice(2);
+const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const page = await browser.newPage({ viewport: { width: 1200, height: 760 } });
+page.on('pageerror', (e) => console.log('pageerror', e.message));
+await page.goto(url);
+await page.waitForFunction(() => window.gameReady === true, null, { timeout: 60000 });
+await page.evaluate(([tx, ty, z, n]) => { const g = window.game; g.settings.qualityChosen = true; const wx = (tx - ty) * 32, wy = (tx + ty) * 16; g.view.cam.jump(wx, wy - 40, z); if (n === '1') g.s.time = 0.8 * 600; }, [+tx, +ty, +zoom, night]);
+await page.waitForTimeout(2500);
+await page.screenshot({ path: out });
+await browser.close();
