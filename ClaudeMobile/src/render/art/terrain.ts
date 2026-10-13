@@ -85,7 +85,7 @@ function stoneTop(t: Tile, u: number, v: number, wx: number, wy: number, get: Ti
 
 function skyTop(t: Tile, u: number, v: number, wx: number, wy: number, get: TileLookup): RGBA {
   const n = noise2(wx / 10, wy / 5, 51);
-  const vein = Math.abs(noise2(wx / 16, wy / 8, 53) - 0.5) < 0.035;
+  const vein = Math.abs(noise2(wx / 26, wy / 13, 53) - 0.5) < 0.016 && noise2(wx / 40, wy / 20, 57) > 0.45;
   let l = 0.62 + n * 0.2;
   const backL = !get(t.x - 1, t.y), backR = !get(t.x, t.y - 1);
   if ((backL && u * 32 < 1.1) || (backR && v * 32 < 1.1)) l += 0.25;

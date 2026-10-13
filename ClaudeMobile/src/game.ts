@@ -7,7 +7,7 @@ import { applyOffline, type OfflineReport } from './core/offline';
 import { deserialize, exportText, importText, serialize } from './core/save';
 import { TICK, rebuildCache, tick } from './core/sim';
 import { type Dir, type GameState, DX, DY, buildingAt, createState, key, tileAt } from './core/state';
-import { demoWorld } from './dev/demo';
+import { demoWorld, lateWorld } from './dev/demo';
 import { type MachineVoice, audio, haptic } from './platform/audio';
 import * as store from './platform/storage';
 import { tileCenter } from './render/art/terrain';
@@ -75,7 +75,7 @@ export class Game {
 
     const loaded = params.has('demo') ? null : await this.load();
     let offline: OfflineReport | null = null;
-    if (params.has('demo')) this.s = demoWorld();
+    if (params.has('demo')) this.s = params.get('demo') === 'late' ? lateWorld() : demoWorld();
     else if (loaded) {
       this.s = loaded.state;
       if (loaded.view) this.view.cam.jump(loaded.view.x, loaded.view.y, loaded.view.zoom);
@@ -310,7 +310,15 @@ export class Game {
       this.select(b.id, false);
       return;
     }
-    // machines with finished outputs collect on tap (before belts exist)
+    // machines holding finished goods hand them over on tap
+    if (b.status !== 'working' || kind === 'harvester' || kind === 'generator' || kind === 'drill') {
+      let any = false;
+      for (const k in b.outBuf) if ((b.outBuf[k as ItemId] ?? 0) > 0) any = true;
+      if (any) {
+        const r = A.collect(this.s, b.id);
+        if (r.ok && r.got) { audio.play('collect'); haptic(6, this.settings.haptics); this.ui.floater(sx, sy, r.got); this.view.pulse(b.id, 0.4); this.markDirty(); }
+      }
+    }
     this.select(b.id);
   }
 

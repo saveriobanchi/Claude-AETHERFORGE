@@ -179,9 +179,9 @@ export class Sky {
       this.far.push({ s, px: hash2(i, 22) * 1.6 - 0.3, py: 0.35 + depth * 0.18 + hash2(i, 23) * 0.15, speed: 0.004 + depth * 0.004, par: 0.06 + depth * 0.06, w, bob: 0 });
     }
     // cloud sea far below the island, and a few thin wisps drifting in front
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 7; i++) {
       const w = 160 + Math.floor(hash2(i, 31) * 160);
-      const front = i >= 7;
+      const front = false;
       const tex = atlas.add(cloudCanvas(w, Math.round(w * 0.32), i * 11 + 50, front ? 0 : 0.12));
       const s = new Sprite(tex);
       s.anchor.set(0.5, 1);
