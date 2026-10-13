@@ -497,7 +497,7 @@ export class UI {
       statusText = miss ? `Needs ${ITEMS[miss as ItemId].name}` : r.fuel && b.fuel < (r.fuel ?? 0) ? 'Needs fuel' : statusText;
     }
     if (def.kind === 'harvester' && b.status === 'noinput') statusText = 'No trees ready nearby';
-    if (def.kind === 'tree' || def.kind === 'sapling' || def.kind === 'node' || def.kind === 'storage' || def.kind === 'workbench' || def.kind === 'depot') statusText = '';
+    if (['tree', 'sapling', 'node', 'storage', 'workbench', 'depot', 'forge', 'beacon', 'pylon', 'splitter', 'sorter', 'manual'].includes(def.kind)) statusText = '';
     const head = h('div', { class: 'panel-head' },
       h('div', { class: 'thumb' }, img(thumb(b.type))),
       h('div', { class: 't' }, h('div', { class: 'name', text: def.name }),
@@ -744,7 +744,7 @@ export class UI {
       flow.append(this.slot(item, `${fmt(req - (need[item] ?? 0))}/${fmt(req)}`, (need[item] ?? 0) > 0));
     }
     body.append(h('div', { class: 'muted', style: 'font-size:0.8rem', text: 'The Aetherforge asks for more. Each answer kindles a spark.' }), flow);
-    actions.append(h('button', { class: 'btn primary', onclick: () => this.g.act(() => A.contribute(s), 'craft') }, 'Contribute'));
+    body.append(h('div', { class: 'actions' }, h('button', { class: 'btn primary', onclick: () => this.g.act(() => A.contribute(s), 'craft') }, 'Contribute')));
     body.append(h('div', { class: 'caps', text: `Sparks · ${f.sparks}` }));
     const list = h('div', { class: 'chips' });
     for (const a of ATTUNEMENTS) {

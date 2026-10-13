@@ -256,7 +256,7 @@ button {
 .rchip {
   display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px 4px 5px; min-height: 36px;
   border-radius: 4px; border: 1px solid var(--line); background: rgba(255,255,255,0.03);
-  font-family: 'Pixelify', monospace; font-size: 0.8rem;
+  font-family: 'Atkinson', system-ui, sans-serif; font-weight: 700; font-size: 0.78rem;
 }
 .rchip img { width: 22px; height: 22px; }
 .rchip.on { border-color: rgba(242, 200, 78, 0.7); background: var(--accent-soft); color: #ffeab0; }
