@@ -17,7 +17,7 @@ const r = await page.evaluate(async () => {
   const s0 = performance.now();
   g.advance(60);
   const simMs = (performance.now() - s0) / (60 * 20);
-  return { fps, frameMs: g.view.frameMs, simMsPerTick: simMs, stats: g.view.stats(), buildings: g.s.buildings.size, tiles: g.s.tiles.size };
+  return { fps, frameMs: g.view.frameMs, updateMs: g.view.updateMs, simMsPerTick: simMs, stats: g.view.stats(), buildings: g.s.buildings.size, tiles: g.s.tiles.size };
 });
 console.log(JSON.stringify(r));
 await browser.close();

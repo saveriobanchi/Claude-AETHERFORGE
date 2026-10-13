@@ -65,3 +65,24 @@ export function lateWorld(): GameState {
   run(s, 20);
   return s;
 }
+
+/** Performance stress: a 40×40 island with ~1200 machines and conveyors. */
+export function stressWorld(): GameState {
+  const s = createState(3);
+  for (const d of DISCOVERY_LIST) s.known.add(d.id);
+  s.extraCapacity = 1_000_000;
+  for (const id of ITEM_IDS) s.stash[id] = 100000;
+  for (let y = -20; y < 20; y++) for (let x = -20; x < 20; x++) addTile(s, x, y, 'stone');
+  for (let row = -18; row < 18; row += 3) {
+    for (let x = -18; x < 16; x += 6) {
+      const d = A.place(s, 'dispatcher', x, row, 0).id!;
+      A.setFilter(s, d, 'loam');
+      A.placeLine(s, 'belt', [1, 2].map((k) => ({ x: x + k, y: row, dir: 0 as const })));
+      A.place(s, 'wind_sifter', x + 3, row, 0);
+      A.place(s, 'depot', x + 4, row);
+      A.place(s, 'windmill', x + 3, row + 1);
+    }
+  }
+  run(s, 30);
+  return s;
+}

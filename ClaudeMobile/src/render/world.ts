@@ -109,6 +109,7 @@ export class WorldView {
   vh = 0;
   night = 0;
   frameMs = 16;
+  updateMs = 0;
 
   async init(host: HTMLElement): Promise<void> {
     TextureSource.defaultOptions.scaleMode = 'nearest';
@@ -498,8 +499,11 @@ export class WorldView {
       this.fx.emit(this.night > 0.5 ? 'mote' : 'leaf', wx, wy, 1, { vx: 8, up: 2, spread: 4, life: 3, drag: 0.9, g: 3 });
     }
     this.fx.update(dt);
+    const t1 = performance.now();
     this.app.renderer.render(this.app.stage);
-    this.frameMs = this.frameMs * 0.9 + (performance.now() - t0) * 0.1;
+    const t2 = performance.now();
+    this.frameMs = this.frameMs * 0.9 + (t2 - t0) * 0.1;
+    this.updateMs = this.updateMs * 0.9 + (t1 - t0) * 0.1;
   }
 
   private updateView(s: GameState, b: Building, v: BView, kind: string, t: number, dt: number, o: ViewOptions): void {

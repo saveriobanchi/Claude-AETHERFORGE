@@ -7,7 +7,7 @@ import { applyOffline, type OfflineReport } from './core/offline';
 import { deserialize, exportText, importText, serialize } from './core/save';
 import { TICK, rebuildCache, tick } from './core/sim';
 import { type Dir, type GameState, DX, DY, buildingAt, createState, key, tileAt } from './core/state';
-import { demoWorld, lateWorld } from './dev/demo';
+import { demoWorld, lateWorld, stressWorld } from './dev/demo';
 import { type MachineVoice, audio, haptic } from './platform/audio';
 import * as store from './platform/storage';
 import { tileCenter } from './render/art/terrain';
@@ -75,7 +75,7 @@ export class Game {
 
     const loaded = params.has('demo') ? null : await this.load();
     let offline: OfflineReport | null = null;
-    if (params.has('demo')) this.s = params.get('demo') === 'late' ? lateWorld() : demoWorld();
+    if (params.has('demo')) this.s = params.get('demo') === 'late' ? lateWorld() : params.get('demo') === 'stress' ? stressWorld() : demoWorld();
     else if (loaded) {
       this.s = loaded.state;
       if (loaded.view) this.view.cam.jump(loaded.view.x, loaded.view.y, loaded.view.zoom);
