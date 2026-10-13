@@ -34,15 +34,15 @@ const R: RecipeDef[] = [
   { id: 'core', name: 'Heart Core', inputs: { sunmetal: 4, cell: 2, coil: 1, amber: 2 }, outputs: { core: 1 }, time: 30, stations: ['assembler'], unlock: 'forge' },
 
   // ── Nature-driven processes ──────────────────────────────────────────────
-  { id: 'compost', name: 'Compost', inputs: { leaf: 3 }, outputs: { loam: 1 }, time: 8, stations: ['composter'], unlock: 'compost' },
-  { id: 'sift_loam', name: 'Sift loam', inputs: { loam: 1 }, outputs: { pebble: 1 }, chance: { copper_grit: 0.3, sapling: 0.04 }, time: 2.5, stations: ['sieve', 'wind_sifter'], unlock: 'sieve' },
-  { id: 'sift_gravel', name: 'Sift gravel', inputs: { gravel: 1 }, outputs: { sand: 1 }, chance: { iron_grit: 0.35, copper_grit: 0.1 }, time: 3, stations: ['wind_sifter'], unlock: 'mill' },
+  { id: 'compost', name: 'Compost', inputs: { leaf: 2 }, outputs: { loam: 1 }, time: 8, stations: ['composter'], unlock: 'compost' },
+  { id: 'sift_loam', name: 'Sift loam', inputs: { loam: 1 }, outputs: { pebble: 2 }, chance: { copper_grit: 0.35, sapling: 0.04 }, time: 2.5, stations: ['sieve', 'wind_sifter'], unlock: 'sieve' },
+  { id: 'sift_gravel', name: 'Sift gravel', inputs: { gravel: 1 }, outputs: { sand: 1 }, chance: { iron_grit: 0.5, copper_grit: 0.12 }, time: 3, stations: ['wind_sifter'], unlock: 'mill' },
   { id: 'clay', name: 'Clay', inputs: { loam: 2, dew: 1 }, outputs: { clay: 1 }, time: 10, stations: ['clay_tub'], unlock: 'clay' },
 
   // ── Fire ─────────────────────────────────────────────────────────────────
   { id: 'charcoal', name: 'Charcoal', inputs: { wood: 3 }, outputs: { charcoal: 1 }, time: 8, stations: ['kiln'], unlock: 'kiln' },
   { id: 'brick', name: 'Brick', inputs: { clay: 1 }, outputs: { brick: 1 }, time: 6, fuel: 1, stations: ['kiln'], unlock: 'kiln' },
-  { id: 'smelt_copper', name: 'Copper', inputs: { copper_grit: 2 }, outputs: { copper: 1 }, time: 8, fuel: 1, stations: ['kiln'], unlock: 'kiln' },
+  { id: 'smelt_copper', name: 'Copper', inputs: { copper_grit: 2 }, outputs: { copper: 1 }, time: 6, fuel: 1, stations: ['kiln'], unlock: 'kiln' },
   { id: 'glass', name: 'Glass', inputs: { sand: 2 }, outputs: { glass: 1 }, time: 8, fuel: 1, stations: ['kiln'], unlock: 'glass' },
   { id: 'smelt_iron', name: 'Iron', inputs: { iron_grit: 2, charcoal: 1 }, outputs: { iron: 1 }, time: 6, stations: ['furnace'], unlock: 'iron' },
   { id: 'fast_copper', name: 'Copper', inputs: { copper_grit: 2 }, outputs: { copper: 1 }, time: 3, stations: ['furnace'], unlock: 'iron' },
@@ -52,10 +52,10 @@ const R: RecipeDef[] = [
   { id: 'saw', name: 'Planks', inputs: { wood: 3 }, outputs: { plank: 2 }, time: 3, stations: ['sawmill'], unlock: 'wind' },
   { id: 'press', name: 'Stone', inputs: { pebble: 4 }, outputs: { stone: 1 }, time: 3, stations: ['press'], unlock: 'wind' },
   { id: 'twist', name: 'Twine', inputs: { fiber: 3 }, outputs: { twine: 1 }, time: 3, stations: ['press'], unlock: 'wind' },
-  { id: 'crush', name: 'Gravel', inputs: { stone: 1 }, outputs: { gravel: 2 }, time: 4, stations: ['millstone'], unlock: 'mill' },
+  { id: 'crush', name: 'Gravel', inputs: { stone: 1 }, outputs: { gravel: 3 }, time: 4, stations: ['millstone'], unlock: 'mill' },
 
   // ── Aether ───────────────────────────────────────────────────────────────
-  { id: 'distill', name: 'Aether', inputs: { mist: 4 }, outputs: { aether: 1, dew: 1 }, time: 8, stations: ['distiller'], unlock: 'distill' },
+  { id: 'distill', name: 'Aether', inputs: { mist: 3 }, outputs: { aether: 1, dew: 1 }, time: 6, stations: ['distiller'], unlock: 'distill' },
   { id: 'crystal', name: 'Aether Crystal', inputs: { aether: 2, stardust: 1 }, outputs: { crystal: 1 }, time: 12, stations: ['resonator'], unlock: 'resonance' },
   { id: 'skystone', name: 'Skystone', inputs: { stone: 3, aether: 1 }, outputs: { skystone: 2 }, time: 6, stations: ['resonator'], unlock: 'resonance' },
   { id: 'sunmetal', name: 'Sunmetal', inputs: { iron: 2, copper: 2, aether: 1 }, outputs: { sunmetal: 1 }, time: 10, stations: ['crucible'], unlock: 'alloy' },

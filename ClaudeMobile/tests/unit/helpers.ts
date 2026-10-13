@@ -35,5 +35,5 @@ export function totalItems(s: GameState): number {
     n += stackTotal(b.inBuf) + stackTotal(b.outBuf) + b.items.length + (b.hold ? 1 : 0) + inProgress(b);
   }
   for (const w of s.wisps) n += w.carry ? w.n : 0;
-  return n;
+  return n + s.stats.spilled;
 }

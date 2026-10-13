@@ -25,7 +25,7 @@ export const START_TILES = 9;
 export function plotCost(tiles: number): Stack {
   const k = Math.max(0, tiles - START_TILES);
   return {
-    loam: Math.ceil(2 + 0.45 * k + 0.004 * k * k),
+    loam: Math.ceil(3 + 0.4 * k + 0.0015 * k * k),
     wood: 1 + Math.floor(k / 6),
   };
 }

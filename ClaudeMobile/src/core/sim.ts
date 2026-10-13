@@ -143,13 +143,15 @@ export function offer(s: GameState, t: Building, item: ItemId, from: Dir): boole
       return true;
     }
     case 'depot': {
-      if (stashAdd(s, item, 1) === 1) {
-        s.stats.delivered++;
-        addTo(s.flow.cur.inn, item, 1);
-        s.events.push({ type: 'deliver', id: t.id, item });
-        return true;
+      // Depots never block: overflow beyond stash capacity spills (and is counted).
+      if (stashAdd(s, item, 1) === 1) addTo(s.flow.cur.inn, item, 1);
+      else {
+        s.stats.spilled++;
+        s.events.push({ type: 'spill', id: t.id, item });
       }
-      return false;
+      s.stats.delivered++;
+      s.events.push({ type: 'deliver', id: t.id, item });
+      return true;
     }
     case 'splitter':
     case 'sorter': {
@@ -305,7 +307,7 @@ function tickGenerator(s: GameState, b: Building, dt: number): void {
   }
 }
 
-function isTree(t: Building | undefined): t is Building {
+function isTree(t: Building | undefined): boolean {
   return !!t && BUILDINGS[t.type].kind === 'tree';
 }
 
@@ -323,6 +325,7 @@ export function harvestTree(s: GameState, t: Building, sink: (item: ItemId, n: n
   s.stats.harvests++;
   s.stats.sincePity++;
   if (!elder) {
+    if (rand(s) < TREE.fiberChance && sink('fiber', 1)) got.fiber = 1;
     if (rand(s) < TREE.saplingChance || s.stats.sincePity >= TREE.saplingPity) {
       s.stats.sincePity = 0;
       if (sink('sapling', 1)) got.sapling = 1;
@@ -338,20 +341,25 @@ function tickHarvester(s: GameState, b: Building, dt: number): void {
   const full = stackTotal(b.outBuf) >= (def.bufferCap ?? 24) - 3;
   if (full) { b.status = 'blocked'; return; }
   b.timer += dt * machineSpeed(s, b);
-  const trees: Building[] = [];
+  const ready: Building[] = [];
+  let any = false;
   for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
     if (!dx && !dy) continue;
     const t = buildingAt(s, b.x + dx, b.y + dy);
-    if (isTree(t) && !trees.includes(t)) trees.push(t);
+    if (!t) continue;
+    if (isTree(t)) { any = true; if (t.stock >= 1 && !ready.includes(t)) ready.push(t); }
+    else if (t.type === 'tuft') { any = true; ready.push(t); }
   }
-  if (!trees.length) { b.status = 'noinput'; b.timer = 0; return; }
-  const ready = trees.filter((t) => t.stock >= 1);
+  if (!any) { b.status = 'noinput'; b.timer = 0; return; }
   b.status = ready.length ? 'working' : 'noinput';
   if (b.timer < HARVESTER_INTERVAL) return;
   if (!ready.length) { b.timer = HARVESTER_INTERVAL; return; }
   b.timer = 0;
   const t = ready[b.rr++ % ready.length];
-  harvestTree(s, t, (item, n) => { addTo(b.outBuf, item, n); return n; });
+  if (t.type === 'tuft') {
+    addTo(b.outBuf, 'fiber', TUFT.yield);
+    removeBuildingRaw(s, t);
+  } else harvestTree(s, t, (item, n) => { addTo(b.outBuf, item, n); return n; });
   b.cycles++;
   s.events.push({ type: 'cycle', id: b.id });
 }

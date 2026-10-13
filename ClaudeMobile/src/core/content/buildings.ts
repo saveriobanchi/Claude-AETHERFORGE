@@ -73,7 +73,7 @@ const B: BuildingDef[] = [
   { id: 'millstone', name: 'Millstone', desc: 'Grinds stone down.', kind: 'crafter', category: 'craft', size: 1, cost: { stone: 16, gear: 6, plank: 4 }, floors: ['stone', 'sky'], unlock: 'mill', rotatable: true, power: 3, bufferCap: 12 },
   { id: 'furnace', name: 'Bellows Furnace', desc: 'A wind-fed furnace, hot enough for iron.', kind: 'crafter', category: 'craft', size: 1, cost: { brick: 16, copper: 8, gear: 4 }, floors: ['stone', 'sky'], unlock: 'iron', rotatable: true, power: 4, bufferCap: 12 },
   { id: 'assembler', name: 'Assembler', desc: 'Builds components on its own.', kind: 'crafter', category: 'craft', size: 1, cost: { iron: 8, gear: 8, brick: 8 }, floors: ['stone', 'sky'], unlock: 'assembler', rotatable: true, power: 3, bufferCap: 12 },
-  { id: 'condenser', name: 'Mist Condenser', desc: 'Combs passing clouds. Must touch the edge.', kind: 'generator', category: 'aether', size: 1, cost: { glass: 6, copper: 8, plate: 4 }, edge: true, unlock: 'aether', rotatable: true, power: 3, produces: { item: 'mist', every: 4 }, bufferCap: 16 },
+  { id: 'condenser', name: 'Mist Condenser', desc: 'Combs passing clouds. Must touch the edge.', kind: 'generator', category: 'aether', size: 1, cost: { glass: 6, copper: 8, plate: 4 }, edge: true, unlock: 'aether', rotatable: true, power: 3, produces: { item: 'mist', every: 3 }, bufferCap: 16 },
   { id: 'distiller', name: 'Distiller', desc: 'Separates mist.', kind: 'crafter', category: 'aether', size: 1, cost: { glass: 8, iron: 8, brick: 10 }, floors: ['stone', 'sky'], unlock: 'distill', rotatable: true, power: 4, bufferCap: 16 },
   { id: 'star_net', name: 'Star Net', desc: 'Catches what falls at night. Must touch the edge.', kind: 'generator', category: 'aether', size: 1, cost: { twine: 16, lens: 2, wire: 6 }, edge: true, unlock: 'night', rotatable: true, produces: { item: 'stardust', every: 12, nightOnly: true }, bufferCap: 12 },
   { id: 'resonator', name: 'Resonator', desc: 'Sings matter into new shapes.', kind: 'crafter', category: 'aether', size: 1, cost: { iron: 10, lens: 4, mechanism: 2 }, floors: ['stone', 'sky'], unlock: 'resonance', rotatable: true, power: 6, bufferCap: 12 },
@@ -125,6 +125,7 @@ export const TREE = {
   regrow: 5, // seconds per stock
   yield: { wood: 1, leaf: 2 } as Stack,
   saplingChance: 0.05,
+  fiberChance: 0.2,
   saplingPity: 12,
   elderMaxStock: 20,
   elderRegrow: 1.5,
@@ -133,6 +134,6 @@ export const TREE = {
   saplingGrowTime: 45,
 };
 
-export const HARVESTER_INTERVAL = 3; // seconds per harvest
+export const HARVESTER_INTERVAL = 1.5; // seconds per harvest
 export const DISPATCH_INTERVAL = 0.4;
 export const TUFT = { every: 18, yield: 2 };

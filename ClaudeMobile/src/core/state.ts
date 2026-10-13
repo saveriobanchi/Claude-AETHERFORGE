@@ -71,7 +71,8 @@ export type SimEvent =
   | { type: 'islet_docked'; name: string; x: number; y: number }
   | { type: 'forge_stage'; stage: number }
   | { type: 'resonance'; level: number }
-  | { type: 'deliver'; id: number; item: ItemId };
+  | { type: 'deliver'; id: number; item: ItemId }
+  | { type: 'spill'; id: number; item: ItemId };
 
 export interface FlowBucket {
   dt: number;
@@ -95,6 +96,7 @@ export interface GameState {
     crafted: number;
     built: number;
     playSeconds: number;
+    spilled: number;
   };
   known: Set<string>;
   flags: Set<string>;
@@ -165,7 +167,7 @@ export function createState(seed = 1234567): GameState {
     buildings: new Map(),
     occ: new Map(),
     stash: emptyStash(),
-    stats: { obtained: {}, delivered: 0, harvests: 0, sincePity: 0, crafted: 0, built: 0, playSeconds: 0 },
+    stats: { obtained: {}, delivered: 0, harvests: 0, sincePity: 0, crafted: 0, built: 0, playSeconds: 0, spilled: 0 },
     known: new Set(['start']),
     flags: new Set(),
     nextId: 1,

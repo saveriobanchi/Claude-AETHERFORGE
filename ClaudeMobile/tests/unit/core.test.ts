@@ -166,7 +166,7 @@ describe('machines', () => {
     A.tapManual(s, id!);
     expect(s.stash.pebble).toBe(0);
     A.tapManual(s, id!);
-    expect(s.stash.pebble).toBe(1);
+    expect(s.stash.pebble).toBe(2);
     expect(s.stash.loam).toBe(1);
   });
 

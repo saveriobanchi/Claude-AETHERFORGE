@@ -87,7 +87,7 @@ describe('offline progression', () => {
     expect(rep).toBeTruthy();
     // the loam supply runs out: gains are limited by it
     expect(s.stash.loam).toBeGreaterThanOrEqual(0);
-    expect((rep.gained.pebble ?? 0)).toBeLessThanOrEqual(before.loam + 1);
+    expect(rep.gained.pebble ?? 0).toBeLessThanOrEqual(2 * before.loam + 2);
   });
 
   it('caps very long absences', () => {
