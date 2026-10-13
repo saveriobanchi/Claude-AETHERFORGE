@@ -155,6 +155,7 @@ export class Game {
     this.last = now;
     this.autoQuality(dt);
     if (dt > 0.25) dt = 0.25;
+    if (!(dt > 0)) dt = 0; // rAF timestamps can precede performance.now()
     // fixed-step simulation
     this.acc += dt * this.speed;
     let steps = 0;

@@ -613,8 +613,9 @@ export class WorldView {
       frames = vars['st' + Math.max(0, Math.min(3, s.forge.stage))] ?? frames;
     }
     const animated = b.status === 'working' || ['tree', 'tuft', 'node', 'pylon', 'beacon', 'sapling', 'forge', 'elder'].includes(kind) || b.type === 'elder_tree';
-    const fi = animated && frames.length > 1 ? Math.floor((t + v.phase) * st.def.fps) % frames.length : 0;
-    if (v.sprite.texture !== frames[fi].tex) setArt(v.sprite, frames[fi]);
+    const raw = animated && frames.length > 1 ? Math.floor((t + v.phase) * st.def.fps) % frames.length : 0;
+    const fr = frames[Number.isFinite(raw) && raw >= 0 ? raw : 0];
+    if (v.sprite.texture !== fr.tex) setArt(v.sprite, fr);
 
     // status mote
     const status = b.status;
