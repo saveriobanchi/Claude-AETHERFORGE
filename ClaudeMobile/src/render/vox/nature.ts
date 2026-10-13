@@ -121,16 +121,14 @@ export function treeVol(w: number, h: number, o: TreeOpts, sway = 0): Vol {
 }
 
 export function treeSprite(): SpriteDef {
-  const variants: Record<string, PixelCanvas[]> = {};
-  let ax = 0, ay = 0;
+  const specs: [string, number, (f: number) => Vol][] = [];
   for (let stock = 0; stock <= 5; stock++) {
-    const b = bakeFrames((f) => treeVol(40, 64, {
+    specs.push(['s' + stock, 4, (f) => treeVol(40, 64, {
       trunkH: 20, trunkR: 2.4, seed: 11, buds: stock * 4, lean: 0.5,
       canopy: [[-6, 1, 26, 7.5], [5, -2, 27, 7.5], [0, 4, 30, 7], [-2, -5, 33, 7.5], [3, 2, 37, 6.5], [-4, 0, 40, 5.5]],
-    }, [0, 1, 0, -1][f]), 4);
-    variants['s' + stock] = b.frames;
-    ax = b.ax; ay = b.ay;
+    }, [0, 1, 0, -1][f])]);
   }
+  const { variants, ax, ay } = bakeVariants(specs);
   return { frames: variants.s5, ax, ay, fps: 2, variants };
 }
 
@@ -140,4 +138,15 @@ export function elderTreeSprite(): SpriteDef {
     canopy: [[-11, 3, 36, 11], [10, -4, 37, 11], [0, 7, 42, 10], [-4, -9, 46, 11], [7, 5, 51, 9.5], [-8, -1, 55, 9], [2, -3, 60, 8], [13, 4, 44, 7]],
   }, [0, 1, 0, -1][f]), 4);
   return { frames: b.frames, ax: b.ax, ay: b.ay, fps: 2, lights: [[-14, -24, 0xffc060, 18], [12, -26, 0xffc060, 18]] };
+}
+
+/** Bake several variant animations into one shared frame box, so swapping variants never shifts the anchor. */
+export function bakeVariants(specs: [string, number, (f: number) => Vol][], opts: { outline?: boolean; ao?: number } = {}): { variants: Record<string, PixelCanvas[]>; ax: number; ay: number } {
+  const index: [number, number][] = [];
+  specs.forEach(([, n], s) => { for (let f = 0; f < n; f++) index.push([s, f]); });
+  const b = bakeFrames((q) => specs[index[q][0]][2](index[q][1]), index.length, opts);
+  const variants: Record<string, PixelCanvas[]> = {};
+  let q = 0;
+  for (const [k, n] of specs) { variants[k] = b.frames.slice(q, q + n); q += n; }
+  return { variants, ax: b.ax, ay: b.ay };
 }

@@ -3,7 +3,7 @@ import { PixelCanvas as PixelCanvasCtor } from '../art/pixel';
 import { pack } from '../artpack';
 import type { SpriteDef } from '../art/sprite';
 import { M } from './mats';
-import { bakeFrames } from './nature';
+import { bakeFrames, bakeVariants } from './nature';
 import { band, barrel, bricks, chimney, crate, lantern, pile, planks, plinth, post, roofU, roofV, stones } from './kit';
 import { type Mat, Vol } from './vox';
 
@@ -528,19 +528,19 @@ export function splitter(sorter: boolean): SpriteDef {
 
 export function storage(kind: 'crate' | 'silo' | 'warehouse'): SpriteDef {
   if (kind === 'crate') {
-    const lv = (fill: number) => def(() => {
+    const lv = (fill: number) => () => {
       const v = new Vol(W, W, 30);
       crate(v, L(0), L(0), 0, 10);
       crate(v, L(10), L(9), 0, 7);
       if (fill >= 1) crate(v, L(1), L(1), 10, 7);
       if (fill >= 2) { crate(v, L(10), L(9), 7, 6); v.sphere(L(4), L(13), 3, 3.2, M.cloth, () => 0, 0.8); v.sphere(L(7), L(14), 2, 2.6, M.cloth, () => -0.06, 0.8); }
       return v;
-    }, 1, 1);
-    const a = lv(0), b = lv(1), cc = lv(2);
-    return { ...b, variants: { f0: a.frames, f1: b.frames, f2: cc.frames } };
+    };
+    const b = bakeVariants([['f0', 1, lv(0)], ['f1', 1, lv(1)], ['f2', 1, lv(2)]]);
+    return { frames: b.variants.f1, ax: b.ax, ay: b.ay, fps: 1, variants: b.variants };
   }
   if (kind === 'silo') {
-    const lv = (fill: number) => def(() => {
+    const lv = (fill: number) => () => {
       const v = new Vol(W, W, 66);
       plinth(v, P, 2);
       v.cyl(c, c, 2, 44, 7, M.brick, (_i, _j, k, a) => (k % 3 === 0 || Math.cos(a * 9 + Math.floor(k / 3)) > 0.93 ? -0.2 : 0));
@@ -549,9 +549,9 @@ export function storage(kind: 'crate' | 'silo' | 'warehouse'): SpriteDef {
       for (let k = 6; k <= 36; k++) v.set(c - 1, c + 7, k, k <= 6 + (fill / 2) * 30 ? M.gold : M.glass, 0);
       v.cone(c, c, 45, 56, 8, 0.5, M.copper, false, (_i, _j, k) => (k % 3 === 0 ? -0.12 : 0.04));
       return v;
-    }, 1, 1);
-    const a = lv(0), b = lv(1), cc = lv(2);
-    return { ...b, variants: { f0: a.frames, f1: b.frames, f2: cc.frames } };
+    };
+    const b = bakeVariants([['f0', 1, lv(0)], ['f1', 1, lv(1)], ['f2', 1, lv(2)]]);
+    return { frames: b.variants.f1, ax: b.ax, ay: b.ay, fps: 1, variants: b.variants };
   }
   return def((f) => {
     const v = new Vol(W, W, 46);
@@ -691,11 +691,10 @@ export function roost(): SpriteDef {
 export function forge(): SpriteDef {
   const PF = 4, WF = 48 + PF * 2, cf = WF / 2;
   const LF = (q: number) => q + PF;
-  const variants: Record<string, import('../art/pixel').PixelCanvas[]> = {};
-  let ax = 0, ay = 0;
+  const specs: [string, number, (f: number) => Vol][] = [];
   for (let stage = 0; stage <= 3; stage++) {
     const n = stage === 3 ? 12 : 1;
-    const b = bakeFrames((f) => {
+    specs.push(['st' + stage, n, (f) => {
       const v = new Vol(WF, WF, 130);
       plinth(v, PF, 3, M.cobble, 3);
       if (stage === 0) {
@@ -730,20 +729,18 @@ export function forge(): SpriteDef {
         for (const [i, j] of [[11, 11], [36, 11], [11, 36], [36, 36]]) v.sphere(LF(i), LF(j), 87, 2.5, M.star);
       }
       return v;
-    }, n);
-    variants['st' + stage] = b.frames;
-    ax = b.ax; ay = b.ay;
+    }]);
   }
+  const { variants, ax, ay } = bakeVariants(specs);
   return { frames: variants.st0, ax, ay, fps: 8, variants, lights: [[0, -200, 0x6cb8f2, 70]] };
 }
 
 // ───────────────────────── nature extras ─────────────────────────
 
 export function sapling(): SpriteDef {
-  const variants: Record<string, import('../art/pixel').PixelCanvas[]> = {};
-  let ax = 0, ay = 0;
+  const specs: [string, number, (f: number) => Vol][] = [];
   for (let stage = 0; stage < 3; stage++) {
-    const b = bakeFrames((f) => {
+    specs.push(['g' + stage, 2, (f) => {
       const v = new Vol(W, W, 30);
       v.sphere(c, c, 0, 3.5, M.dirt, () => 0.05, 0.4);
       const h = 4 + stage * 5;
@@ -751,10 +748,9 @@ export function sapling(): SpriteDef {
       const r = 2 + stage * 1.6;
       v.sphere(c + f * 0.5, c, h + r * 0.5, r, M.leaf, (i, j, k) => (hash2(i, j + k, stage) - 0.5) * 0.3 + (k - h) * 0.04, 0.85);
       return v;
-    }, 2);
-    variants['g' + stage] = b.frames;
-    ax = b.ax; ay = b.ay;
+    }]);
   }
+  const { variants, ax, ay } = bakeVariants(specs);
   return { frames: variants.g0, ax, ay, fps: 1.5, variants };
 }
 

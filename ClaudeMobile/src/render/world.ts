@@ -76,6 +76,8 @@ export class WorldView {
   world = new Container();
   private terrain = new Container();
   private shadows = new Container();
+  private falls = new Container();
+  private fallFrames: Texture[] = [];
   private floor = new Container();
   private items = new Container();
   private objects = new Container();
@@ -138,7 +140,7 @@ export class WorldView {
 
     this.objects.sortableChildren = true;
     this.lights.blendMode = 'add';
-    this.world.addChild(this.terrain, this.shadows, this.floor, this.items, this.grid, this.objects, this.fx.layer, this.lights, this.ghostLayer, this.overlay);
+    this.world.addChild(this.terrain, this.falls, this.shadows, this.floor, this.items, this.grid, this.objects, this.fx.layer, this.lights, this.ghostLayer, this.overlay);
     this.worldView.roundPixels = false;
     this.app.stage.addChild(this.sky.back, this.worldView, this.sky.front);
   }
@@ -239,6 +241,7 @@ export class WorldView {
       }
       this.cam.setBounds(x0, y0, x1, y1 + 80);
       this.islandBottom = y1 + 120;
+      this.syncFalls(s);
     }
     if (!this.chunkQueue.size) return;
     // first build renders everything; afterwards one chunk per frame (no hitches)
@@ -275,6 +278,39 @@ export class WorldView {
   }
 
   islandBottom = 0;
+
+  /**
+   * Waterfalls spill from a few grass edges whose drop is clear of other land
+   * on screen. Sites are picked by a stable hash so they stay put as you build.
+   */
+  private syncFalls(s: GameState): void {
+    for (const c of this.falls.removeChildren()) c.destroy();
+    if (!this.fallFrames.length) this.fallFrames = waterfallFrames().map((f) => this.atlas.add(f));
+    const sites: [number, number, number][] = [];
+    const centres = [...s.tiles.values()].map((t) => tileCenter(t.x, t.y));
+    for (const t of s.tiles.values()) {
+      if (t.floor !== 'grass') continue;
+      const [cx, cy] = tileCenter(t.x, t.y);
+      for (const side of [0, 1]) {
+        const open = side === 0 ? !s.tiles.has(key(t.x, t.y + 1)) : !s.tiles.has(key(t.x + 1, t.y));
+        if (!open) continue;
+        const h = hashTile(t.x * 3 + side, t.y);
+        if (h > 0.3) continue;
+        const fx = cx + (side === 0 ? -16 : 16), fy = cy + 8;
+        if (centres.some(([x, y]) => Math.abs(x - fx) < 30 && y > fy + 4)) continue;
+        sites.push([fx, fy, h]);
+      }
+    }
+    sites.sort((a, b) => a[2] - b[2]);
+    const picked: [number, number, number][] = [];
+    for (const site of sites) if (picked.length < 3 && picked.every(([x, y]) => Math.hypot(x - site[0], y - site[1]) > 120)) picked.push(site);
+    for (const [fx, fy] of picked) {
+      const sp = new Sprite(this.fallFrames[0]);
+      sp.anchor.set(0.5, 0);
+      sp.position.set(fx, fy - 3);
+      this.falls.addChild(sp);
+    }
+  }
 
   private rt: RenderTexture | null = null;
   private readonly worldView = new Sprite();
@@ -554,6 +590,10 @@ export class WorldView {
       this.fx.emit(this.night > 0.5 ? 'mote' : 'leaf', wx, wy, 1, { vx: 8, up: 2, spread: 4, life: 3, drag: 0.9, g: 3 });
     }
     this.fx.update(dt);
+    if (this.falls.children.length) {
+      const fi = Math.floor(this.time * 12) % this.fallFrames.length;
+      for (const c of this.falls.children) (c as Sprite).texture = this.fallFrames[fi];
+    }
     const t1 = performance.now();
     this.app.renderer.render({ container: this.world, target: this.rt!, clear: true });
     this.app.renderer.render(this.app.stage);
@@ -841,4 +881,36 @@ export class WorldView {
   dirVec(d: number): [number, number] {
     return [DX[d], DY[d]];
   }
+}
+
+function hashTile(x: number, y: number): number {
+  let h = (x * 374761393 + y * 668265263) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+/** A falling ribbon of water: streaks scroll down, foam at the lip, fading into mist. */
+function waterfallFrames(): PixelCanvas[] {
+  const W = 20, H = 300, N = 8;
+  const ramp = [0x1f5288, 0x2a6ea6, 0x3c8dc2, 0x5fb0da, 0x8dd2ec, 0xc6eef8, 0xffffff];
+  const out: PixelCanvas[] = [];
+  for (let f = 0; f < N; f++) {
+    const c = new PixelCanvas(W, H);
+    for (let y = 0; y < H; y++) {
+      const spread = Math.min(3, y / 60);
+      const x0 = Math.round(2 - spread * 0.6), x1 = Math.round(W - 3 + spread * 0.6);
+      const fade = y < H * 0.45 ? 1 : Math.max(0, 1 - (y - H * 0.45) / (H * 0.55));
+      for (let x = x0; x <= x1; x++) {
+        const edge = x === x0 || x === x1;
+        const streak = Math.sin(x * 2.3 + Math.floor((y - f * 6) / 9) * 1.7) * 0.5 + 0.5;
+        let l = 2.4 + streak * 2.2 - (edge ? 1.2 : 0) + (x < W / 2 ? 0.4 : -0.3);
+        if (y < 4) l = 5.5 - y * 0.4;
+        const a = Math.round(255 * fade * (edge ? 0.7 : 0.92));
+        if (a < 8 || bayer(x, y) * 255 > a + 40) continue;
+        c.set(x, y, rgb(ramp[Math.max(0, Math.min(ramp.length - 1, Math.round(l)))], a));
+      }
+    }
+    out.push(c);
+  }
+  return out;
 }

@@ -11,10 +11,16 @@ src/
     offline.ts     time-away model
     save.ts        versioned JSON save, migrations, export/import
   render/
-    art/           procedural pixel-art toolkit and every sprite/tile/icon
+    art/           pixel canvas toolkit, sprite registry, legacy flat art
+    vox/           voxel art engine: 16-voxel blocks per tile, per-face light,
+                   ambient occlusion, emissive materials; block terrain,
+                   building/tree/item models with moving parts
+    bake.ts        bakes every sprite/icon into packed sheets (runs in Node)
+    artpack.ts     loads the pre-baked sheets at startup (production)
     world.ts       Pixi scene: chunked terrain, depth-sorted buildings, belts,
                    items, lights, overlays, wisps
-    sky.ts         time-of-day sky, sun/moon, stars, parallax clouds and islets
+    sky.ts         golden-hour sky gradient, sun bloom, painterly clouds,
+                   distant voxel islets with waterfalls, stars, cloud sea
     camera.ts      inertial pan, focal pinch-zoom, eased focus, soft bounds
     effects.ts     pooled particles
     atlas.ts       shelf-packed texture atlas (few draw calls)
@@ -47,8 +53,18 @@ production is assumed to stop at that moment.
 
 ## Rendering & performance
 
-- Terrain is rasterised on the CPU per 8×8-tile chunk into one texture each and
-  only re-rendered when ground changes (`tileRev`).
+- All art is procedural voxel models (no external image assets). `npm run art`
+  (part of `npm run build`) bakes every sprite, belt frame and icon into PNG
+  sheets in `public/art/` (~300 KB, generated, not committed); production
+  loads those instead of generating art on the device. Dev (`npm run dev`)
+  and `?liveart` generate art live.
+- The world is drawn crisp at a whole number of device pixels per art pixel
+  into an offscreen texture, then scaled smoothly to the exact zoom, so pixels
+  stay even-sized and pans/zooms glide sub-pixel without shimmer. The sky is
+  drawn with smooth filtering on its own.
+- Terrain is voxel-rasterised on the CPU per 8×8-tile chunk into one texture
+  each and only re-rendered when ground changes (`tileRev`); after the first
+  build, changed chunks re-render one per frame, nearest the camera first.
 - Buildings, items and effects come from one atlas page → heavily batched.
 - Off-screen buildings are culled; sprites, items and particles are pooled.
 - Night lights are additive sprites, drawn only when it is dark.
