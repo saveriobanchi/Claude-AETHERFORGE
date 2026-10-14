@@ -459,21 +459,7 @@ export class Game {
     this.selected = id;
     if (id !== null) {
       if (sound) audio.play('select');
-      const b = this.s.buildings.get(id);
-      if (b) {
-        // keep the selection clear of the side panel
-        const [sx, sy] = this.view.tileToScreen(b.x, b.y);
-        const landscape = this.view.vw > this.view.vh;
-        const panelW = landscape ? Math.min(320, this.view.vw * 0.44) + 16 : 0;
-        const freeRight = this.view.vw - panelW;
-        const bottomCut = landscape ? 0 : this.view.vh * 0.55 + 80;
-        if (sx > freeRight - 40 || sy > this.view.vh - bottomCut - 30) {
-          const [wx, wy] = tileCenter(b.x, b.y);
-          const cx = wx + (panelW / 2) / this.view.cam.zoom;
-          const cy = wy + (bottomCut / 2) / this.view.cam.zoom;
-          this.view.cam.focus(cx, cy, undefined, 0.5);
-        }
-      }
+      // the camera stays where the player put it: selecting never pans the view
     }
     this.ui.onSelect();
   }
