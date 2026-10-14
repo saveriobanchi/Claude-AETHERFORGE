@@ -67,6 +67,15 @@ export function demoWorld(): GameState {
   }
   for (const [x, y] of [[-6, -3], [1, -4]]) { s.stash.sapling = 9; A.place(s, 'sapling', x, y); }
   s.trade.marks = 140;
+  // a decorated corner: paths, a fountain, gazebo, lamps, hedges and a garden
+  s.chapters = 5;
+  for (const id of ['patterns1', 'patterns2', 'patterns3', 'patterns4']) s.known.add(id);
+  // free grass west of the trees becomes a little park
+  const spots: [number, number][] = [];
+  for (let y = -8; y <= 8; y++) for (let x = -10; x <= 10; x++) if (A.canPlace(s, 'bench', x, y).ok && s.tiles.get(((x + 2048) * 4096 + (y + 2048)))?.floor === 'grass') spots.push([x, y]);
+  spots.sort((p, q) => Math.hypot(p[0] + 2, p[1] - 6) - Math.hypot(q[0] + 2, q[1] - 6));
+  const park = ['fountain', 'stone_path', 'gazebo', 'lamp_post', 'flower_bed', 'bench', 'statue', 'stone_path', 'planter', 'well', 'hedge', 'banner', 'flower_bed', 'brick_arch', 'crystal_lamp', 'lamp_post', 'hedge', 'fence', 'fence', 'plank_path', 'bench', 'flower_bed'];
+  park.forEach((t, i) => { const p = spots[i]; if (p) A.place(s, t, p[0], p[1], (i % 2) as 0 | 1); });
   s.renown = { xp: 40, level: 11, points: 4, perks: { well_oiled: 2, bountiful: 1, haggler: 1, deep_cellars: 3 }, codex: ['biomes'] };
   s.trade.level = 2;
   run(s, 40);

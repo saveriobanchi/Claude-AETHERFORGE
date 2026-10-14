@@ -385,7 +385,7 @@ export class WorldView {
         root.addChild(v.mote);
         v.mote.y = -st!.top - 5;
       }
-      if (def.rotatable && def.kind !== 'belt') {
+      if (def.rotatable && def.kind !== 'belt' && def.kind !== 'decor') {
         v.arrow = new Sprite(this.arrowTex[b.dir]);
         v.arrow.anchor.set(0.5);
         this.floor.addChild(v.arrow);
@@ -663,6 +663,8 @@ export class WorldView {
       frames = vars['f' + this.fillLevel] ?? frames;
     } else if (kind === 'forge') {
       frames = vars['st' + Math.max(0, Math.min(3, s.forge.stage))] ?? frames;
+    } else if (vars['d' + (b.dir % 2)]) {
+      frames = vars['d' + (b.dir % 2)];
     }
     const animated = b.status === 'working' || ['tree', 'tuft', 'node', 'pylon', 'beacon', 'sapling', 'forge', 'elder', 'post', 'decor'].includes(kind) || b.type === 'elder_tree';
     const raw = animated && frames.length > 1 ? Math.floor((t + v.phase) * st.def.fps) % frames.length : 0;

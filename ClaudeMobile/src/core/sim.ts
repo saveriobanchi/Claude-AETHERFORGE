@@ -10,6 +10,8 @@ import {
   rand, isNight, isEdgeTile, computeCapacity, attuneRank, addBuilding, addTile, tileAt, removeBuildingRaw, addXp, made, perkRank,
 } from './state';
 import { checkDiscoveries } from './progression';
+import { charm, checkChapters } from './chapters';
+import { charmTradeBonus } from './content/chapters';
 import { CODEX, FRUIT_ITEMS, GEMS, LUCK, MASTERY_SPEED, XP, masteryStar } from './content/renown';
 
 export const TICK = 0.05; // 20 Hz fixed simulation step
@@ -47,6 +49,7 @@ export function bufCap(def: BuildingDef, b: Building, fallback = 12): number {
 export function rebuildCache(s: GameState): void {
   const c = s.cache;
   c.capacity = computeCapacity(s);
+  c.charm = charm(s);
   c.edge.clear();
   for (const t of s.tiles.values()) if (isEdgeTile(s, t.x, t.y)) c.edge.add(key(t.x, t.y));
 
@@ -777,7 +780,7 @@ export function completeContract(s: GameState, i: number): void {
   const tr = s.trade;
   const c = tr.board[i];
   if (!c) return;
-  const pay = Math.round(c.marks * (1 + 0.1 * perkRank(s, 'haggler')));
+  const pay = Math.round(c.marks * (1 + 0.1 * perkRank(s, 'haggler') + charmTradeBonus(s.cache.charm)));
   tr.marks += pay;
   tr.earned += pay;
   tr.rep += Math.round(c.marks * (1 + 0.15 * perkRank(s, 'good_name')));
@@ -970,7 +973,7 @@ export function tick(s: GameState, dt = TICK): void {
   }
 
   // Discoveries once per simulated second (cheap, and deterministic).
-  if (Math.floor(s.time) !== Math.floor(s.time - dt)) { checkDiscoveries(s); checkCodex(s); }
+  if (Math.floor(s.time) !== Math.floor(s.time - dt)) { checkDiscoveries(s); checkCodex(s); checkChapters(s); }
 }
 
 /** Codex sets: each completed set grants a perk point and renown. */

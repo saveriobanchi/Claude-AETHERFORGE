@@ -29,7 +29,7 @@ export type BuildingKind =
 
 export type Floor = 'grass' | 'stone' | 'sky';
 import { FRUITS } from './biomes';
-export type BuildCategory = 'nature' | 'craft' | 'logistics' | 'power' | 'storage' | 'aether' | 'wonder';
+export type BuildCategory = 'nature' | 'craft' | 'logistics' | 'power' | 'storage' | 'aether' | 'decor' | 'wonder';
 
 export interface BuildingDef {
   id: string;
@@ -55,6 +55,7 @@ export interface BuildingDef {
   radius?: number;
   bufferCap?: number;      // input/output buffer cap per item
   growsInto?: string;      // saplings: the tree they become
+  charm?: number;          // decor: how much it adds to the island's charm
 }
 
 const B: BuildingDef[] = [
@@ -97,7 +98,33 @@ const B: BuildingDef[] = [
   { id: 'roost', name: 'Wisp Roost', desc: 'Wisps ferry items between your stash and nearby machines.', kind: 'roost', category: 'logistics', size: 1, cost: { coil: 2, skystone: 8, plate: 6 }, unlock: 'wisps', power: 4, radius: 5 },
 
   { id: 'trading_post', name: 'Trading Post', desc: 'Sky traders dock here. Must touch the edge.', kind: 'post', category: 'logistics', size: 1, cost: { plank: 12, stone: 6, twine: 4 }, edge: true, unlock: 'trade', bufferCap: 999 },
-  { id: 'lantern', name: 'Trade Lantern', desc: 'A gift from the traders. Glows at night.', kind: 'decor', category: 'storage', size: 1, cost: { plank: 2, candle: 2 }, unlock: 'tradelights' },
+  { id: 'lantern', name: 'Trade Lantern', desc: 'A gift from the traders. Glows at night.', kind: 'decor', category: 'decor', size: 1, cost: { plank: 2, candle: 2 }, unlock: 'tradelights', charm: 4 },
+
+  // ── Decor: pieces for shaping the island; they add charm ──
+  // Garden patterns (chapter 1)
+  { id: 'plank_path', name: 'Plank Path', desc: 'A boardwalk tile.', kind: 'decor', category: 'decor', size: 1, cost: { plank: 1 }, unlock: 'patterns1', charm: 1, draggable: true },
+  { id: 'fence', name: 'Fence', desc: 'A low rail fence. Drag to lay a line.', kind: 'decor', category: 'decor', size: 1, cost: { plank: 2 }, unlock: 'patterns1', charm: 1, draggable: true, rotatable: true },
+  { id: 'hedge', name: 'Hedge', desc: 'A trimmed leafy block.', kind: 'decor', category: 'decor', size: 1, cost: { leaf: 8 }, floors: ['grass'], unlock: 'patterns1', charm: 2, draggable: true },
+  { id: 'flower_bed', name: 'Flower Bed', desc: 'A wooden box of wildflowers.', kind: 'decor', category: 'decor', size: 1, cost: { loam: 2, fiber: 2 }, unlock: 'patterns1', charm: 3 },
+  { id: 'bench', name: 'Bench', desc: 'Somewhere to watch the clouds.', kind: 'decor', category: 'decor', size: 1, cost: { plank: 4 }, unlock: 'patterns1', charm: 2, rotatable: true },
+  // Mason patterns (chapter 3)
+  { id: 'stone_path', name: 'Cobble Path', desc: 'A cobbled tile.', kind: 'decor', category: 'decor', size: 1, cost: { stone: 1 }, unlock: 'patterns2', charm: 1, draggable: true },
+  { id: 'stone_wall', name: 'Stone Wall', desc: 'A dry-stone wall. Drag to lay a line.', kind: 'decor', category: 'decor', size: 1, cost: { stone: 4 }, unlock: 'patterns2', charm: 2, draggable: true },
+  { id: 'planter', name: 'Brick Planter', desc: 'A raised bed with a little tree.', kind: 'decor', category: 'decor', size: 1, cost: { brick: 6, loam: 2 }, unlock: 'patterns2', charm: 4 },
+  { id: 'banner', name: 'Banner', desc: 'Your island’s colours.', kind: 'decor', category: 'decor', size: 1, cost: { twine: 6, plank: 3 }, unlock: 'patterns2', charm: 3 },
+  { id: 'well', name: 'Well', desc: 'A stone well with a little roof.', kind: 'decor', category: 'decor', size: 1, cost: { stone: 16, plank: 6 }, unlock: 'patterns2', charm: 6 },
+  // Town patterns (chapter 5)
+  { id: 'lamp_post', name: 'Lamp Post', desc: 'An iron lamp. Glows at night.', kind: 'decor', category: 'decor', size: 1, cost: { iron: 4, glass: 2 }, unlock: 'patterns3', charm: 5 },
+  { id: 'brick_arch', name: 'Brick Arch', desc: 'A proud brick arch.', kind: 'decor', category: 'decor', size: 1, cost: { brick: 24 }, unlock: 'patterns3', charm: 8 },
+  { id: 'fountain', name: 'Fountain', desc: 'Clear water, endlessly falling.', kind: 'decor', category: 'decor', size: 1, cost: { stone: 30, glass: 8 }, unlock: 'patterns3', charm: 14 },
+  { id: 'gazebo', name: 'Gazebo', desc: 'A shaded pavilion.', kind: 'decor', category: 'decor', size: 1, cost: { plank: 30, brick: 12 }, unlock: 'patterns3', charm: 12 },
+  // Sky patterns (chapter 7)
+  { id: 'sky_path', name: 'Skystone Path', desc: 'A faintly glowing tile.', kind: 'decor', category: 'decor', size: 1, cost: { skystone: 1 }, unlock: 'patterns4', charm: 2, draggable: true },
+  { id: 'crystal_lamp', name: 'Crystal Lamp', desc: 'An aether crystal on a marble stand.', kind: 'decor', category: 'decor', size: 1, cost: { crystal: 1, glass: 4 }, unlock: 'patterns4', charm: 10 },
+  { id: 'statue', name: 'Skystone Statue', desc: 'A wanderer looking out at the haze.', kind: 'decor', category: 'decor', size: 1, cost: { skystone: 16 }, unlock: 'patterns4', charm: 12 },
+  { id: 'star_arch', name: 'Star Arch', desc: 'A skystone arch with stars caught in it.', kind: 'decor', category: 'decor', size: 1, cost: { skystone: 20, crystal: 2 }, unlock: 'patterns4', charm: 16 },
+  // Wonder pattern (chapter 9)
+  { id: 'monument', name: 'Forge Monument', desc: 'A model of the Aetherforge, cast in sunmetal.', kind: 'decor', category: 'decor', size: 1, cost: { sunmetal: 8, skystone: 20 }, unlock: 'patterns5', charm: 30 },
 
   // ── Storage ──
   { id: 'crate', name: 'Storage Crate', desc: 'Your stash holds 50 more of everything.', kind: 'storage', category: 'storage', size: 1, cost: { plank: 8, stone: 2 }, unlock: 'storage', capacity: 50 },

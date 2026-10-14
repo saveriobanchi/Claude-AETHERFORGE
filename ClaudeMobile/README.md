@@ -47,6 +47,9 @@ camera drifts so you can simply watch the island live.
 - Long-term goals for the grind: item mastery stars, renown levels with a
   perk build to plan, lucky output and bountiful harvests, gathering combos,
   rare gems and a codex of collections.
+- Ten chapters of goals that carry you from a single tree to the Aetherforge
+  and beyond, and twenty decor pieces to make the island your own (charm
+  makes traders pay more).
 - An endgame that keeps going.
 
 The rest is meant to be discovered. (Developers: see `docs/dev/DESIGN.md`,

@@ -660,3 +660,190 @@ export function lanternPost(c: Canvas, L: TexLib, f = 0): void {
   blk(ctx, [0.45, 0.45, 1.15], [0.9, 0.55, 1.22], 'a/oak_planks');
   lantern(ctx, [0.78, 0.5, 0.8 + Math.sin(f * TAU) * 0.02]);
 }
+
+// ───────────────────────── decor ─────────────────────────
+
+/** Flat path tile (sits on the ground, edges slightly inset). */
+export function path(c: Canvas, L: TexLib, tex: string, glow = false): void {
+  const t = L.get(tex);
+  c.box([0.03, 0.03, 0], [0.97, 0.97, 0.0625], F(t, { glow: glow ? false : undefined }), F(t), F(t), 1);
+  if (glow) c.light([0.5, 0.5, 0.2], [30, 60, 110], 0.8);
+}
+
+/** Rail fence along x (dir 0) or y (dir 1). */
+export function fence(c: Canvas, L: TexLib, dir: number): void {
+  const ctx = { c, L };
+  const along = dir % 2 === 0;
+  const post = (p: number) => along ? blk(ctx, [p, 0.44, 0], [p + 0.12, 0.56, 0.62], 'a/oak_log_top', 'a/oak_log_side') : blk(ctx, [0.44, p, 0], [0.56, p + 0.12, 0.62], 'a/oak_log_top', 'a/oak_log_side');
+  post(0.06); post(0.82);
+  for (const z of [0.24, 0.46]) {
+    if (along) blk(ctx, [0, 0.46, z], [1, 0.54, z + 0.08], 'a/oak_planks');
+    else blk(ctx, [0.46, 0, z], [0.54, 1, z + 0.08], 'a/oak_planks');
+  }
+}
+
+export function hedge(c: Canvas, L: TexLib): void {
+  const lv = L.get('a/oak_leaves');
+  c.box([0.04, 0.04, 0], [0.96, 0.96, 0.7], F(lv, { tint: [0.9, 1.05, 0.88] }), F(lv, { tint: [0.85, 1, 0.84] }), F(lv, { tint: [0.8, 0.95, 0.82] }), 3);
+}
+
+export function flowerBed(c: Canvas, L: TexLib): void {
+  const ctx = { c, L };
+  for (const [a, b] of [[[0.05, 0.05, 0], [0.95, 0.15, 0.3]], [[0.05, 0.85, 0], [0.95, 0.95, 0.3]], [[0.05, 0.05, 0], [0.15, 0.95, 0.3]], [[0.85, 0.05, 0], [0.95, 0.95, 0.3]]] as [V3, V3][]) blk(ctx, a, b, 'a/oak_planks');
+  blk(ctx, [0.15, 0.15, 0], [0.85, 0.85, 0.24], 'a/farmland', 'a/dirt');
+  const fl = ['aster', 'dandelion', 'forget_me_not', 'oxeye_daisy', 'lupine', 'pimpernel'];
+  for (let i = 0; i < 6; i++) c.sprite([0.26 + (i % 3) * 0.24, 0.3 + Math.floor(i / 3) * 0.36, 0.24], { tex: L.get('a/plants/' + fl[i]) }, 4, 1);
+}
+
+export function bench(c: Canvas, L: TexLib, dir: number): void {
+  const ctx = { c, L };
+  const along = dir % 2 === 0;
+  const b = (a: V3, bb: V3, t: string) => along ? blk(ctx, a, bb, t) : blk(ctx, [a[1], a[0], a[2]], [bb[1], bb[0], bb[2]], t);
+  for (const x of [0.12, 0.78]) b([x, 0.3, 0], [x + 0.1, 0.7, 0.3], 'a/slate');
+  b([0.06, 0.28, 0.3], [0.94, 0.72, 0.38], 'a/oak_planks');
+  b([0.06, 0.28, 0.38], [0.94, 0.36, 0.72], 'a/oak_planks');
+}
+
+export function stoneWall(c: Canvas, L: TexLib): void {
+  const ctx = { c, L };
+  blk(ctx, [0.06, 0.06, 0], [0.94, 0.94, 0.62], 'a/cobblestone_mossy', 'a/cobblestone_bricks_mossy', 'a/cobblestone_bricks');
+  blk(ctx, [0.02, 0.02, 0.62], [0.98, 0.98, 0.72], 'a/slate_tiles');
+}
+
+export function planter(c: Canvas, L: TexLib, f = 0): void {
+  const ctx = { c, L };
+  blk(ctx, [0.1, 0.1, 0], [0.9, 0.9, 0.45], 'a/mud_bricks');
+  blk(ctx, [0.18, 0.18, 0.4], [0.82, 0.82, 0.44], 'a/dirt');
+  const lv = L.get('a/beech_leaves');
+  blk(ctx, [0.46, 0.46, 0.44], [0.54, 0.54, 0.9], 'a/beech_log_top', 'a/beech_log_side');
+  c.box([0.24 + Math.sin(f * TAU) * 0.02, 0.24, 0.85], [0.76 + Math.sin(f * TAU) * 0.02, 0.76, 1.3], F(lv, { cut: 96 }), F(lv, { cut: 96 }), F(lv, { cut: 96 }), 3);
+}
+
+export function bannerPole(c: Canvas, L: TexLib, f = 0): void {
+  const ctx = { c, L };
+  blk(ctx, [0.36, 0.36, 0], [0.64, 0.64, 0.1], 'a/cobblestone_bricks');
+  blk(ctx, [0.46, 0.46, 0.1], [0.54, 0.54, 1.9], 'a/oak_log_top', 'a/oak_log_side');
+  blk(ctx, [0.43, 0.43, 1.9], [0.57, 0.57, 1.98], 'as/default_gold_block');
+  const flag = new Paint(16, 24);
+  for (let x = 0; x < 16; x++) {
+    const wave = Math.round(Math.sin(f * TAU + x * 0.45) * 1.2);
+    for (let y = 0; y < 20; y++) {
+      const yy = y + wave;
+      if (yy < 0 || yy >= 24) continue;
+      const tail = y > 15 && Math.abs(x - 7.5) < (y - 15) * 1.6;
+      if (tail) continue;
+      flag.set(x, yy, y < 2 ? 0xe0b040 : x < 2 || x > 13 ? 0x8a2a2a : (x > 5 && x < 10 && y > 6 && y < 11) ? 0xffd040 : 0xc83a2a);
+    }
+  }
+  c.quad([0.54, 0.5, 1.82], [0, 0.6, 0], [0, 0, -0.9], F(flag), [1, 1, 1], 6, 0.2);
+}
+
+export function well(c: Canvas, L: TexLib, f = 0): void {
+  const ctx = { c, L };
+  for (const [a, b] of [[[0.1, 0.1, 0], [0.9, 0.26, 0.5]], [[0.1, 0.74, 0], [0.9, 0.9, 0.5]], [[0.1, 0.1, 0], [0.26, 0.9, 0.5]], [[0.74, 0.1, 0], [0.9, 0.9, 0.5]]] as [V3, V3][]) blk(ctx, a, b, 'a/cobblestone_bricks');
+  const water = new Paint(16, 16);
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) water.set(x, y, (x + y + Math.floor(f * 4)) % 7 === 0 ? 0x8ac8f0 : 0x3a78b8);
+  c.quad([0.26, 0.26, 0.4], [0.48, 0, 0], [0, 0.48, 0], F(water), [1, 1, 1.05], 5, 0, true);
+  for (const x of [0.12, 0.78]) blk(ctx, [x, 0.44, 0.5], [x + 0.1, 0.56, 1.35], 'a/oak_log_top', 'a/oak_log_side');
+  blk(ctx, [0.2, 0.47, 1.0], [0.8, 0.53, 1.06], 'a/oak_log_side');
+  c.box([0.46, 0.44, 0.62], [0.58, 0.56, 0.78], F(L.get('as/bucket')), F(L.get('as/bucket')), F(L.get('as/bucket')), 6);
+  for (let k = 0; k < 3; k++) blk(ctx, [0.0 + k * 0.08, 0.3 + k * 0.08, 1.35 + k * 0.1], [1.0 - k * 0.08, 0.7 - k * 0.08, 1.45 + k * 0.1], 'a/maple_planks');
+}
+
+export function lampPost(c: Canvas, L: TexLib): void {
+  const ctx = { c, L };
+  blk(ctx, [0.34, 0.34, 0], [0.66, 0.66, 0.14], 'a/slate_tiles');
+  blk(ctx, [0.45, 0.45, 0.14], [0.55, 0.55, 1.6], 'as/default_steel_block');
+  blk(ctx, [0.36, 0.36, 1.6], [0.64, 0.64, 1.66], 'as/default_steel_block');
+  const lt = lanternTex();
+  c.box([0.38, 0.38, 1.66], [0.62, 0.62, 1.94], F(lt, { glow: true, uv: [4, 3, 12, 11] }), F(lt, { glow: true, uv: [3, 3, 13, 12] }), F(lt, { glow: true, uv: [3, 3, 13, 12] }), 6);
+  blk(ctx, [0.34, 0.34, 1.94], [0.66, 0.66, 2.0], 'as/default_steel_block');
+  c.light([0.5, 0.5, 1.8], [130, 95, 40], 1.6);
+}
+
+export function brickArch(c: Canvas, L: TexLib): void {
+  const ctx = { c, L };
+  for (const x of [0.02, 0.76]) blk(ctx, [x, 0.36, 0], [x + 0.22, 0.64, 1.5], 'a/mud_bricks');
+  for (let k = 0; k < 4; k++) blk(ctx, [0.18 + k * 0.04, 0.36, 1.5 - (3 - k) * 0.12], [0.82 - k * 0.04, 0.64, 1.62 - (3 - k) * 0.12 + 0.12], 'a/mud_bricks');
+  blk(ctx, [0.0, 0.33, 1.62], [1.0, 0.67, 1.74], 'a/sandstone_tiles');
+  blk(ctx, [0.44, 0.33, 1.74], [0.56, 0.67, 1.86], 'as/default_gold_block');
+}
+
+export function fountain(c: Canvas, L: TexLib, f = 0): void {
+  const ctx = { c, L };
+  for (const [a, b] of [[[0.02, 0.02, 0], [0.98, 0.14, 0.32]], [[0.02, 0.86, 0], [0.98, 0.98, 0.32]], [[0.02, 0.02, 0], [0.14, 0.98, 0.32]], [[0.86, 0.02, 0], [0.98, 0.98, 0.32]]] as [V3, V3][]) blk(ctx, a, b, 'a/marble_bricks');
+  const water = new Paint(16, 16);
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+    const d = Math.hypot(x - 7.5, y - 7.5);
+    water.set(x, y, Math.abs(((d - f * 6) % 3 + 3) % 3 - 1.5) < 0.4 ? 0x9ad8f4 : 0x3a82c4);
+  }
+  c.quad([0.14, 0.14, 0.26], [0.72, 0, 0], [0, 0.72, 0], F(water), [1, 1, 1.05], 5, 0, true);
+  blk(ctx, [0.4, 0.4, 0.26], [0.6, 0.6, 0.8], 'a/marble');
+  blk(ctx, [0.28, 0.28, 0.8], [0.72, 0.72, 0.9], 'a/marble_bricks');
+  blk(ctx, [0.45, 0.45, 0.9], [0.55, 0.55, 1.15], 'a/marble');
+  // jets
+  const jet = new Paint(4, 16);
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 4; x++) if ((y + Math.floor(f * 8) + x) % 4) jet.set(x, y, y < 3 ? 0xffffff : 0x9ad8f4);
+  c.sprite([0.5, 0.5, 1.15], { tex: jet, glow: true }, 6, 2);
+  for (const [x, y] of [[0.3, 0.3], [0.7, 0.3], [0.3, 0.7], [0.7, 0.7]]) c.sprite([x, y, 0.32 + ((f * 2 + x) % 1) * 0.4], { tex: L.get('as/bubble') }, 6, 1);
+}
+
+export function gazebo(c: Canvas, L: TexLib): void {
+  const ctx = { c, L };
+  blk(ctx, [0.02, 0.02, 0], [0.98, 0.98, 0.12], 'a/oak_planks', 'a/mud_bricks');
+  for (const [x, y] of [[0.06, 0.06], [0.82, 0.06], [0.06, 0.82], [0.82, 0.82]]) blk(ctx, [x, y, 0.12], [x + 0.12, y + 0.12, 1.3], 'a/beech_log_top', 'a/beech_log_side');
+  blk(ctx, [0.06, 0.06, 0.12], [0.94, 0.12, 0.45], 'a/beech_planks');
+  for (let k = 0; k < 5; k++) blk(ctx, [-0.04 + k * 0.1, -0.04 + k * 0.1, 1.3 + k * 0.13], [1.04 - k * 0.1, 1.04 - k * 0.1, 1.43 + k * 0.13], k % 2 ? 'a/maple_planks' : 'a/slate_tiles');
+  blk(ctx, [0.44, 0.44, 1.95], [0.56, 0.56, 2.15], 'as/default_gold_block');
+  lantern(ctx, [0.5, 0.5, 0.95]);
+}
+
+export function crystalLamp(c: Canvas, L: TexLib, f = 0): void {
+  const ctx = { c, L };
+  blk(ctx, [0.3, 0.3, 0], [0.7, 0.7, 0.16], 'a/marble_bricks');
+  blk(ctx, [0.4, 0.4, 0.16], [0.6, 0.6, 1.0], 'a/marble');
+  blk(ctx, [0.33, 0.33, 1.0], [0.67, 0.67, 1.08], 'as/default_gold_block');
+  const bob = Math.sin(f * TAU) * 0.04;
+  c.box([0.4, 0.4, 1.18 + bob], [0.6, 0.6, 1.5 + bob], F(L.get('a/amethyst'), { glow: true, tint: [0.7, 0.95, 1.3] }), F(L.get('a/amethyst'), { glow: true, tint: [0.7, 0.95, 1.3] }), F(L.get('a/amethyst'), { glow: true, tint: [0.6, 0.85, 1.2] }), 6);
+  c.light([0.5, 0.5, 1.3], [40, 90, 150], 1.8);
+}
+
+export function statue(c: Canvas, L: TexLib): void {
+  const ctx = { c, L };
+  const sk = 'a/marble';
+  blk(ctx, [0.12, 0.12, 0], [0.88, 0.88, 0.3], 'a/marble_bricks');
+  blk(ctx, [0.2, 0.2, 0.3], [0.8, 0.8, 0.42], 'a/marble_bricks3');
+  // a robed wanderer with a staff, looking out
+  blk(ctx, [0.36, 0.38, 0.42], [0.64, 0.62, 1.2], sk);           // robe
+  blk(ctx, [0.32, 0.34, 0.42], [0.68, 0.66, 0.6], sk);           // hem
+  blk(ctx, [0.39, 0.41, 1.2], [0.61, 0.59, 1.42], sk);           // head
+  blk(ctx, [0.36, 0.38, 1.38], [0.64, 0.62, 1.48], 'a/marble_bricks2'); // hood
+  blk(ctx, [0.66, 0.46, 0.42], [0.72, 0.52, 1.6], 'as/default_gold_block'); // staff
+  blk(ctx, [0.64, 0.44, 1.6], [0.74, 0.54, 1.7], 'a/amethyst');
+}
+
+export function starArch(c: Canvas, L: TexLib, f = 0): void {
+  const ctx = { c, L };
+  for (const x of [0.02, 0.78]) blk(ctx, [x, 0.38, 0], [x + 0.2, 0.62, 1.7], 'a/marble_bricks2', 'a/marble');
+  for (let k = 0; k < 4; k++) blk(ctx, [0.16 + k * 0.05, 0.38, 1.7 - (3 - k) * 0.12], [0.84 - k * 0.05, 0.62, 1.82 - (3 - k) * 0.12], 'a/marble');
+  blk(ctx, [0.0, 0.35, 1.82], [1.0, 0.65, 1.92], 'as/default_gold_block');
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI + f * 0.6;
+    c.sprite([0.5 + Math.cos(a) * 0.28, 0.5, 0.75 + Math.sin(a) * 0.5], { tex: L.get('as/default_mese_crystal_fragment'), glow: true }, 6, 1);
+  }
+  c.light([0.5, 0.5, 1.0], [80, 70, 140], 1.6);
+}
+
+export function monument(c: Canvas, L: TexLib, f = 0): void {
+  const ctx = { c, L };
+  blk(ctx, [0.04, 0.04, 0], [0.96, 0.96, 0.18], 'a/marble_bricks');
+  blk(ctx, [0.12, 0.12, 0.18], [0.88, 0.88, 0.3], 'as/default_gold_block');
+  for (const [x, y] of [[0.16, 0.16], [0.72, 0.16], [0.16, 0.72], [0.72, 0.72]]) blk(ctx, [x, y, 0.3], [x + 0.12, y + 0.12, 1.25], 'as/default_steel_block');
+  blk(ctx, [0.16, 0.16, 1.25], [0.84, 0.84, 1.33], 'as/default_gold_block');
+  const bob = Math.sin(f * TAU) * 0.05;
+  for (let k = 0; k < 3; k++) {
+    const r = 0.08 + (k === 1 ? 0.08 : 0.03);
+    c.box([0.5 - r, 0.5 - r, 1.45 + k * 0.12 + bob], [0.5 + r, 0.5 + r, 1.57 + k * 0.12 + bob], F(L.get('a/amethyst'), { glow: true }), F(L.get('a/amethyst'), { glow: true }), F(L.get('a/amethyst'), { glow: true }), 6);
+  }
+  c.light([0.5, 0.5, 1.6], [90, 70, 150], 1.8);
+}

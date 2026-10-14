@@ -85,7 +85,9 @@ export type SimEvent =
   | { type: 'mastery'; item: ItemId; star: number }
   | { type: 'renown_level'; level: number }
   | { type: 'lucky'; id: number }
-  | { type: 'codex'; set: string };
+  | { type: 'codex'; set: string }
+  | { type: 'chapter'; id: number }
+  | { type: 'charm'; milestone: number };
 
 export interface FlowBucket {
   dt: number;
@@ -147,6 +149,8 @@ export interface GameState {
   forge: { id: number; stage: number; progress: Stack; level: number; sparks: number; attune: Record<string, number>; request: Stack };
   trade: TradeState;
   renown: RenownState;
+  /** Chapters completed (the active chapter is this + 1). */
+  chapters: number;
   /** Hand-gathering combo: chain length and when the last tap happened (sim time). */
   combo: { n: number; t: number };
   wisps: Wisp[];
@@ -170,6 +174,7 @@ export interface SimCache {
   roostTargets: Map<number, number[]>;
   edge: Set<number>;
   capacity: number;
+  charm: number;
 }
 
 export function key(x: number, y: number): number {
@@ -195,7 +200,7 @@ export function newBuilding(id: number, type: string, x: number, y: number, dir:
 }
 
 export function emptyCache(): SimCache {
-  return { beltOrder: [], machines: [], boost: new Map(), roostTargets: new Map(), edge: new Set(), capacity: BASE_CAPACITY };
+  return { beltOrder: [], machines: [], boost: new Map(), roostTargets: new Map(), edge: new Set(), capacity: BASE_CAPACITY, charm: 0 };
 }
 
 export function hashSeed(x: number, y: number): number {
@@ -224,6 +229,7 @@ export function createState(seed = 1234567): GameState {
     forge: { id: 0, stage: -1, progress: {}, level: 0, sparks: 0, attune: {}, request: {} },
     trade: emptyTrade(),
     renown: emptyRenown(),
+    chapters: 0,
     combo: { n: 0, t: -99 },
     wisps: [],
     flow: { cur: { dt: 0, inn: {}, out: {} }, hist: [] },
@@ -242,7 +248,7 @@ export function createState(seed = 1234567): GameState {
   return s;
 }
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 export function emptyRenown(): RenownState {
   return { xp: 0, level: 0, points: 0, perks: {}, codex: [] };

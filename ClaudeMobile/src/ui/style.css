@@ -835,3 +835,13 @@ body.sheet-open .hud-bottom .main-btn.on:not(.big) { border-image: var(--tex-pan
 .chip .num, .chip.power .num, .chip.marks .num { font-family: var(--font-num); font-weight: 400; font-size: 1.12rem; letter-spacing: 0.02em; }
 .chip { gap: 3px; padding-right: 6px; }
 @media (orientation: portrait) { .toasts { top: calc(162px + var(--sat)); } }
+.entry.chapter { border: 6px solid transparent; border-image: var(--tex-slot) 3 fill / 6px / 0 repeat; padding: 2px 4px 4px; box-shadow: 0 0 0 2px #c8962a, 0 0 12px rgba(255, 200, 90, 0.25); margin: 4px 2px; }
+.entry.chapter .caps { color: #ffd35a; }
+.entry.chapter .h { color: #fff2c8; }
+.entry.chapter p { color: #f0e2c4; }
+.goal { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; padding: 1px 0; color: #fff4dc; }
+.goal .tick { width: 14px; height: 14px; display: grid; place-items: center; background: rgba(0,0,0,0.35); color: #b8f0a0; font-size: 0.75rem; }
+.goal .gt { flex: 1; }
+.goal.done .gt { color: #c8e8b0; text-decoration: line-through; text-decoration-color: rgba(200,232,176,0.5); }
+.goal .num { font-size: 1.05rem; }
+.reward-line { font-size: 0.72rem; color: #ffe08a; margin-top: 3px; }

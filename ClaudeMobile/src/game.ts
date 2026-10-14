@@ -250,6 +250,16 @@ export class Game {
           this.ui.renownUp(e.level);
           this.markDirty();
           break;
+        case 'chapter':
+          audio.play('forge', 1.1);
+          haptic([20, 50, 20, 50, 30], this.settings.haptics);
+          this.ui.chapterDone(e.id);
+          this.markDirty();
+          break;
+        case 'charm':
+          audio.play('discover', 1.3);
+          this.ui.charmMilestone(e.milestone);
+          break;
         case 'codex':
           audio.play('discover');
           this.ui.codexDone(e.set);

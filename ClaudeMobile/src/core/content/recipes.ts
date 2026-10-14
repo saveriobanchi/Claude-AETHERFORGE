@@ -38,8 +38,8 @@ const R: RecipeDef[] = [
 
   // ── Nature-driven processes ──────────────────────────────────────────────
   { id: 'compost', name: 'Compost', inputs: { leaf: 2 }, outputs: { loam: 1 }, time: 8, stations: ['composter'], unlock: 'compost' },
-  { id: 'sift_loam', name: 'Sift loam', inputs: { loam: 1 }, outputs: { pebble: 2 }, chance: { copper_grit: 0.35, sapling: 0.04, topaz: 0.004 }, time: 2.5, stations: ['sieve', 'wind_sifter'], unlock: 'sieve' },
-  { id: 'sift_gravel', name: 'Sift gravel', inputs: { gravel: 1 }, outputs: { sand: 1 }, chance: { iron_grit: 0.5, copper_grit: 0.12, ruby: 0.003 }, time: 3, stations: ['wind_sifter'], unlock: 'mill' },
+  { id: 'sift_loam', name: 'Sift loam', inputs: { loam: 1 }, outputs: { pebble: 2 }, chance: { copper_grit: 0.35, sapling: 0.04, topaz: 0.002 }, time: 2.5, stations: ['sieve', 'wind_sifter'], unlock: 'sieve' },
+  { id: 'sift_gravel', name: 'Sift gravel', inputs: { gravel: 1 }, outputs: { sand: 1 }, chance: { iron_grit: 0.5, copper_grit: 0.12, ruby: 0.0015 }, time: 3, stations: ['wind_sifter'], unlock: 'mill' },
   { id: 'clay', name: 'Clay', inputs: { loam: 2, dew: 1 }, outputs: { clay: 1 }, time: 10, stations: ['clay_tub'], unlock: 'clay' },
 
   // ── Fire ─────────────────────────────────────────────────────────────────

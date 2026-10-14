@@ -94,6 +94,8 @@ describe('full playthrough', () => {
     bot.automate('distill', 1);
     bot.automate('sunmetal', 1);
     bot.buildForge();
+    // the chapter line through the Great Work (chapter 9)
+    bot.doChapters(9);
     } finally { dump(); }
 
     const missing = DISCOVERY_LIST.filter((d) => !bot.s.known.has(d.id)).map((d) => d.id);

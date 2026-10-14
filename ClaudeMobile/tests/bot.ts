@@ -4,12 +4,14 @@
  * reachable (no softlocks, no impossible recipes) and to measure pacing.
  */
 import * as A from '../src/core/actions';
-import { BUILDINGS } from '../src/core/content/buildings';
+import { BUILDINGS, BUILDING_LIST } from '../src/core/content/buildings';
 import type { ItemId } from '../src/core/content/items';
 import { ITEMS } from '../src/core/content/items';
 import { RECIPES, RECIPE_LIST, type RecipeDef } from '../src/core/content/recipes';
 import { FORGE_STAGES, ISLETS, summonCost } from '../src/core/content/world';
-import { MARKET_BY_ID, marketPrice } from '../src/core/content/trade';
+import { MARKET_BY_ID, marketPrice, upgradable, upgradeCost } from '../src/core/content/trade';
+import { activeChapter, charm, goalDone, goalValue } from '../src/core/chapters';
+import type { Goal } from '../src/core/content/chapters';
 import { buildingUnlocked, recipeUnlocked } from '../src/core/progression';
 import { TICK, forgeNeeds, tick } from '../src/core/sim';
 import { type Building, type Dir, type GameState, DX, DY, buildingAt, capacity, createState, key, tileAt, isEdgeTile, stackTotal } from '../src/core/state';
@@ -120,6 +122,7 @@ export class Bot {
       let best = this.s.stash[item];
       let bestT = this.t;
       const paused: Building[] = [];
+      let stalls = 0;
       try {
         while (this.s.stash[item] < n) {
           if (this.t - t0 > 4 * 3600) throw new Error(`Stuck ensuring ${n} ${item}: ${this.status()}`);
@@ -129,6 +132,8 @@ export class Bot {
             // consumers are draining it: pause the dispatchers that send it out
             for (const b of this.s.buildings.values()) if (b.type === 'dispatcher' && b.filter === item) { A.setFilter(this.s, b.id, null); paused.push(b); }
             bestT = this.t;
+            // a slow line (like a player noticing a bottleneck): add one more cell, once per ensure
+            if (++stalls % 10 === 0 && stalls <= 30) this.widenBottleneck(item);
           }
         }
       } finally {
@@ -136,6 +141,18 @@ export class Bot {
       }
     } finally {
       this.depth--;
+    }
+  }
+
+  /** Follow a starving item down its recipe chain and add a cell where supply runs dry. */
+  widenBottleneck(item: ItemId, depth = 0): void {
+    const r = this.producerRecipe(item);
+    if (!r || depth > 6) return;
+    const short = (Object.keys(r.inputs) as ItemId[]).filter((k) => this.s.stash[k] < (r.inputs[k] ?? 0) * 4).sort((a, b) => this.s.stash[a] - this.s.stash[b])[0];
+    if (short && this.producerRecipe(short)) return this.widenBottleneck(short, depth + 1);
+    const cells = this.cells.get(r.id) ?? 0;
+    if (cells > 0 && cells < 9) {
+      try { this.automate(r.id, 1); this.log(`widened ${r.id} for ${item}`); } catch { /* no station or room */ }
     }
   }
 
@@ -528,6 +545,84 @@ export class Bot {
     if (!r.ok) throw new Error(`buy ${id}: ${r.reason}`);
     this.flushEvents();
     this.log(`bought ${id}`);
+  }
+
+  // ───────────────────────── chapters ─────────────────────────
+
+  /** Work through chapters up to (and including) `upTo`, satisfying each goal. */
+  doChapters(upTo: number): void {
+    let guard = 0;
+    while (this.s.chapters < upTo) {
+      if (++guard > 60) throw new Error(`chapters stuck at ${this.s.chapters + 1}: ${this.status()}`);
+      const ch = activeChapter(this.s)!;
+      for (const g of ch.goals) {
+        if (goalDone(this.s, g)) continue;
+        this.satisfy(g);
+      }
+      this.wait(1.1);
+      this.log(`chapter ${ch.id} → ${this.s.chapters}`);
+    }
+  }
+
+  satisfy(g: Goal): void {
+    const s = this.s;
+    switch (g.t) {
+      case 'built':
+        if (g.type === '*fruit') {
+          while (goalValue(s, g) < g.n) {
+            if (!s.stash.fruit_sapling) this.buy('fruit');
+            const spot = this.findSpot([{ type: 'fruit_sapling', dx: 0, dy: 0, dir: 0 }]);
+            if (!spot) { this.growIsland(true); continue; }
+            A.place(s, 'fruit_sapling', spot[0], spot[1]);
+            this.wait(50);
+          }
+        } else while (goalValue(s, g) < g.n) this.build(g.type);
+        break;
+      case 'made': this.ensure(g.item, g.n - goalValue(s, g) + s.stash[g.item]); break;
+      case 'tiles': while (s.tiles.size < g.n) this.growIsland(true); break;
+      case 'contracts': {
+        if (!this.countOf('trading_post')) this.build('trading_post');
+        let k = 0;
+        while (s.trade.done < g.n && k++ < 200) {
+          const i = s.trade.board.findIndex((c) => c);
+          if (i < 0) { this.wait(5); continue; }
+          const c = s.trade.board[i]!;
+          this.ensure(c.item, Math.min(c.n - c.got, Math.floor(capacity(s) * 0.8)));
+          A.handOver(s, i);
+        }
+        break;
+      }
+      case 'charm': {
+        // cheapest charm per unit of material first, rotating for variety
+        const decor = BUILDING_LIST.filter((b) => b.kind === 'decor' && buildingUnlocked(s, b.id) && b.id !== 'lantern');
+        let k = 0;
+        while (charm(s) < g.n && k++ < 400) {
+          const pick = decor[k % decor.length];
+          this.build(pick.id);
+        }
+        break;
+      }
+      case 'level': {
+        const m = [...s.buildings.values()].filter((b) => upgradable(BUILDINGS[b.type])).sort((a, b) => stackTotal(BUILDINGS[a.type].cost) - stackTotal(BUILDINGS[b.type].cost))[0];
+        while (m.level < g.n) {
+          this.ensureAll(upgradeCost(BUILDINGS[m.type], m.level + 1).items);
+          const r = A.upgrade(s, m.id);
+          if (!r.ok) throw new Error('upgrade: ' + r.reason);
+        }
+        break;
+      }
+      case 'biomes': {
+        for (const t of [...s.tiles.values()]) {
+          if (t.floor !== 'grass' || t.biome) continue;
+          this.ensureAll({ dew: 3, loam: 2 });
+          if (A.expand(s, 'marsh', t.x, t.y).ok) break;
+        }
+        break;
+      }
+      case 'islets': this.summonAll(); break;
+      case 'forge': this.buildForge(); break;
+      default: throw new Error('bot cannot do goal ' + g.t);
+    }
   }
 
   // ───────────────────────── wonders ─────────────────────────

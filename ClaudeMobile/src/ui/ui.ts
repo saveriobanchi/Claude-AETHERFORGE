@@ -3,6 +3,8 @@ import { BUILDINGS, BUILDING_LIST, HIVE, NODE_YIELD, TREE, type BuildCategory } 
 import { BIOMES, FRUIT_BY_TREE, OFF_HOME } from '../core/content/biomes';
 import { MARKET, CONTRACT_REFRESH, levelSpeed, marketPrice, repForLevel, upgradable, upgradeCost } from '../core/content/trade';
 import { dayIndex, weatherFor } from '../core/content/weather';
+import { charmTradeBonus, CHAPTERS } from '../core/content/chapters';
+import { activeChapter, goalDone, goalText, goalValue } from '../core/chapters';
 import { CODEX, PERKS, type PerkBranch, masteryStar, masteryThresholds, xpForLevel } from '../core/content/renown';
 import { DISCOVERIES, DISCOVERY_LIST } from '../core/content/discoveries';
 import { ITEMS, ITEM_IDS, type ItemId, type Stack } from '../core/content/items';
@@ -27,6 +29,7 @@ const CATS: { id: BuildCategory | 'land'; name: string }[] = [
   { id: 'power', name: 'Power' },
   { id: 'storage', name: 'Store' },
   { id: 'aether', name: 'Aether' },
+  { id: 'decor', name: 'Decor' },
   { id: 'wonder', name: 'Wonder' },
 ];
 
@@ -48,6 +51,7 @@ export class UI {
   private clockEl!: HTMLElement;
   private weatherImg!: HTMLImageElement;
   private bannerEl!: HTMLElement;
+  private questCaps!: HTMLElement;
   private renownTab: 'perks' | 'mastery' | 'codex' = 'perks';
   private weatherId = '';
   private questIcon!: HTMLImageElement;
@@ -113,7 +117,7 @@ export class UI {
     const left = h('div', { class: 'hud-left' }, this.iconBtn('compass', 'Centre view', () => this.g.view.cam.focus(0, -10, this.g.defaultZoom())));
     this.note = h('div', { class: 'qtext' });
     this.questIcon = img(uiIcon('book'));
-    this.quest = h('button', { class: 'quest panel hide', onclick: () => this.openJournal() }, h('div', { class: 'qicon' }, this.questIcon), h('div', { class: 'qbody' }, h('div', { class: 'caps', text: 'Next step' }), this.note), h('span', { class: 'chev', text: '›' }));
+    this.quest = h('button', { class: 'quest panel hide', onclick: () => this.openJournal() }, h('div', { class: 'qicon' }, this.questIcon), h('div', { class: 'qbody' }, this.questCaps = h('div', { class: 'caps', text: 'Next step' }), this.note), h('span', { class: 'chev', text: '›' }));
     this.btnBuild = this.mainBtn('build', 'Build', () => this.toggleBuild());
     this.btnBuild.classList.add('big');
     this.btnCraft = this.mainBtn('craft', 'Craft', () => this.toggleCraft());
@@ -230,14 +234,20 @@ export class UI {
       }
     }
     // note
-    const n = this.g.observe ? null : guideNote(s);
-    if ((n ?? '') !== this.lastNote) {
-      this.lastNote = n ?? '';
+    // the quest card: early tips first, then the active chapter's next goal
+    const tip = this.g.observe ? null : guideNote(s);
+    const ch = this.g.observe ? null : activeChapter(s);
+    const goal = ch?.goals.find((g) => !goalDone(s, g));
+    const n = tip ?? (goal ? `${goalText(goal)}${goal.n > 1 ? ` · ${fmt(Math.min(goal.n, goalValue(s, goal)))}/${fmt(goal.n)}` : ''}` : null);
+    const caps = tip ? 'Next step' : ch ? `Chapter ${ch.id} · ${ch.title}` : '';
+    if ((n ?? '') + caps !== this.lastNote) {
+      this.lastNote = (n ?? '') + caps;
       if (n) {
         this.note.textContent = n;
+        this.questCaps.textContent = caps;
         this.quest.classList.remove('hide');
         const named = BUILDING_LIST.find((d) => n.includes(d.name));
-        this.questIcon.src = named ? thumb(named.id) : uiIcon('book');
+        this.questIcon.src = named ? thumb(named.id) : goal?.t === 'made' ? itemIcon(goal.item) : uiIcon(tip ? 'book' : 'chapter');
       }
       else this.quest.classList.add('hide');
     }
@@ -745,6 +755,16 @@ export class UI {
         break;
       }
       case 'beacon': this.fillBeacon(body, actions, b); addCommon(); break;
+      case 'decor': {
+        const ch = s.cache.charm;
+        body.append(h('div', { class: 'stats' },
+          h('span', { text: 'Charm' }), h('span', { class: 'num', text: '+' + (def.charm ?? 0) }),
+          h('span', { text: 'Island charm' }), h('span', { class: 'num', text: String(ch) }),
+          h('span', { text: 'Contract pay' }), h('span', { class: 'num', text: '+' + Math.round(charmTradeBonus(ch) * 100) + '%' })));
+        body.append(h('div', { class: 'muted', style: 'font-size:0.74rem', text: 'Charm makes traders pay more and earns renown at milestones. Variety counts: past ten of a kind, each adds a quarter.' }));
+        addCommon();
+        break;
+      }
       case 'post': this.fillPost(body, actions); addCommon(); break;
       case 'hive': {
         const trees = [-1, 0, 1].flatMap((dy) => [-1, 0, 1].map((dx) => [dx, dy])).filter(([dx, dy]) => (dx || dy) && [...s.buildings.values()].some((t) => t.x === b.x + dx && t.y === b.y + dy && BUILDINGS[t.type].kind === 'tree')).length;
@@ -866,6 +886,16 @@ export class UI {
 
   renownUp(level: number): void {
     this.toast(`Renown ${level + 1}!`, 'A perk point to spend — tap your island’s banner.', uiIcon('island'), 'big');
+  }
+
+  chapterDone(id: number): void {
+    const c = CHAPTERS[id - 1];
+    const next = CHAPTERS[id];
+    this.toast(`Chapter ${id} complete: ${c?.title ?? ''}`, next ? `Next — ${next.title}` : 'Every chapter told.', uiIcon('chapter'), 'big');
+  }
+
+  charmMilestone(m: number): void {
+    this.toast(`Charm ${m}!`, 'Your island grows lovelier. Renown earned.', uiIcon('charm'));
   }
 
   codexDone(set: string): void {
@@ -1067,6 +1097,21 @@ export class UI {
     s.flags.add('seen:journal:' + s.known.size);
     this.refreshHud();
     const entries = h('div', { class: 'entries scroll' });
+    const ch = activeChapter(s);
+    if (ch) {
+      const box = h('div', { class: 'entry chapter' }, h('div', { class: 'caps', text: `Chapter ${ch.id} of ${CHAPTERS.length}` }), h('div', { class: 'h', text: ch.title }), h('p', { text: ch.intro }));
+      for (const g of ch.goals) {
+        const v = Math.min(g.n, goalValue(s, g)), done = v >= g.n;
+        box.append(h('div', { class: 'goal' + (done ? ' done' : '') }, h('span', { class: 'tick', text: done ? '✓' : '' }), h('span', { class: 'gt', text: goalText(g) }), h('span', { class: 'num', text: `${fmt(v)}/${fmt(g.n)}` })));
+      }
+      const r = ch.reward, parts: string[] = [];
+      if (r.marks) parts.push(`${r.marks} Marks`);
+      if (r.points) parts.push(`${r.points} perk point${r.points > 1 ? 's' : ''}`);
+      if (r.items) for (const k in r.items) parts.push(`${r.items[k as ItemId]} ${ITEMS[k as ItemId].name}`);
+      if (r.unlock) parts.push('new decor patterns');
+      box.append(h('div', { class: 'reward-line', text: 'Reward: ' + parts.join(' · ') }));
+      entries.append(box);
+    } else entries.append(h('div', { class: 'entry chapter' }, h('div', { class: 'h', text: 'Every chapter told' }), h('p', { text: 'The island is yours. Keep the Aetherforge singing.' })));
     const riddles = teasers(s);
     if (riddles.length) {
       const box = h('div', { class: 'entry' }, h('div', { class: 'caps', text: 'Unanswered' }));
@@ -1080,6 +1125,8 @@ export class UI {
     entries.append(h('div', { class: 'entry' }, h('div', { class: 'caps', text: 'Records' }), h('div', { class: 'stats' },
       h('span', { text: 'Time in this world' }), h('span', { class: 'num', text: duration(st.playSeconds) }),
       h('span', { text: 'Ground' }), h('span', { class: 'num', text: `${s.tiles.size} tiles` }),
+      h('span', { text: 'Charm' }), h('span', { class: 'num', text: String(s.cache.charm) }),
+      h('span', { text: 'Chapters' }), h('span', { class: 'num', text: `${s.chapters}/${CHAPTERS.length}` }),
       h('span', { text: 'Structures' }), h('span', { class: 'num', text: String(count((b) => !['tree', 'tuft', 'sapling', 'elder_tree'].includes(b.type) && BUILDINGS[b.type].kind !== 'node')) }),
       h('span', { text: 'Trees' }), h('span', { class: 'num', text: String(count((b) => b.type === 'tree')) }),
       h('span', { text: 'Gathered by hand' }), h('span', { class: 'num', text: fmt(st.harvests) }),

@@ -203,8 +203,27 @@ hundred planks, the hundred-thousandth. Four layers reward volume and choices.
 
 ### Codex (collections)
 - Rare gems with tiny chances in existing chains: Topaz (sifting loam,
-  0.4 %), Ruby (sifting gravel, 0.3 %), Opal (millstone, 0.25 %), Emerald
+  0.2 %), Ruby (sifting gravel, 0.15 %), Opal (millstone, 0.25 %), Emerald
   (core drill on an ore heart, 0.5 %). Prized by traders.
 - Sets: Gems (4), Fruits (6), Biomes (4 grounds discovered), Wonders
   (forge completed, all islets home). Each completed set: +1 perk point and
   100 renown.
+
+## Chapters, decor and charm
+
+- **Chapters** (`content/chapters.ts`): ten chapters, one active at a time,
+  from the first workbench to resonance 3. Each has 1–4 goals (build, make,
+  grow, trade, charm, upgrade, biomes, islets, forge, renown, codex) and a
+  reward (items, Marks, perk points); chapters 1/3/5/7/9 unlock decor
+  patterns. The quest card shows the early tips, then the active chapter's
+  next goal; the journal lists the chapter with progress. Old saves catch up
+  on load.
+- **Decor** (Build › Decor): 20 pieces in five pattern sets — paths, fences,
+  hedges, flower beds, benches; cobble paths, stone walls, planters,
+  banners, wells; lamp posts, brick arches, fountains, gazebos; skystone
+  paths, crystal lamps, statues, star arches; the Forge Monument.
+- **Charm** = sum of decor charm (first ten of a kind full, then a quarter).
+  Contracts pay +1 % per 5 charm (max +30 %); milestones 20/60/150/300/600/
+  1000 give 40 renown each.
+- Bot: completes chapters 1–9 and every discovery in ≈16 h (it now widens a
+  starving production chain like a player noticing a bottleneck).

@@ -1,3 +1,4 @@
+import { SAVE_VERSION } from '../../src/core/state';
 import { describe, expect, it } from 'vitest';
 import * as A from '../../src/core/actions';
 import { PERKS, masteryStar, masteryThresholds, xpForLevel } from '../../src/core/content/renown';
@@ -174,7 +175,7 @@ describe('renown saves', () => {
     (v4.stats as Record<string, unknown>).made = undefined;
     (v4.stats as Record<string, unknown>).obtained = { wood: 77 };
     const m = migrate(v4);
-    expect(m.v).toBe(5);
+    expect(m.v).toBe(SAVE_VERSION);
     expect(deserialize(v4).state.stats.made.wood).toBe(77);
   });
 });
