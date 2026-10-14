@@ -6,7 +6,12 @@ export type ItemId =
   | 'dew' | 'clay' | 'charcoal' | 'brick' | 'copper_grit' | 'copper' | 'gear' | 'wire'
   | 'gravel' | 'sand' | 'iron_grit' | 'iron' | 'glass' | 'plate' | 'mechanism' | 'lens'
   | 'mist' | 'aether' | 'stardust' | 'crystal' | 'skystone' | 'sunmetal' | 'amber'
-  | 'cell' | 'coil' | 'core';
+  | 'cell' | 'coil' | 'core'
+  | 'fruit_sapling' | 'apple' | 'honey' | 'wax' | 'cider' | 'candle' | 'preserves'
+  | 'cherry_sapling' | 'orange_sapling' | 'date_sapling' | 'pear_sapling' | 'plum_sapling'
+  | 'cherry' | 'orange' | 'date' | 'pear' | 'plum' | 'juice' | 'fruit_basket'
+  | 'topaz' | 'ruby' | 'opal' | 'emerald'
+  | 'wheat' | 'carrot' | 'flour' | 'bread' | 'wool' | 'cloth' | 'egg' | 'stew' | 'pie';
 
 export interface ItemDef {
   id: ItemId;
@@ -52,6 +57,38 @@ const list: ItemDef[] = [
   { id: 'cell', name: 'Aether Cell', desc: 'A sealed charge of living aether.', tier: 5 },
   { id: 'coil', name: 'Lumen Coil', desc: 'A spiral that remembers light.', tier: 5 },
   { id: 'core', name: 'Heart Core', desc: 'It beats.', tier: 6 },
+  { id: 'fruit_sapling', name: 'Apple Sapling', desc: 'A grafted cutting from far away. Thrives in meadow.', tier: 1 },
+  { id: 'apple', name: 'Apple', desc: 'Crisp and sweet. Traders love them.', tier: 1 },
+  { id: 'honey', name: 'Honey', desc: 'Slow gold from busy bees.', tier: 2 },
+  { id: 'wax', name: 'Beeswax', desc: 'Soft, fragrant and useful.', tier: 2 },
+  { id: 'cider', name: 'Cider', desc: 'Pressed apples, gently fizzing.', tier: 2 },
+  { id: 'candle', name: 'Candle', desc: 'A warm light for long voyages.', tier: 2 },
+  { id: 'preserves', name: 'Preserves', desc: 'Apples and honey, sealed for the journey.', tier: 3 },
+  { id: 'cherry_sapling', name: 'Cherry Sapling', desc: 'Thrives in meadow.', tier: 1 },
+  { id: 'orange_sapling', name: 'Orange Sapling', desc: 'Thrives in warm dunes.', tier: 2 },
+  { id: 'date_sapling', name: 'Date Palm Sapling', desc: 'Thrives in warm dunes.', tier: 2 },
+  { id: 'pear_sapling', name: 'Pear Sapling', desc: 'Thrives in wet marsh.', tier: 1 },
+  { id: 'plum_sapling', name: 'Plum Sapling', desc: 'Thrives in the frost.', tier: 3 },
+  { id: 'cherry', name: 'Cherries', desc: 'Small, dark and sweet.', tier: 1 },
+  { id: 'orange', name: 'Orange', desc: 'Sunshine you can peel.', tier: 2 },
+  { id: 'date', name: 'Dates', desc: 'Sticky, sweet and long-keeping.', tier: 2 },
+  { id: 'pear', name: 'Pear', desc: 'Soft and fragrant.', tier: 1 },
+  { id: 'plum', name: 'Plums', desc: 'Frost makes them sweeter.', tier: 3 },
+  { id: 'juice', name: 'Orange Juice', desc: 'Pressed oranges. Traders pay well.', tier: 3 },
+  { id: 'fruit_basket', name: 'Fruit Basket', desc: 'Every fruit of the sky, woven together.', tier: 4 },
+  { id: 'wheat', name: 'Wheat', desc: 'Golden grain from your fields.', tier: 1 },
+  { id: 'carrot', name: 'Carrots', desc: 'Crunchy and sweet.', tier: 1 },
+  { id: 'flour', name: 'Flour', desc: 'Milled wheat.', tier: 2 },
+  { id: 'bread', name: 'Bread', desc: 'Warm loaves. Settlers love it.', tier: 2 },
+  { id: 'wool', name: 'Wool', desc: 'Soft and warm, shorn from sky sheep.', tier: 1 },
+  { id: 'cloth', name: 'Cloth', desc: 'Woven wool, for homes and sails.', tier: 2 },
+  { id: 'egg', name: 'Eggs', desc: 'Fresh from the coop.', tier: 1 },
+  { id: 'stew', name: 'Stew', desc: 'Carrots and egg, slow-cooked.', tier: 3 },
+  { id: 'pie', name: 'Apple Pie', desc: 'The best thing on any island.', tier: 3 },
+  { id: 'topaz', name: 'Topaz', desc: 'A honey-coloured stone, very rarely sifted from loam.', tier: 4 },
+  { id: 'ruby', name: 'Ruby', desc: 'A red spark, very rarely sifted from gravel.', tier: 4 },
+  { id: 'opal', name: 'Opal', desc: 'Milky fire, very rarely ground from stone.', tier: 4 },
+  { id: 'emerald', name: 'Emerald', desc: 'Deep green, very rarely drilled from an ore heart.', tier: 5 },
 ];
 
 export const ITEMS: Record<ItemId, ItemDef> = Object.fromEntries(list.map((i) => [i.id, i])) as Record<ItemId, ItemDef>;

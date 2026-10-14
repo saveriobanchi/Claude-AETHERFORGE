@@ -1,18 +1,28 @@
-import { BUILDINGS, TUFT } from './content/buildings';
+import { openRung } from './ambitions';
+import { ambitionById } from './content/ambitions';
+import type { Role } from './content/people';
+import { assign, draft } from './people';
+import { BUILDINGS } from './content/buildings';
+import { FRUIT_BY_TREE } from './content/biomes';
 import { ITEMS, type ItemId, type Stack } from './content/items';
 import { FUEL_VALUE, RECIPES } from './content/recipes';
 import { ATTUNE, ISLETS, LAND, SUMMON_TIME, landCost, summonCost } from './content/world';
 import { buildingUnlocked, checkDiscoveries, landUnlocked, recipeUnlocked } from './progression';
-import { currentRecipe, defaultRecipe, forgeAccept, forgeNeeds, harvestTree, rebuildCache, salvage } from './sim';
+import { bufCap, completeContract, rareChance, tuftYield, currentRecipe, defaultRecipe, fillBoard, forgeAccept, forgeNeeds, harvestTree, rebuildCache, salvage } from './sim';
+import { LUCK, PERK, RESPEC_PER_POINT } from './content/renown';
+import { BASIC_MAX_LEVEL, MARKET_BY_ID, MAX_LEVEL, SKIP_COOLDOWN, marketPrice, upgradable, upgradeCost } from './content/trade';
 import {
   type Building, type Dir, type GameState, DX, DY, addBuilding, addTile, addTo, buildingAt, canAfford, key,
-  pay, refund, room, stashAdd, tileAt, isEdgeTile, stackTotal, removeBuildingRaw, rand,
+  pay, refund, room, stashAdd, tileAt, isEdgeTile, stackTotal, removeBuildingRaw, rand, made, perkRank,
 } from './state';
 
 export interface Result {
   ok: boolean;
   reason?: string;
   got?: Stack;
+  /** Hand harvest: a triple (bountiful) harvest, and the current combo chain. */
+  crit?: boolean;
+  combo?: number;
 }
 const OK: Result = { ok: true };
 const fail = (reason: string): Result => ({ ok: false, reason });
@@ -67,7 +77,7 @@ function clearTufts(s: GameState, type: string, x: number, y: number): void {
   for (let dy = 0; dy < size; dy++) for (let dx = 0; dx < size; dx++) {
     const o = buildingAt(s, x + dx, y + dy);
     if (o && o.type === 'tuft') {
-      stashAdd(s, 'fiber', TUFT.yield);
+      stashAdd(s, 'fiber', tuftYield(s, o.x, o.y));
       removeBuildingRaw(s, o);
     }
   }
@@ -122,7 +132,7 @@ export function remove(s: GameState, id: number): Result {
   if (def.removable === false) return fail('It will not move');
   if (b.type === 'tuft') return harvestAt(s, b.x, b.y);
   salvage(s, b);
-  if (def.kind === 'tree') refund(s, { wood: 2, sapling: 1 });
+  if (def.kind === 'tree') refund(s, { wood: 2, [FRUIT_BY_TREE[b.type]?.seed ?? 'sapling']: 1 });
   else refund(s, def.cost);
   sync(s);
   return OK;
@@ -167,6 +177,10 @@ export function canExpand(s: GameState, land: string, x: number, y: number, chec
     let adj = false;
     for (let d = 0; d < 4; d++) if (s.tiles.has(key(x + DX[d], y + DY[d]))) adj = true;
     if (!adj) return fail('Must join the island');
+  } else if (def.biome) {
+    if (!t) return fail('Needs ground');
+    if (t.floor !== 'grass') return fail('Needs grass');
+    if ((t.biome ?? 'meadow') === def.biome) return fail(`Already ${def.name.toLowerCase()}`);
   } else {
     if (!t) return fail('Needs ground');
     if (t.floor !== 'grass') return fail('Already paved');
@@ -184,9 +198,14 @@ export function expand(s: GameState, land: string, x: number, y: number): Result
   const def = LAND[land];
   pay(s, landCost(land, s.tiles.size));
   if (def.mode === 'new') addTile(s, x, y, def.floor);
-  else {
+  else if (def.biome) {
+    const t = tileAt(s, x, y)!;
+    if (def.biome === 'meadow') delete t.biome; else t.biome = def.biome;
+    s.topoDirty = true;
+    s.tileRev++;
+  } else {
     const o = buildingAt(s, x, y);
-    if (o && o.type === 'tuft') { stashAdd(s, 'fiber', TUFT.yield); removeBuildingRaw(s, o); }
+    if (o && o.type === 'tuft') { stashAdd(s, 'fiber', tuftYield(s, o.x, o.y)); removeBuildingRaw(s, o); }
     tileAt(s, x, y)!.floor = def.floor;
     s.topoDirty = true;
     s.tileRev++;
@@ -203,7 +222,8 @@ export function harvestAt(s: GameState, x: number, y: number): Result {
   const b = buildingAt(s, x, y);
   if (!b) return fail('');
   if (b.type === 'tuft') {
-    const n = stashAdd(s, 'fiber', TUFT.yield);
+    const n = stashAdd(s, 'fiber', tuftYield(s, b.x, b.y));
+    made(s, 'fiber', n);
     removeBuildingRaw(s, b);
     sync(s);
     checkDiscoveries(s);
@@ -212,8 +232,28 @@ export function harvestAt(s: GameState, x: number, y: number): Result {
   if (BUILDINGS[b.type].kind !== 'tree') return fail('');
   if (b.stock < 1) return fail('Regrowing');
   const got = harvestTree(s, b, (item, n) => stashAdd(s, item, n));
+  // gathering combo: quick taps chain; every 5th gives one more of the main item
+  const c = s.combo;
+  c.n = s.time - c.t <= LUCK.comboWindow ? c.n + 1 : 1;
+  c.t = s.time;
+  const main = Object.keys(got).find((k) => k !== 'sapling' && k !== 'fiber' && !k.endsWith('_sapling')) as ItemId | undefined;
+  let crit = false;
+  if (main) {
+    // bountiful: a triple harvest of everything ordinary
+    if (rand(s) < LUCK.crit + LUCK.perCritPerk * perkRank(s, 'bountiful')) {
+      crit = true;
+      for (const k in got) {
+        const item = k as ItemId;
+        if (item === 'sapling' || item === 'fiber' || item.endsWith('_sapling')) continue;
+        const extra = stashAdd(s, item, (got[item] ?? 0) * (LUCK.critMult - 1));
+        made(s, item, extra);
+        got[item] = (got[item] ?? 0) + extra;
+      }
+    }
+    if (c.n % LUCK.comboEvery === 0) { const e = stashAdd(s, main, 1); made(s, main, e); got[main] = (got[main] ?? 0) + e; }
+  }
   checkDiscoveries(s);
-  return { ok: true, got };
+  return { ok: true, got, crit, combo: c.n };
 }
 
 export const SIEVE_TAPS = 3;
@@ -235,9 +275,9 @@ export function tapManual(s: GameState, id: number): Result {
     b.progress = 0;
     b.cycles++;
     const got: Stack = {};
-    for (const k in r.outputs) { const n = stashAdd(s, k as ItemId, r.outputs[k as ItemId] ?? 0); if (n) got[k as ItemId] = n; }
+    for (const k in r.outputs) { const n = stashAdd(s, k as ItemId, r.outputs[k as ItemId] ?? 0); made(s, k as ItemId, n); if (n) got[k as ItemId] = n; }
     if (r.chance) for (const k in r.chance) {
-      if (rand(s) < (r.chance[k as ItemId] ?? 0) && stashAdd(s, k as ItemId, 1)) got[k as ItemId] = 1;
+      if (rand(s) < rareChance(s, k as ItemId, r.chance[k as ItemId] ?? 0) && stashAdd(s, k as ItemId, 1)) { got[k as ItemId] = 1; made(s, k as ItemId, 1); }
     }
     b.status = 'idle';
     checkDiscoveries(s);
@@ -270,7 +310,7 @@ export function craft(s: GameState, recipe: string, times = 1): Result {
     return fail(m || 'Stash is full');
   }
   pay(s, scale(r.inputs, n));
-  for (const k in r.outputs) stashAdd(s, k as ItemId, (r.outputs[k as ItemId] ?? 0) * n);
+  for (const k in r.outputs) made(s, k as ItemId, stashAdd(s, k as ItemId, (r.outputs[k as ItemId] ?? 0) * n));
   s.stats.crafted += n;
   checkDiscoveries(s);
   return { ok: true, got: scale(r.outputs, n) };
@@ -323,7 +363,7 @@ export function load(s: GameState, id: number): Result {
   }
   const r = currentRecipe(b);
   if (!r) return fail('');
-  const cap = def.bufferCap ?? 12;
+  const cap = bufCap(def, b);
   for (const k in r.inputs) {
     const item = k as ItemId;
     const want = Math.max(cap, (r.inputs[item] ?? 0) * 2) - (b.inBuf[item] ?? 0);
@@ -398,4 +438,155 @@ export function attune(s: GameState, id: string): Result {
   sync(s);
   return OK;
 }
+
+// ───────────────────────── trade ─────────────────────────
+
+/** Fill a contract from the stash (as much as is there). */
+export function handOver(s: GameState, slot: number): Result {
+  const c = s.trade.board[slot];
+  if (!c) return fail('');
+  const n = Math.min(s.stash[c.item], c.n - c.got);
+  if (n <= 0) return fail(`No ${ITEMS[c.item].name} in your stash`);
+  s.stash[c.item] -= n;
+  c.got += n;
+  s.stats.delivered += n;
+  if (c.got >= c.n) completeContract(s, slot);
+  checkDiscoveries(s);
+  return { ok: true, got: { [c.item]: n } };
+}
+
+/** Swap a contract for a new one (free, on a cooldown). Delivered goods are kept as Marks pro rata. */
+export function skipContract(s: GameState, slot: number): Result {
+  const tr = s.trade;
+  const c = tr.board[slot];
+  if (!c) return fail('');
+  if (tr.skipCd > 0) return fail(`Traders need ${Math.ceil(tr.skipCd)} s`);
+  const part = Math.floor((c.marks * c.got) / c.n);
+  tr.marks += part;
+  tr.earned += part;
+  tr.board[slot] = null;
+  tr.refresh[slot] = 0;
+  tr.skipCd = SKIP_COOLDOWN;
+  fillBoard(s, true, [c.item]);
+  return OK;
+}
+
+/** Market price after the Bargains perk. */
+export function priceOf(s: GameState, id: string): number {
+  const m = MARKET_BY_ID[id];
+  return Math.max(1, Math.round(marketPrice(m, s.trade.bought[id] ?? 0) * (1 - 0.05 * perkRank(s, 'bargains'))));
+}
+
+// ───────────────────────── renown & perks ─────────────────────────
+
+export function canPerk(s: GameState, id: string): Result {
+  const p = PERK[id];
+  if (!p) return fail('');
+  if ((s.renown.perks[id] ?? 0) >= p.max) return fail('Mastered');
+  if (s.renown.points < 1) return fail('No perk points — earn renown');
+  return OK;
+}
+
+export function takePerk(s: GameState, id: string): Result {
+  const r = canPerk(s, id);
+  if (!r.ok) return r;
+  s.renown.points--;
+  s.renown.perks[id] = (s.renown.perks[id] ?? 0) + 1;
+  s.topoDirty = true; // capacity may change
+  sync(s);
+  return OK;
+}
+
+export function respecCost(s: GameState): number {
+  return RESPEC_PER_POINT * Object.values(s.renown.perks).reduce((a, b) => a + b, 0);
+}
+
+/** Take back every perk point (costs Marks). */
+export function respec(s: GameState): Result {
+  const spent = Object.values(s.renown.perks).reduce((a, b) => a + b, 0);
+  if (!spent) return fail('No perks taken');
+  const cost = respecCost(s);
+  if (s.trade.marks < cost) return fail(`Need ${cost} Marks`);
+  s.trade.marks -= cost;
+  s.renown.points += spent;
+  s.renown.perks = {};
+  s.topoDirty = true;
+  sync(s);
+  return OK;
+}
+
+export function marketVisible(s: GameState, id: string): boolean {
+  const m = MARKET_BY_ID[id];
+  if (!m) return false;
+  if (m.needs && !s.known.has(m.needs)) return false;
+  return !(m.once && (s.trade.bought[id] ?? 0) > 0);
+}
+
+export function buy(s: GameState, id: string): Result {
+  const m = MARKET_BY_ID[id];
+  if (!m || !marketVisible(s, id)) return fail('Not offered');
+  const price = priceOf(s, id);
+  if (s.trade.marks < price) return fail(`Need ${price - s.trade.marks} more Marks`);
+  if (m.gives) for (const k in m.gives) if (room(s, k as ItemId) < (m.gives[k as ItemId] ?? 0)) return fail('Stash is full');
+  s.trade.marks -= price;
+  s.trade.bought[id] = (s.trade.bought[id] ?? 0) + 1;
+  if (m.gives) for (const k in m.gives) stashAdd(s, k as ItemId, m.gives[k as ItemId] ?? 0);
+  if (m.flag) s.flags.add(m.flag);
+  checkDiscoveries(s);
+  return { ok: true, got: m.gives };
+}
+
+// ───────────────────────── upgrades ─────────────────────────
+
+export function maxLevel(s: GameState): number {
+  return s.known.has('master') ? MAX_LEVEL : BASIC_MAX_LEVEL;
+}
+
+/** Can this machine be upgraded right now? (`ok` false with a reason otherwise.) */
+export function canUpgrade(s: GameState, id: number): Result {
+  const b = s.buildings.get(id);
+  if (!b) return fail('');
+  const def = BUILDINGS[b.type];
+  if (!upgradable(def) || !s.known.has('tinker')) return fail('Cannot be upgraded');
+  if (b.level >= MAX_LEVEL) return fail('Fully upgraded');
+  if (b.level >= maxLevel(s)) return fail('Needs master tools');
+  const c = upgradeCost(def, b.level + 1);
+  if (s.trade.marks < c.marks) return fail(`Need ${c.marks - s.trade.marks} more Marks`);
+  if (!canAfford(s, c.items)) return fail(missing(s, c.items));
+  return OK;
+}
+
+export function upgrade(s: GameState, id: number): Result {
+  const r = canUpgrade(s, id);
+  if (!r.ok) return r;
+  const b = s.buildings.get(id)!;
+  const c = upgradeCost(BUILDINGS[b.type], b.level + 1);
+  pay(s, c.items);
+  s.trade.marks -= c.marks;
+  b.level++;
+  return OK;
+}
+
 export { canAfford } from './state';
+
+// ───────────────────────── settlers, designs, ambitions ─────────────────────────
+
+/** Move one settler into (delta 1) or out of (delta -1) a role. */
+export function assignRole(s: GameState, role: Role, delta: 1 | -1): Result {
+  if (!assign(s, role, delta)) return fail(delta > 0 ? 'Everyone already has a role' : 'Nobody in that role');
+  return { ok: true };
+}
+
+/** Draft a design at the Drafting Table. */
+export function draftDesign(s: GameState, id: string): Result {
+  const why = draft(s, id);
+  return why ? fail(why) : { ok: true };
+}
+
+/** Pin an ambition to the quest card (null unpins). */
+export function pinAmbition(s: GameState, id: string | null): Result {
+  const a = id === null ? null : ambitionById(id);
+  if (id !== null && (!a || openRung(s, a.path).id !== id)) return fail('Not an open ambition');
+  s.pinned = s.pinned === id ? null : id;
+  return { ok: true };
+}

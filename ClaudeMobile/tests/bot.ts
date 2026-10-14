@@ -4,11 +4,15 @@
  * reachable (no softlocks, no impossible recipes) and to measure pacing.
  */
 import * as A from '../src/core/actions';
-import { BUILDINGS } from '../src/core/content/buildings';
+import { BUILDINGS, BUILDING_LIST } from '../src/core/content/buildings';
 import type { ItemId } from '../src/core/content/items';
 import { ITEMS } from '../src/core/content/items';
 import { RECIPES, RECIPE_LIST, type RecipeDef } from '../src/core/content/recipes';
 import { FORGE_STAGES, ISLETS, summonCost } from '../src/core/content/world';
+import { MARKET_BY_ID, marketPrice, upgradable, upgradeCost } from '../src/core/content/trade';
+import { charm, goalDone, goalValue, openRung } from '../src/core/ambitions';
+import { ambitionById, type Goal } from '../src/core/content/ambitions';
+import { DESIGN } from '../src/core/content/people';
 import { buildingUnlocked, recipeUnlocked } from '../src/core/progression';
 import { TICK, forgeNeeds, tick } from '../src/core/sim';
 import { type Building, type Dir, type GameState, DX, DY, buildingAt, capacity, createState, key, tileAt, isEdgeTile, stackTotal } from '../src/core/state';
@@ -119,6 +123,7 @@ export class Bot {
       let best = this.s.stash[item];
       let bestT = this.t;
       const paused: Building[] = [];
+      let stalls = 0;
       try {
         while (this.s.stash[item] < n) {
           if (this.t - t0 > 4 * 3600) throw new Error(`Stuck ensuring ${n} ${item}: ${this.status()}`);
@@ -128,6 +133,8 @@ export class Bot {
             // consumers are draining it: pause the dispatchers that send it out
             for (const b of this.s.buildings.values()) if (b.type === 'dispatcher' && b.filter === item) { A.setFilter(this.s, b.id, null); paused.push(b); }
             bestT = this.t;
+            // a slow line (like a player noticing a bottleneck): add one more cell, once per ensure
+            if (++stalls % 10 === 0 && stalls <= 30) this.widenBottleneck(item);
           }
         }
       } finally {
@@ -135,6 +142,18 @@ export class Bot {
       }
     } finally {
       this.depth--;
+    }
+  }
+
+  /** Follow a starving item down its recipe chain and add a cell where supply runs dry. */
+  widenBottleneck(item: ItemId, depth = 0): void {
+    const r = this.producerRecipe(item);
+    if (!r || depth > 6) return;
+    const short = (Object.keys(r.inputs) as ItemId[]).filter((k) => this.s.stash[k] < (r.inputs[k] ?? 0) * 4).sort((a, b) => this.s.stash[a] - this.s.stash[b])[0];
+    if (short && this.producerRecipe(short)) return this.widenBottleneck(short, depth + 1);
+    const cells = this.cells.get(r.id) ?? 0;
+    if (cells > 0 && cells < 9) {
+      try { this.automate(r.id, 1); this.log(`widened ${r.id} for ${item}`); } catch { /* no station or room */ }
     }
   }
 
@@ -332,6 +351,7 @@ export class Bot {
       if (!spot) this.growIsland(true);
     }
     if (!spot) throw new Error('no grove spot');
+    this.ensureAll(BUILDINGS.harvester.cost);
     const h = A.place(this.s, 'harvester', spot[0], spot[1], 0);
     if (!h.ok) throw new Error('grove harvester: ' + h.reason);
     this.ensureAll(BUILDINGS.depot.cost);
@@ -501,6 +521,132 @@ export class Bot {
   landCost(land: string): Partial<Record<ItemId, number>> {
     // mirrors content/world.landCost through the public API
     return land === 'plot' ? plotCostFor(this.s.tiles.size) : land === 'flagstone' ? { stone: 2 } : { skystone: 3 };
+  }
+
+  // ───────────────────────── trade ─────────────────────────
+
+  /** Fill contracts (making the goods as needed) until the bot holds `marks`. */
+  tradeUntil(marks: number): void {
+    if (!this.countOf('trading_post')) this.build('trading_post');
+    let g = 0;
+    while (this.s.trade.marks < marks) {
+      if (++g > 300) throw new Error(`trade stuck: ${this.status()}`);
+      const i = this.s.trade.board.findIndex((c) => c);
+      if (i < 0) { this.wait(5); continue; }
+      const c = this.s.trade.board[i]!;
+      this.ensure(c.item, Math.min(c.n - c.got, Math.floor(capacity(this.s) * 0.8)));
+      A.handOver(this.s, i);
+      this.flushEvents();
+    }
+  }
+
+  buy(id: string): void {
+    const m = MARKET_BY_ID[id];
+    this.tradeUntil(marketPrice(m, this.s.trade.bought[id] ?? 0));
+    const r = A.buy(this.s, id);
+    if (!r.ok) throw new Error(`buy ${id}: ${r.reason}`);
+    this.flushEvents();
+    this.log(`bought ${id}`);
+  }
+
+  // ───────────────────────── ambitions ─────────────────────────
+
+  /** Climb a path's ambitions until `id` is achieved, satisfying each goal. */
+  achieve(id: string): void {
+    const a = ambitionById(id)!;
+    let guard = 0;
+    while (!this.s.ambitions.has(id)) {
+      if (++guard > 40) throw new Error(`ambition ${id} stuck: ${this.status()}`);
+      const rung = openRung(this.s, a.path)!;
+      for (const g of rung.goals) if (!goalDone(this.s, g)) this.satisfy(g);
+      this.wait(1.1);
+      if (this.s.ambitions.has(rung.id)) this.log(`ambition ${rung.id}`);
+    }
+  }
+
+  // ───────────────────────── settlers & designs ─────────────────────────
+
+  /** Keep food in the stash until `n` settlers live here (building cottages as needed). */
+  settle(n: number): void {
+    let g = 0;
+    while (this.s.people.count < n) {
+      if (++g > 200) throw new Error(`settlers stuck at ${this.s.people.count}: ${this.status()}`);
+      while (this.countOf('cottage') * 2 < n) this.build('cottage');
+      this.ensure('bread', 6);
+      this.wait(20);
+    }
+  }
+
+  /** Draft a design at the Drafting Table, making its materials first. */
+  draft(id: string): void {
+    if (!this.countOf('drafting_table')) this.build('drafting_table');
+    this.ensureAll(DESIGN[id].cost);
+    const r = A.draftDesign(this.s, id);
+    if (!r.ok) throw new Error(`draft ${id}: ${r.reason}`);
+    this.flushEvents();
+    this.log(`drafted ${id}`);
+  }
+
+  satisfy(g: Goal): void {
+    const s = this.s;
+    switch (g.t) {
+      case 'built':
+        if (g.type === '*fruit') {
+          while (goalValue(s, g) < g.n) {
+            if (!s.stash.fruit_sapling) this.buy('fruit');
+            const spot = this.findSpot([{ type: 'fruit_sapling', dx: 0, dy: 0, dir: 0 }]);
+            if (!spot) { this.growIsland(true); continue; }
+            A.place(s, 'fruit_sapling', spot[0], spot[1]);
+            this.wait(50);
+          }
+        } else while (goalValue(s, g) < g.n) this.build(g.type);
+        break;
+      case 'made': this.ensure(g.item, g.n - goalValue(s, g) + s.stash[g.item]); break;
+      case 'tiles': while (s.tiles.size < g.n) this.growIsland(true); break;
+      case 'contracts': {
+        if (!this.countOf('trading_post')) this.build('trading_post');
+        let k = 0;
+        while (s.trade.done < g.n && k++ < 200) {
+          const i = s.trade.board.findIndex((c) => c);
+          if (i < 0) { this.wait(5); continue; }
+          const c = s.trade.board[i]!;
+          this.ensure(c.item, Math.min(c.n - c.got, Math.floor(capacity(s) * 0.8)));
+          A.handOver(s, i);
+        }
+        break;
+      }
+      case 'charm': {
+        // cheapest charm per unit of material first, rotating for variety
+        const decor = BUILDING_LIST.filter((b) => b.kind === 'decor' && buildingUnlocked(s, b.id) && b.id !== 'lantern');
+        let k = 0;
+        while (charm(s) < g.n && k++ < 400) {
+          const pick = decor[k % decor.length];
+          this.build(pick.id);
+        }
+        break;
+      }
+      case 'level': {
+        const m = [...s.buildings.values()].filter((b) => upgradable(BUILDINGS[b.type])).sort((a, b) => stackTotal(BUILDINGS[a.type].cost) - stackTotal(BUILDINGS[b.type].cost))[0];
+        while (m.level < g.n) {
+          this.ensureAll(upgradeCost(BUILDINGS[m.type], m.level + 1).items);
+          const r = A.upgrade(s, m.id);
+          if (!r.ok) throw new Error('upgrade: ' + r.reason);
+        }
+        break;
+      }
+      case 'biomes': {
+        for (const t of [...s.tiles.values()]) {
+          if (t.floor !== 'grass' || t.biome) continue;
+          this.ensureAll({ dew: 3, loam: 2 });
+          if (A.expand(s, 'marsh', t.x, t.y).ok) break;
+        }
+        break;
+      }
+      case 'islets': this.summonAll(); break;
+      case 'forge': this.buildForge(); break;
+      case 'settlers': this.settle(g.n); break;
+      default: throw new Error('bot cannot do goal ' + g.t);
+    }
   }
 
   // ───────────────────────── wonders ─────────────────────────

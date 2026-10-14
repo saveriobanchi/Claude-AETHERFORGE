@@ -1,12 +1,20 @@
-import { BUILDINGS, HARVESTER_INTERVAL, DISPATCH_INTERVAL, NODE_YIELD, TREE, TUFT } from './content/buildings';
+import { BUILDINGS, HARVESTER_INTERVAL, DISPATCH_INTERVAL, HIVE, NODE_YIELD, TREE, TUFT, type BuildingDef } from './content/buildings';
+import { BIOMES, type BiomeDef, FRUIT_BY_TREE, OFF_HOME } from './content/biomes';
+import { BOARD_SIZE, CONTRACT_REFRESH, contractPool, levelBuffer, levelSpeed, makeContract, repForLevel } from './content/trade';
+import { type WeatherDef, dayIndex, weatherFor } from './content/weather';
 import type { ItemId, Stack } from './content/items';
 import { FUEL_VALUE, RECIPES, recipesFor, type RecipeDef } from './content/recipes';
-import { ISLETS, FORGE_STAGES, resonanceRequest } from './content/world';
+import { ISLETS, FORGE_STAGES, resonanceRequest, summonCost } from './content/world';
 import {
   type Building, type Dir, type GameState, DX, DY, key, buildingAt, addTo, stackTotal, stashAdd,
-  rand, isNight, isEdgeTile, computeCapacity, attuneRank, addBuilding, addTile, tileAt, removeBuildingRaw,
+  rand, isNight, isEdgeTile, computeCapacity, attuneRank, addBuilding, addTile, tileAt, removeBuildingRaw, addXp, made, perkRank, refund,
 } from './state';
 import { checkDiscoveries } from './progression';
+import { charm, checkAmbitions } from './ambitions';
+import { merchantBonus, present, settlerBonus, tickPeople } from './people';
+import { charmTradeBonus } from './content/ambitions';
+import { CODEX, FRUIT_ITEMS, GEMS, LUCK, MASTERY_SPEED, MASTERY_STARS, XP, masteryStar } from './content/renown';
+import { seasonFor } from './content/seasons';
 
 export const TICK = 0.05; // 20 Hz fixed simulation step
 export const BELT_GAP = 0.34;
@@ -17,11 +25,33 @@ const WISP_LOAD = 6;
 const FLOW_BUCKET = 30;
 const FLOW_HISTORY = 10;
 
+/** Today's weather. */
+export function weatherNow(s: GameState): WeatherDef {
+  return weatherFor(dayIndex(s.time), s.seed);
+}
+
+/** Biome under a tile (only grass has one; paved ground counts as neutral). */
+export function biomeAt(s: GameState, x: number, y: number): BiomeDef | null {
+  const t = tileAt(s, x, y);
+  if (!t || t.floor !== 'grass') return null;
+  return BIOMES[t.biome ?? 'meadow'];
+}
+/** Fiber from a tuft standing at (x, y). */
+export function tuftYield(s: GameState, x: number, y: number): number {
+  return (biomeAt(s, x, y) ?? BIOMES.meadow).tuftFiber + perkRank(s, 'forager');
+}
+
+/** Buffer capacity of a machine, grown by its upgrade level. */
+export function bufCap(def: BuildingDef, b: Building, fallback = 12): number {
+  return Math.round((def.bufferCap ?? fallback) * levelBuffer(b.level));
+}
+
 // ───────────────────────────────── topology ─────────────────────────────────
 
 export function rebuildCache(s: GameState): void {
   const c = s.cache;
   c.capacity = computeCapacity(s);
+  c.charm = charm(s);
   c.edge.clear();
   for (const t of s.tiles.values()) if (isEdgeTile(s, t.x, t.y)) c.edge.add(key(t.x, t.y));
 
@@ -73,13 +103,16 @@ export function rebuildCache(s: GameState): void {
     const list: number[] = [];
     for (const m of c.machines) {
       const k = BUILDINGS[m.type].kind;
-      if (!['crafter', 'generator', 'harvester', 'drill', 'engine'].includes(k)) continue;
+      if (!['crafter', 'generator', 'harvester', 'drill', 'engine', 'hive'].includes(k)) continue;
       if (Math.abs(m.x - r.x) <= rad && Math.abs(m.y - r.y) <= rad) list.push(m.id);
     }
     c.roostTargets.set(r.id, list);
   }
   // Keep wisp population in sync with roosts.
+  for (const w of s.wisps) if (!s.buildings.has(w.roost) && w.carry && w.n) stashAdd(s, w.carry, w.n);
   s.wisps = s.wisps.filter((w) => s.buildings.has(w.roost));
+  for (const b of s.buildings.values()) b.claimed = 0;
+  for (const w of s.wisps) if (w.phase === 'out') { const t = s.buildings.get(w.target); if (t) t.claimed++; }
   for (const r of roosts) {
     const have = s.wisps.filter((w) => w.roost === r.id).length;
     for (let i = have; i < WISPS_PER_ROOST; i++) {
@@ -98,7 +131,8 @@ export function currentRecipe(b: Building): RecipeDef | undefined {
 }
 
 export function defaultRecipe(type: string): string | null {
-  const list = recipesFor(type);
+  // blueprints are opt-in alternatives, never the default
+  const list = recipesFor(type).filter((r) => !r.unlock.startsWith('bp_'));
   return list.length ? list[0].id : null;
 }
 
@@ -124,7 +158,7 @@ export function offer(s: GameState, t: Building, item: ItemId, from: Dir): boole
     case 'crafter': {
       const r = currentRecipe(t);
       if (!r) return false;
-      const cap = def.bufferCap ?? 12;
+      const cap = bufCap(def, t);
       if (r.inputs[item] !== undefined) {
         if ((t.inBuf[item] ?? 0) >= Math.max(cap, (r.inputs[item] ?? 0) * 2)) return false;
         addTo(t.inBuf, item, 1);
@@ -160,7 +194,13 @@ export function offer(s: GameState, t: Building, item: ItemId, from: Dir): boole
       return true;
     }
     case 'forge':
-      return forgeAccept(s, item, 1) === 1;
+      if (forgeAccept(s, item, 1) !== 1) return false;
+      addTo((s.flow.cur.sunk ??= {}), item, 1);
+      return true;
+    case 'post':
+      if (!contractAccept(s, item)) return false;
+      addTo((s.flow.cur.sunk ??= {}), item, 1);
+      return true;
     default:
       return false;
   }
@@ -221,6 +261,7 @@ function advanceForge(s: GameState): void {
   if (f.stage < FORGE_STAGES.length) {
     f.stage++;
     s.events.push({ type: 'forge_stage', stage: f.stage });
+    addXp(s, XP.forgeStage);
     if (f.stage === FORGE_STAGES.length) {
       s.flags.add('forge_complete');
       f.request = resonanceRequest(f.level);
@@ -230,17 +271,47 @@ function advanceForge(s: GameState): void {
     f.sparks++;
     f.request = resonanceRequest(f.level);
     s.events.push({ type: 'resonance', level: f.level });
+    addXp(s, XP.resonance);
   }
 }
 
 // ───────────────────────────────── machines ─────────────────────────────────
 
-function machineSpeed(s: GameState, b: Building): number {
-  return (s.cache.boost.get(b.id) ?? 1) * (1 + 0.1 * attuneRank(s, 'swift'));
+/** The item a machine is "about" (for mastery speed). */
+function primaryOut(b: Building): ItemId | null {
+  const def = BUILDINGS[b.type];
+  if (def.kind === 'crafter') { const r = currentRecipe(b); return r ? (Object.keys(r.outputs)[0] as ItemId) : null; }
+  if (def.kind === 'generator') return def.produces?.item ?? null;
+  if (def.kind === 'harvester') return 'wood';
+  if (def.kind === 'hive') return 'honey';
+  return null;
 }
 
-function outputsFit(def: { bufferCap?: number }, b: Building, r: RecipeDef): boolean {
-  const cap = def.bufferCap ?? 12;
+/** Mastery speed bonus for machines making an item. */
+export function masteryBonus(s: GameState, item: ItemId | null): number {
+  return item ? 1 + MASTERY_SPEED * Math.min(MASTERY_STARS, masteryStar(item, s.stats.made[item] ?? 0)) : 1;
+}
+
+export function machineSpeed(s: GameState, b: Building): number {
+  return (s.cache.boost.get(b.id) ?? 1) * (1 + 0.1 * attuneRank(s, 'swift')) * levelSpeed(b.level)
+    * masteryBonus(s, primaryOut(b)) * (1 + 0.05 * perkRank(s, 'well_oiled') + 0.02 * perkRank(s, 'craftsman')) * settlerBonus(s, b);
+}
+
+/** Chance a machine cycle comes out double. */
+export function luckyChance(s: GameState): number {
+  return LUCK.machine + LUCK.perMachinePerk * perkRank(s, 'lucky_gears');
+}
+function lucky(s: GameState, b: Building): number {
+  if (rand(s) < luckyChance(s)) { s.events.push({ type: 'lucky', id: b.id }); return 2; }
+  return 1;
+}
+/** Rare finds (gems) get the Sure Sift bonus. */
+export function rareChance(s: GameState, item: ItemId, p: number): number {
+  return GEMS.includes(item) ? p * (1 + 0.15 * perkRank(s, 'sure_sift')) : p;
+}
+
+function outputsFit(def: BuildingDef, b: Building, r: RecipeDef): boolean {
+  const cap = bufCap(def, b);
   for (const k in r.outputs) if ((b.outBuf[k as ItemId] ?? 0) + (r.outputs[k as ItemId] ?? 0) > cap) return false;
   return true;
 }
@@ -251,10 +322,20 @@ function hasInputs(b: Building, r: RecipeDef): boolean {
 }
 
 function finishRecipe(s: GameState, b: Building, r: RecipeDef, sink: (item: ItemId, n: number) => void): void {
-  for (const k in r.outputs) sink(k as ItemId, r.outputs[k as ItemId] ?? 0);
-  if (r.chance) for (const k in r.chance) if (rand(s) < (r.chance[k as ItemId] ?? 0)) sink(k as ItemId, 1);
+  const m = lucky(s, b);
+  for (const k in r.outputs) { const n = (r.outputs[k as ItemId] ?? 0) * m; sink(k as ItemId, n); made(s, k as ItemId, n); }
+  if (r.chance) for (const k in r.chance) if (rand(s) < rareChance(s, k as ItemId, r.chance[k as ItemId] ?? 0)) { sink(k as ItemId, 1); made(s, k as ItemId, 1); }
   b.cycles++;
   s.events.push({ type: 'cycle', id: b.id });
+}
+
+/** Effective progress per second of a crafter on a recipe (everything that speeds or slows it). */
+export function crafterRate(s: GameState, b: Building, r: RecipeDef): number {
+  let rate = machineSpeed(s, b);
+  if (BUILDINGS[b.type].power) rate *= s.power.ratio;
+  if (r.id === 'compost') rate *= biomeAt(s, b.x, b.y)?.compost ?? 1;
+  else if (b.type === 'field') rate *= (biomeAt(s, b.x, b.y)?.crop ?? 1) * seasonFor(s.time).crop * (1 + 0.03 * perkRank(s, 'evergreen'));
+  return rate;
 }
 
 function tickCrafter(s: GameState, b: Building, dt: number): void {
@@ -270,12 +351,11 @@ function tickCrafter(s: GameState, b: Building, dt: number): void {
     b.working = true;
     b.progress = 0;
   }
-  let rate = machineSpeed(s, b);
   if (def.power) {
     s.power.nextDemand += def.power;
-    rate *= s.power.ratio;
     if (s.power.ratio <= 0) { b.status = 'nopower'; return; }
   }
+  const rate = crafterRate(s, b, r);
   b.status = 'working';
   b.progress += dt * rate;
   if (b.progress >= r.time) {
@@ -289,8 +369,12 @@ function tickGenerator(s: GameState, b: Building, dt: number): void {
   const def = BUILDINGS[b.type];
   const p = def.produces!;
   if (p.nightOnly && !isNight(s)) { b.status = 'night'; return; }
-  if ((b.outBuf[p.item] ?? 0) >= (def.bufferCap ?? 10)) { b.status = 'blocked'; return; }
+  if ((b.outBuf[p.item] ?? 0) >= bufCap(def, b, 10)) { b.status = 'blocked'; return; }
   let rate = machineSpeed(s, b);
+  const w = weatherNow(s);
+  if (p.item === 'dew') rate *= w.dew * seasonFor(s.time).dew * (biomeAt(s, b.x, b.y)?.dew ?? 1);
+  else if (p.item === 'mist') rate *= w.mist;
+  else if (p.item === 'stardust') rate *= w.stardust;
   if (def.power) {
     s.power.nextDemand += def.power;
     rate *= s.power.ratio;
@@ -301,7 +385,9 @@ function tickGenerator(s: GameState, b: Building, dt: number): void {
   b.progress += dt * rate;
   if (b.progress >= p.every) {
     b.progress -= p.every;
-    addTo(b.outBuf, p.item, 1);
+    const n = lucky(s, b);
+    addTo(b.outBuf, p.item, n);
+    made(s, p.item, n);
     b.cycles++;
     s.events.push({ type: 'cycle', id: b.id });
   }
@@ -312,11 +398,31 @@ function isTree(t: Building | undefined): boolean {
 }
 
 export function harvestTree(s: GameState, t: Building, sink: (item: ItemId, n: number) => number): Stack {
+  if (t.stock < 1) return {};
+  t.stock -= 1;
+  const got0 = harvestTreeRaw(s, t, sink);
+  for (const k in got0) made(s, k as ItemId, got0[k as ItemId] ?? 0);
+  return got0;
+}
+
+function harvestTreeRaw(s: GameState, t: Building, sink: (item: ItemId, n: number) => number): Stack {
   const elder = t.type === 'elder_tree';
   const got: Stack = {};
-  if (t.stock < 1) return got;
-  t.stock -= 1;
-  const y = elder ? TREE.elderYield : TREE.yield;
+  const fruit = FRUIT_BY_TREE[t.type];
+  if (fruit) {
+    const y: Stack = { ...fruit.yield };
+    // bees nearby pollinate: one more fruit
+    if (hivesNear(s, t) > 0) y[fruit.fruit] = (y[fruit.fruit] ?? 0) + 1;
+    for (const k in y) {
+      const n = sink(k as ItemId, y[k as ItemId] ?? 0);
+      if (n) got[k as ItemId] = n;
+    }
+    s.stats.harvests++;
+    if (rand(s) < fruit.saplingChance && sink(fruit.seed, 1)) got[fruit.seed] = 1;
+    return got;
+  }
+  const bio = biomeAt(s, t.x, t.y) ?? BIOMES.meadow;
+  const y = elder ? TREE.elderYield : bio.tree;
   for (const k in y) {
     const item = k as ItemId;
     const n = sink(item, y[item] ?? 0);
@@ -325,7 +431,7 @@ export function harvestTree(s: GameState, t: Building, sink: (item: ItemId, n: n
   s.stats.harvests++;
   s.stats.sincePity++;
   if (!elder) {
-    if (rand(s) < TREE.fiberChance && sink('fiber', 1)) got.fiber = 1;
+    if (rand(s) < bio.treeFiber && sink('fiber', 1)) got.fiber = 1;
     if (rand(s) < TREE.saplingChance || s.stats.sincePity >= TREE.saplingPity) {
       s.stats.sincePity = 0;
       if (sink('sapling', 1)) got.sapling = 1;
@@ -338,7 +444,7 @@ export function harvestTree(s: GameState, t: Building, sink: (item: ItemId, n: n
 
 function tickHarvester(s: GameState, b: Building, dt: number): void {
   const def = BUILDINGS[b.type];
-  const full = stackTotal(b.outBuf) >= (def.bufferCap ?? 24) - 3;
+  const full = stackTotal(b.outBuf) >= bufCap(def, b, 24) - 3;
   if (full) { b.status = 'blocked'; return; }
   b.timer += dt * machineSpeed(s, b);
   const ready: Building[] = [];
@@ -357,7 +463,9 @@ function tickHarvester(s: GameState, b: Building, dt: number): void {
   b.timer = 0;
   const t = ready[b.rr++ % ready.length];
   if (t.type === 'tuft') {
-    addTo(b.outBuf, 'fiber', TUFT.yield);
+    const fy = tuftYield(s, t.x, t.y);
+    addTo(b.outBuf, 'fiber', fy);
+    made(s, 'fiber', fy);
     removeBuildingRaw(s, t);
   } else harvestTree(s, t, (item, n) => { addTo(b.outBuf, item, n); return n; });
   b.cycles++;
@@ -372,7 +480,7 @@ function tickDrill(s: GameState, b: Building, dt: number): void {
     if (t && BUILDINGS[t.type].kind === 'node') node = t;
   }
   if (!node) { b.status = 'noinput'; return; }
-  if (stackTotal(b.outBuf) >= (def.bufferCap ?? 16)) { b.status = 'blocked'; return; }
+  if (stackTotal(b.outBuf) >= bufCap(def, b, 16)) { b.status = 'blocked'; return; }
   s.power.nextDemand += def.power ?? 0;
   if (s.power.ratio <= 0) { b.status = 'nopower'; return; }
   b.status = 'working';
@@ -384,7 +492,7 @@ function tickDrill(s: GameState, b: Building, dt: number): void {
     let roll = rand(s) * total;
     for (const e of y.table) {
       roll -= e.weight;
-      if (roll <= 0) { addTo(b.outBuf, e.item, 1); break; }
+      if (roll <= 0) { const n = lucky(s, b); addTo(b.outBuf, e.item, n); made(s, e.item, n); break; }
     }
     b.cycles++;
     s.events.push({ type: 'cycle', id: b.id });
@@ -429,7 +537,7 @@ function tickRouter(s: GameState, b: Building): void {
 }
 
 function tickBelt(s: GameState, b: Building, dt: number): void {
-  const speed = BUILDINGS[b.type].speed ?? 1.25;
+  const speed = (BUILDINGS[b.type].speed ?? 1.25) * (1 + 0.1 * perkRank(s, 'swift_belts'));
   const items = b.items;
   if (!items.length) return;
   if (items.length > 1) items.sort((a, c) => c.pos - a.pos);
@@ -609,11 +717,13 @@ function findWispJob(s: GameState, w: (typeof s.wisps)[number], roost: Building)
 function tickNature(s: GameState, b: Building, dt: number): void {
   const def = BUILDINGS[b.type];
   if (def.kind === 'tree') {
-    const elder = b.type === 'elder_tree';
-    const max = elder ? TREE.elderMaxStock : TREE.maxStock;
+    const elder = b.type === 'elder_tree', fruit = FRUIT_BY_TREE[b.type];
+    const max = elder ? TREE.elderMaxStock : fruit ? fruit.maxStock : TREE.maxStock;
     if (b.stock < max) {
-      b.timer += dt;
-      const per = elder ? TREE.elderRegrow : TREE.regrow;
+      const bio = biomeAt(s, b.x, b.y) ?? BIOMES.meadow;
+      const home = !fruit || fruit.home === bio.id ? 1 : OFF_HOME;
+      b.timer += dt * weatherNow(s).regrow * seasonFor(s.time).regrow * bio.regrow * home * (1 + 0.1 * perkRank(s, 'green_thumb') + 0.03 * perkRank(s, 'evergreen'));
+      const per = elder ? TREE.elderRegrow : fruit ? fruit.regrow : TREE.regrow;
       if (b.timer >= per) { b.timer -= per; b.stock++; }
       b.status = 'working';
     } else { b.timer = 0; b.status = 'ready'; }
@@ -621,7 +731,7 @@ function tickNature(s: GameState, b: Building, dt: number): void {
     b.progress += dt;
     b.status = 'working';
     if (b.progress >= TREE.saplingGrowTime) {
-      b.type = 'tree';
+      b.type = def.growsInto ?? 'tree';
       b.stock = 2;
       b.progress = 0;
       b.timer = 0;
@@ -629,6 +739,98 @@ function tickNature(s: GameState, b: Building, dt: number): void {
       s.events.push({ type: 'grown', x: b.x, y: b.y });
     }
   }
+}
+
+// ───────────────────────────────── bees ─────────────────────────────────
+
+function treesNear(s: GameState, b: Building): number {
+  let n = 0;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && isTree(buildingAt(s, b.x + dx, b.y + dy))) n++;
+  return n;
+}
+function hivesNear(s: GameState, b: Building): number {
+  let n = 0;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const t = (dx || dy) ? buildingAt(s, b.x + dx, b.y + dy) : undefined;
+    if (t && BUILDINGS[t.type].kind === 'hive') n++;
+  }
+  return n;
+}
+
+function tickHive(s: GameState, b: Building, dt: number): void {
+  const def = BUILDINGS[b.type];
+  const trees = Math.min(HIVE.maxTrees, treesNear(s, b));
+  if (!trees) { b.status = 'noinput'; return; }
+  if (stackTotal(b.outBuf) >= bufCap(def, b)) { b.status = 'blocked'; return; }
+  b.status = 'working';
+  b.progress += dt * machineSpeed(s, b) * (1 + HIVE.perTree * trees) * (biomeAt(s, b.x, b.y)?.hive ?? 1) * seasonFor(s.time).hive;
+  const every = def.produces?.every ?? 15;
+  if (b.progress >= every) {
+    b.progress -= every;
+    const n = lucky(s, b);
+    addTo(b.outBuf, 'honey', n);
+    made(s, 'honey', n);
+    if (rand(s) < HIVE.waxChance) { addTo(b.outBuf, 'wax', 1); made(s, 'wax', 1); }
+    b.cycles++;
+    s.events.push({ type: 'cycle', id: b.id });
+  }
+}
+
+// ───────────────────────────────── trade ─────────────────────────────────
+
+/** A belt or wisp offers an item to a trading post: accepted if a contract wants it. */
+function contractAccept(s: GameState, item: ItemId): boolean {
+  const tr = s.trade;
+  for (let i = 0; i < tr.board.length; i++) {
+    const c = tr.board[i];
+    if (!c || c.item !== item || c.got >= c.n) continue;
+    c.got++;
+    s.stats.delivered++;
+    if (c.got >= c.n) completeContract(s, i);
+    return true;
+  }
+  return false;
+}
+
+/** Pay out a finished contract and schedule its replacement. */
+export function completeContract(s: GameState, i: number): void {
+  const tr = s.trade;
+  const c = tr.board[i];
+  if (!c) return;
+  const pay = Math.round(c.marks * (1 + 0.1 * perkRank(s, 'haggler') + 0.02 * perkRank(s, 'renowned') + charmTradeBonus(s.cache.charm) + merchantBonus(s)));
+  tr.marks += pay;
+  tr.earned += pay;
+  tr.rep += Math.round(c.marks * (1 + 0.15 * perkRank(s, 'good_name')));
+  addXp(s, Math.round(pay * XP.contractPerMark));
+  tr.done++;
+  s.events.push({ type: 'contract', item: c.item, marks: pay });
+  while (tr.rep >= repForLevel(tr.level)) {
+    tr.rep -= repForLevel(tr.level);
+    tr.level++;
+    s.events.push({ type: 'trade_level', level: tr.level });
+  }
+  tr.board[i] = null;
+  tr.refresh[i] = CONTRACT_REFRESH;
+}
+
+/** Fill empty board slots whose refresh time has passed. */
+export function fillBoard(s: GameState, force = false, avoidAlso: ItemId[] = []): void {
+  const tr = s.trade;
+  const pool = contractPool(s.stats.obtained);
+  for (let i = 0; i < BOARD_SIZE; i++) {
+    if (tr.board[i] || (!force && tr.refresh[i] > 0)) continue;
+    const avoid = [...avoidAlso, ...tr.board.filter((c): c is NonNullable<typeof c> => !!c).map((c) => c.item)];
+    tr.board[i] = makeContract(pool, tr.level, rand(s), rand(s), avoid);
+    tr.refresh[i] = 0;
+  }
+}
+
+function tickTrade(s: GameState, dt: number, hasPost: boolean): void {
+  const tr = s.trade;
+  if (tr.skipCd > 0) tr.skipCd = Math.max(0, tr.skipCd - dt);
+  if (!hasPost) return;
+  for (let i = 0; i < BOARD_SIZE; i++) if (tr.refresh[i] > 0) tr.refresh[i] = Math.max(0, tr.refresh[i] - dt);
+  if (tr.board.some((c) => !c)) fillBoard(s);
 }
 
 function spawnTufts(s: GameState, dt: number): void {
@@ -665,7 +867,8 @@ export function tickSummon(s: GameState, dt: number): void {
   const by = beacon ? beacon.y : 0;
   const spot = findIsletSpot(s, def.layout, bx, by);
   if (!spot) {
-    // nowhere to dock: refund the attempt by keeping the index unchanged
+    // nowhere to dock: refund the attempt (the index is unchanged, so it can be tried again)
+    refund(s, summonCost(sm.index));
     s.events.push({ type: 'islet_docked', name: '', x: bx, y: by });
     return;
   }
@@ -725,7 +928,7 @@ export function tick(s: GameState, dt = TICK): void {
   s.stats.playSeconds += dt;
 
   // Power: generation from wind; demand measured last tick. Engines cover any shortfall.
-  const wind = windFactor(s.time);
+  const wind = windFactor(s.time) * weatherNow(s).wind * seasonFor(s.time).wind;
   s.power.wind = wind;
   let windGen = 0;
   const engines: Building[] = [];
@@ -733,7 +936,7 @@ export function tick(s: GameState, dt = TICK): void {
     const def = BUILDINGS[b.type];
     if (def.kind === 'windmill') {
       const edge = s.cache.edge.has(key(b.x, b.y)) ? 1.25 : 1;
-      windGen += (def.powerGen ?? 6) * wind * edge * (1 + 0.15 * attuneRank(s, 'tailwind'));
+      windGen += (def.powerGen ?? 6) * wind * edge * (1 + 0.15 * attuneRank(s, 'tailwind')) * levelSpeed(b.level) * (biomeAt(s, b.x, b.y)?.wind ?? 1);
       b.status = 'working';
     } else if (def.kind === 'engine') engines.push(b);
   }
@@ -749,6 +952,7 @@ export function tick(s: GameState, dt = TICK): void {
   if (s.power.demand <= 0) s.power.ratio = gen > 0 ? 1 : 0;
   s.power.nextDemand = 0;
 
+  let hasPost = false;
   for (const b of s.cache.machines) {
     const def = BUILDINGS[b.type];
     switch (def.kind) {
@@ -759,6 +963,10 @@ export function tick(s: GameState, dt = TICK): void {
       case 'dispatcher': tickDispatcher(s, b, dt); break;
       case 'splitter': case 'sorter': tickRouter(s, b); break;
       case 'tree': case 'sapling': tickNature(s, b, dt); break;
+      case 'hive': tickHive(s, b, dt); pushOutput(s, b, dt); break;
+      case 'home': b.status = present(s) > 0 && s.people.hungry === 0 ? 'working' : 'idle'; break;
+      case 'drafting': b.status = 'idle'; break;
+      case 'post': hasPost = true; b.status = s.trade.board.some((c) => c) ? 'working' : 'idle'; break;
       case 'roost':
         s.power.nextDemand += def.power ?? 0;
         b.status = s.power.ratio > 0 ? 'working' : 'nopower';
@@ -774,6 +982,8 @@ export function tick(s: GameState, dt = TICK): void {
 
   spawnTufts(s, dt);
   tickSummon(s, dt);
+  tickTrade(s, dt, hasPost);
+  tickPeople(s, dt);
 
   const f = s.flow.cur;
   f.dt += dt;
@@ -784,7 +994,28 @@ export function tick(s: GameState, dt = TICK): void {
   }
 
   // Discoveries once per simulated second (cheap, and deterministic).
-  if (Math.floor(s.time) !== Math.floor(s.time - dt)) checkDiscoveries(s);
+  if (Math.floor(s.time) !== Math.floor(s.time - dt)) { checkDiscoveries(s); checkCodex(s); checkAmbitions(s); }
+}
+
+/** Codex sets: each completed set grants a perk point and renown. */
+export function codexDone(s: GameState, id: string): boolean {
+  const has = (i: ItemId) => (s.stats.obtained[i] ?? 0) > 0 || (s.stats.made[i] ?? 0) > 0;
+  switch (id) {
+    case 'gems': return GEMS.every(has);
+    case 'fruits': return FRUIT_ITEMS.every(has);
+    case 'biomes': return ['marsh', 'dunes', 'frost'].every((k) => s.known.has(k));
+    case 'wonders': return s.forge.stage >= FORGE_STAGES.length && s.islets.docked >= ISLETS.length;
+    default: return false;
+  }
+}
+export function checkCodex(s: GameState): void {
+  for (const c of CODEX) {
+    if (s.renown.codex.includes(c.id) || !codexDone(s, c.id)) continue;
+    s.renown.codex.push(c.id);
+    s.renown.points++;
+    s.events.push({ type: 'codex', set: c.id });
+    addXp(s, XP.codex);
+  }
 }
 
 export function run(s: GameState, seconds: number): void {

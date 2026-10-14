@@ -40,8 +40,25 @@ camera drifts so you can simply watch the island live.
 - Real, physical production: items ride conveyors you lay, machines visibly
   work, idle, starve or back up, and tell you why.
 - The island itself is built tile by tile, and space matters.
-- Day and night, weather-like wind, ambient life, synthesized music and sound.
-- An endgame that keeps going.
+- Day and night with daily weather you can plan around, ambient life,
+  synthesized music and sound.
+- Sky traders with contracts to fill, a market, machine upgrades, and a few
+  gentler side industries — all earned in play (no shop, no timers to pay off).
+- Long-term goals for the grind: item mastery stars, renown levels with a
+  perk build to plan, lucky output and bountiful harvests, gathering combos,
+  rare gems and a codex of collections.
+- No fixed storyline: seven paths of ambitions (land, industry, trade,
+  nature, settlement, aether, invention), all open at once — grow the
+  island in the order you choose, and pin the one you are chasing.
+- Fields, flocks and kitchens; settlers who need varied meals and take the
+  roles you give them; designs drafted at your own drafting table for
+  better ways of making things. Nothing is random loot: everything is
+  crafted, built and earned.
+- Twenty decor pieces to make the island your own (charm makes traders pay
+  more).
+- An endgame that never ends: legacy ambitions on every path, perks with
+  no cap, grandmaster mastery, endless resonance and charm — and seasons
+  that turn the year, so the island never plays quite the same way twice.
 
 The rest is meant to be discovered. (Developers: see `docs/dev/DESIGN.md`,
 which contains spoilers.)

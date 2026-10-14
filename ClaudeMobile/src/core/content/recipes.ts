@@ -33,10 +33,13 @@ const R: RecipeDef[] = [
   { id: 'coil', name: 'Lumen Coil', inputs: { crystal: 1, mechanism: 1, glass: 2 }, outputs: { coil: 1 }, time: 12, stations: ['assembler'], unlock: 'wisps' },
   { id: 'core', name: 'Heart Core', inputs: { sunmetal: 4, cell: 2, coil: 1, amber: 2 }, outputs: { core: 1 }, time: 30, stations: ['assembler'], unlock: 'forge' },
 
+  { id: 'basket', name: 'Fruit Basket', inputs: { apple: 2, cherry: 2, orange: 2, date: 2, pear: 2, plum: 2, twine: 1 }, outputs: { fruit_basket: 1 }, time: 8, stations: ['hand', 'assembler'], unlock: 'orchard' },
+  { id: 'candle', name: 'Candles', inputs: { wax: 2, twine: 1 }, outputs: { candle: 2 }, time: 4, stations: ['hand', 'assembler'], unlock: 'apiary' },
+
   // ── Nature-driven processes ──────────────────────────────────────────────
   { id: 'compost', name: 'Compost', inputs: { leaf: 2 }, outputs: { loam: 1 }, time: 8, stations: ['composter'], unlock: 'compost' },
-  { id: 'sift_loam', name: 'Sift loam', inputs: { loam: 1 }, outputs: { pebble: 2 }, chance: { copper_grit: 0.35, sapling: 0.04 }, time: 2.5, stations: ['sieve', 'wind_sifter'], unlock: 'sieve' },
-  { id: 'sift_gravel', name: 'Sift gravel', inputs: { gravel: 1 }, outputs: { sand: 1 }, chance: { iron_grit: 0.5, copper_grit: 0.12 }, time: 3, stations: ['wind_sifter'], unlock: 'mill' },
+  { id: 'sift_loam', name: 'Sift loam', inputs: { loam: 1 }, outputs: { pebble: 2 }, chance: { copper_grit: 0.35, sapling: 0.04, topaz: 0.002 }, time: 2.5, stations: ['sieve', 'wind_sifter'], unlock: 'sieve' },
+  { id: 'sift_gravel', name: 'Sift gravel', inputs: { gravel: 1 }, outputs: { sand: 1 }, chance: { iron_grit: 0.5, copper_grit: 0.12, ruby: 0.0015 }, time: 3, stations: ['wind_sifter'], unlock: 'mill' },
   { id: 'clay', name: 'Clay', inputs: { loam: 2, dew: 1 }, outputs: { clay: 1 }, time: 10, stations: ['clay_tub'], unlock: 'clay' },
 
   // ── Fire ─────────────────────────────────────────────────────────────────
@@ -44,6 +47,7 @@ const R: RecipeDef[] = [
   { id: 'brick', name: 'Brick', inputs: { clay: 1 }, outputs: { brick: 1 }, time: 6, fuel: 1, stations: ['kiln'], unlock: 'kiln' },
   { id: 'smelt_copper', name: 'Copper', inputs: { copper_grit: 2 }, outputs: { copper: 1 }, time: 6, fuel: 1, stations: ['kiln'], unlock: 'kiln' },
   { id: 'glass', name: 'Glass', inputs: { sand: 2 }, outputs: { glass: 1 }, time: 8, fuel: 1, stations: ['kiln'], unlock: 'glass' },
+  { id: 'preserves', name: 'Preserves', inputs: { apple: 2, honey: 1 }, outputs: { preserves: 1 }, time: 8, fuel: 1, stations: ['kiln'], unlock: 'apiary' },
   { id: 'smelt_iron', name: 'Iron', inputs: { iron_grit: 2, charcoal: 1 }, outputs: { iron: 1 }, time: 6, stations: ['furnace'], unlock: 'iron' },
   { id: 'fast_copper', name: 'Copper', inputs: { copper_grit: 2 }, outputs: { copper: 1 }, time: 3, stations: ['furnace'], unlock: 'iron' },
   { id: 'fast_glass', name: 'Glass', inputs: { sand: 2 }, outputs: { glass: 1 }, time: 3, stations: ['furnace'], unlock: 'iron' },
@@ -52,13 +56,37 @@ const R: RecipeDef[] = [
   { id: 'saw', name: 'Planks', inputs: { wood: 3 }, outputs: { plank: 2 }, time: 3, stations: ['sawmill'], unlock: 'wind' },
   { id: 'press', name: 'Stone', inputs: { pebble: 4 }, outputs: { stone: 1 }, time: 3, stations: ['press'], unlock: 'wind' },
   { id: 'twist', name: 'Twine', inputs: { fiber: 3 }, outputs: { twine: 1 }, time: 3, stations: ['press'], unlock: 'wind' },
-  { id: 'crush', name: 'Gravel', inputs: { stone: 1 }, outputs: { gravel: 3 }, time: 4, stations: ['millstone'], unlock: 'mill' },
+  { id: 'juice', name: 'Orange Juice', inputs: { orange: 3 }, outputs: { juice: 1 }, time: 5, stations: ['press'], unlock: 'dunes' },
+  { id: 'cider', name: 'Cider', inputs: { apple: 4 }, outputs: { cider: 1 }, time: 5, stations: ['press'], unlock: 'orchard' },
+  { id: 'crush', name: 'Gravel', inputs: { stone: 1 }, outputs: { gravel: 3 }, chance: { opal: 0.0025 }, time: 4, stations: ['millstone'], unlock: 'mill' },
 
   // ── Aether ───────────────────────────────────────────────────────────────
   { id: 'distill', name: 'Aether', inputs: { mist: 3 }, outputs: { aether: 1, dew: 1 }, time: 6, stations: ['distiller'], unlock: 'distill' },
   { id: 'crystal', name: 'Aether Crystal', inputs: { aether: 2, stardust: 1 }, outputs: { crystal: 1 }, time: 12, stations: ['resonator'], unlock: 'resonance' },
   { id: 'skystone', name: 'Skystone', inputs: { stone: 3, aether: 1 }, outputs: { skystone: 2 }, time: 6, stations: ['resonator'], unlock: 'resonance' },
   { id: 'sunmetal', name: 'Sunmetal', inputs: { iron: 2, copper: 2, aether: 1 }, outputs: { sunmetal: 1 }, time: 10, stations: ['crucible'], unlock: 'alloy' },
+
+  // ── Farming, ranching, cooking ───────────────────────────────────────────
+  { id: 'grow_wheat', name: 'Wheat', inputs: { dew: 1 }, outputs: { wheat: 4 }, time: 40, stations: ['field'], unlock: 'farming' },
+  { id: 'grow_carrot', name: 'Carrots', inputs: { dew: 1 }, outputs: { carrot: 3 }, time: 45, stations: ['field'], unlock: 'farming' },
+  { id: 'shear', name: 'Wool', inputs: { wheat: 1 }, outputs: { wool: 2 }, time: 20, stations: ['sheep_pen'], unlock: 'ranching' },
+  { id: 'lay', name: 'Eggs', inputs: { wheat: 1 }, outputs: { egg: 2 }, time: 15, stations: ['chicken_coop'], unlock: 'ranching' },
+  { id: 'weave', name: 'Cloth', inputs: { wool: 3 }, outputs: { cloth: 1 }, time: 6, stations: ['loom', 'assembler'], unlock: 'weaving' },
+  { id: 'grind_wheat', name: 'Flour', inputs: { wheat: 2 }, outputs: { flour: 1 }, time: 4, stations: ['millstone'], unlock: 'baking' },
+  { id: 'hand_flour', name: 'Flour', inputs: { wheat: 3 }, outputs: { flour: 1 }, time: 3, stations: ['hand'], unlock: 'baking' },
+  { id: 'bake', name: 'Bread', inputs: { flour: 2 }, outputs: { bread: 2 }, time: 8, fuel: 1, stations: ['oven'], unlock: 'baking' },
+  { id: 'stew', name: 'Stew', inputs: { carrot: 3, egg: 1 }, outputs: { stew: 2 }, time: 10, fuel: 1, stations: ['oven'], unlock: 'baking' },
+  { id: 'pie', name: 'Apple Pie', inputs: { flour: 1, apple: 2, egg: 1 }, outputs: { pie: 1 }, time: 12, fuel: 1, stations: ['oven'], unlock: 'baking' },
+
+  // ── Designs (drafted at the Drafting Table; alternatives the player opts into) ──
+  { id: 'bp_twin_saw', name: 'Twin Saw', inputs: { wood: 2 }, outputs: { plank: 2 }, time: 3, stations: ['sawmill'], unlock: 'bp_twin_saw' },
+  { id: 'bp_clamp', name: 'Charcoal Clamp', inputs: { wood: 2, loam: 1 }, outputs: { charcoal: 1 }, time: 6, stations: ['kiln'], unlock: 'bp_clamp' },
+  { id: 'bp_ore_wash', name: 'Ore Wash', inputs: { gravel: 1, dew: 1 }, outputs: { iron_grit: 1 }, chance: { copper_grit: 0.3 }, time: 3, stations: ['wind_sifter'], unlock: 'bp_ore_wash' },
+  { id: 'bp_still', name: 'Aether Still', inputs: { mist: 2, charcoal: 1 }, outputs: { aether: 1 }, time: 6, stations: ['distiller'], unlock: 'bp_still' },
+  { id: 'bp_gears', name: 'Compact Gears', inputs: { copper: 2 }, outputs: { gear: 3 }, time: 3, stations: ['assembler'], unlock: 'bp_gears' },
+  { id: 'bp_sky_loom', name: 'Sky Loom', inputs: { wool: 2, fiber: 2 }, outputs: { cloth: 1 }, time: 5, stations: ['loom'], unlock: 'bp_sky_loom' },
+  { id: 'bp_quick_bread', name: 'Quick Bread', inputs: { wheat: 3 }, outputs: { bread: 2 }, time: 8, fuel: 1, stations: ['oven'], unlock: 'bp_quick_bread' },
+  { id: 'bp_lattice', name: 'Crystal Lattice', inputs: { aether: 3, glass: 1 }, outputs: { crystal: 1 }, time: 14, stations: ['resonator'], unlock: 'bp_lattice' },
 ];
 
 export const RECIPES: Record<string, RecipeDef> = Object.fromEntries(R.map((r) => [r.id, r]));

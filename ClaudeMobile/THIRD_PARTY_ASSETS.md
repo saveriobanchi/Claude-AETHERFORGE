@@ -33,6 +33,7 @@ but is given here with thanks.
 | Asset | Source | Author | Licence | Modifications |
 | --- | --- | --- | --- | --- |
 | Pixelify Sans (`src/assets/fonts/PixelifySans.ttf`) | https://github.com/google/fonts/tree/main/ofl/pixelifysans (obtained from the owner's approved Cloudroot asset set) | The Pixelify Sans Project Authors (Stefie Justprince) | SIL Open Font License 1.1 — `licenses/PixelifySans-OFL.txt` | Renamed file only |
+| VT323 (`src/assets/fonts/VT323.woff2`, used for numbers) | https://fonts.google.com/specimen/VT323 (Google Fonts, latin subset woff2) | The VT323 Project Authors (Peter Hull) | SIL Open Font License 1.1 — `licenses/VT323-OFL.txt` | Latin subset as served by Google Fonts |
 | Atkinson Hyperlegible (`src/assets/fonts/AtkinsonHyperlegible.ttf`) | https://www.brailleinstitute.org/freefont/ (obtained from the owner's approved Cloudroot asset set) | Braille Institute of America | SIL Open Font License 1.1 — `licenses/AtkinsonHyperlegible-OFL.txt` | Renamed file only |
 
 ## Code libraries (bundled)

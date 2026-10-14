@@ -1,5 +1,6 @@
 import type { Floor } from './buildings';
 import type { ItemId, Stack } from './items';
+import type { BiomeId } from './biomes';
 
 /** Ground the player can lay. */
 export interface LandDef {
@@ -10,12 +11,19 @@ export interface LandDef {
   /** 'new' extends the island into the sky; 'convert' repaves existing grass. */
   mode: 'new' | 'convert';
   unlock: string;
+  /** Biome conversions: grass stays grass, its biome changes. */
+  biome?: BiomeId;
+  cost?: Stack;
 }
 
 export const LANDS: LandDef[] = [
   { id: 'plot', name: 'Loam Plot', desc: 'New ground at the island’s edge. Each costs a little more.', floor: 'grass', mode: 'new', unlock: 'land' },
   { id: 'flagstone', name: 'Flagstone', desc: 'Paves grass. Heavy machines need it.', floor: 'stone', mode: 'convert', unlock: 'copper' },
   { id: 'skytile', name: 'Skystone Tile', desc: 'Ground that needs no soil. Flat cost.', floor: 'sky', mode: 'new', unlock: 'skystone' },
+  { id: 'marsh', name: 'Marsh', desc: 'Soaks grass into marsh. Trees and buildings stay.', floor: 'grass', mode: 'convert', biome: 'marsh', unlock: 'marsh', cost: { dew: 3, loam: 2 } },
+  { id: 'dunes', name: 'Dunes', desc: 'Spreads warm sand over grass. Trees and buildings stay.', floor: 'grass', mode: 'convert', biome: 'dunes', unlock: 'dunes', cost: { sand: 4 } },
+  { id: 'frost', name: 'Frost', desc: 'Freezes grass into snowy ground. Trees and buildings stay.', floor: 'grass', mode: 'convert', biome: 'frost', unlock: 'frost', cost: { mist: 2, pebble: 4 } },
+  { id: 'meadow', name: 'Meadow', desc: 'Turns any biome back into meadow.', floor: 'grass', mode: 'convert', biome: 'meadow', unlock: 'marsh', cost: { loam: 2 } },
 ];
 export const LAND: Record<string, LandDef> = Object.fromEntries(LANDS.map((l) => [l.id, l]));
 
@@ -32,6 +40,7 @@ export function plotCost(tiles: number): Stack {
 export function landCost(id: string, tiles: number): Stack {
   if (id === 'plot') return plotCost(tiles);
   if (id === 'flagstone') return { stone: 2 };
+  if (LAND[id]?.cost) return LAND[id].cost!;
   return { skystone: 3 };
 }
 

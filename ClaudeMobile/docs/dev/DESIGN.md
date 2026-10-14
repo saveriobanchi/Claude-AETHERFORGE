@@ -66,8 +66,9 @@ next few appears in the journal.
 `tests/unit/playthrough.test.ts` drives an unoptimised scripted player that
 uses one-machine-per-cell layouts (no shared conveyors, no pylons, no wisps):
 
-- automation ≈ 10 min, conveyors ≈ 20 min, wind ≈ 25 min, iron ≈ 2.8 h,
-  aether ≈ 5.4 h, the Great Work discovered ≈ 8.3 h, completed ≈ 17 h.
+- automation ≈ 10 min, conveyors ≈ 20 min, trade ≈ 20 min, wind ≈ 25 min,
+  iron ≈ 2.6 h, hives & orchards ≈ 3.5 h, aether ≈ 5.7 h, the Great Work
+  discovered ≈ 7.8 h, completed ≈ 15.7 h (weather on; the bot takes no perks).
 
 A human using dense layouts, pylons and wisps will be faster through the
 middle; the endless resonance levels then scale geometrically.
@@ -81,3 +82,237 @@ middle; the endless resonance levels then scale geometrically.
   paved (also found by the bot).
 - Machine sprites are never mirrored (it would flip the light direction);
   output direction is shown by a brass chevron on the ground.
+
+## Expansion: trade, upgrades, weather, orchards & hives
+
+Goal: more variety without leaving the managerial grind. Every addition is
+another reason to scale a production line, not a new minigame.
+
+### Sky Traders (managerial core loop)
+- Discovery **Sails** (after *Flow*, 60 items delivered) unlocks the
+  **Trading Post** (edge only). Its board always holds 3 **contracts**:
+  "deliver N × item". No timers and no expiry: a contract waits until it's done.
+- Fill a contract by routing conveyors into the post (only items a contract
+  wants are accepted, so lines back up instead of wasting) or by handing items
+  over from the stash on the panel.
+- Rewards: **Marks** (the trade currency; only earned by playing) and
+  reputation. Trade level L raises contract sizes (×(1 + 0.3L)) and Marks.
+  A finished contract is replaced after 20 s. **Skip** swaps one contract
+  (free, 90 s cooldown) so nothing ever blocks the board.
+- Contracts pick from items the player has made before, weighted toward
+  recent tiers; orchard/hive goods are worth the most Marks.
+- The **Market** (post panel) sells, for Marks: fruit saplings, a hive kit
+  (unlocks Apiary), master tools (upgrade levels IV–V), crates of copper /
+  iron flakes / stardust (prices rise 25 % per purchase) and trade lanterns
+  (decor that glows at night). Nothing in the market is required to finish
+  the game; it accelerates and adds variety.
+
+### Machine upgrades (grind sink)
+- Discovery **Tinkering** (after *Wind*, 20 gears ever) lets production
+  machines (crafters, generators, Treewrights, drills, windmills, hives) be
+  upgraded to level III; master tools from the market allow IV–V.
+- Each level: +25 % speed (windmills: +25 % breeze) and +50 % buffers.
+- Cost to reach level L: the machine's build cost × 2^(L−1); levels IV and V
+  also cost 15 / 30 Marks. Removing a machine refunds its build cost only.
+
+### Weather (variety, planning)
+- Each in-game day rolls deterministic weather (day 1 is always clear):
+  Clear 35 %, Breezy 20 % (wind ×1.25), Calm 12 % (wind ×0.8, trees regrow
+  ×1.25), Rain 18 % (dew ×2, trees regrow ×1.5, wind ×0.95), Fog 10 % (mist
+  ×2, stardust ×0.75), Starfall 5 % (stardust ×2.5). Tomorrow's weather is
+  shown on the clock, so a player can plan around it.
+- Averages stay close to 1 so pacing measured by the bot holds.
+
+### Orchards & hives (new branch, trade goods)
+- **Fruit Sapling** (market) grows into a **Fruit Tree**: 4 stock, +1 / 8 s,
+  each harvest gives 1 apple + 1 leaf; Treewrights harvest them too.
+- **Beehive** (Apiary): needs a tree within reach (8 neighbours); makes honey
+  every 15 s (+40 % wax), faster with more trees around (×1 + 0.15 per tree,
+  max 4). Fruit trees next to a hive yield an extra apple (pollination).
+- Recipes: Stone Press 4 apple → cider; Kiln (fuel) 2 apple + 1 honey →
+  preserves; Workbench / Assembler 2 wax + 1 twine → 2 candles.
+- Apples, honey, wax, cider, candles and preserves are mostly trade goods:
+  they make the trade loop varied and give grass tiles a late-game use.
+
+## Biomes
+
+Grass tiles carry a **biome**. New plots are Meadow; the player reshapes grass
+into other biomes with *Land* conversions (like Flagstone, but the ground stays
+alive, so trees and grass buildings keep working on it). Biomes are variables
+on mechanics that already exist, not new minigames — the island's *layout*
+becomes a set of microclimates to plan around.
+
+| Biome | Unlock (discovery) | Convert cost | Island tree | Tufts | Effects on machines standing on it |
+| --- | --- | --- | --- | --- | --- |
+| Meadow | start | 2 loam (restore) | oak: 1 timber + 2 leaves | grass: 2 fiber | hives ×1.2 |
+| Marsh | *Wetland* (12 dew) | 3 dew + 2 loam | willow: 1 timber + 3 leaves, more fiber | reeds: 4 fiber | dew ×1.5, compost ×1.5, wind ×0.9, trees regrow ×1.2 |
+| Dunes | *Dunes* (6 sand) | 4 sand | palm: 1 timber + 1 leaf, 50 % fiber | dry grass: 1 fiber | dew ×0.5, wind ×1.1, compost ×0.75, hives ×0.9, regrow ×0.9 |
+| Frost | *Frost* (6 mist) | 2 mist + 4 pebbles | pine: 2 timber + 1 leaf | frost grass: 1 fiber | wind ×1.25, compost ×0.6, hives ×0.6, regrow ×0.75 |
+
+### Fruit trees (one species per sapling, each with a home biome)
+
+| Fruit | Home | Stock / regrow | Harvest | Uses |
+| --- | --- | --- | --- | --- |
+| Apple | Meadow | 4 / 8 s | 1 apple + leaf | cider, preserves, basket |
+| Cherry | Meadow | 3 / 10 s | 2 cherries | basket, trade |
+| Orange | Dunes | 4 / 9 s | 1 orange + leaf | juice (press), basket |
+| Date | Dunes | 3 / 12 s | 2 dates | basket, trade |
+| Pear | Marsh | 4 / 9 s | 1 pear + leaf | basket, trade |
+| Plum | Frost | 3 / 11 s | 2 plums | basket, trade |
+
+- Outside its home biome a fruit tree still grows but regrows at half speed.
+  Hives next to fruit trees still add one fruit per harvest (pollination).
+- Saplings: the market sells each species once its biome is discovered;
+  fruit trees occasionally drop their own sapling.
+- **Fruit Basket** (Workbench / Assembler): 2 of each fruit + 1 twine — the
+  most valuable trade good; it needs all four biomes on one island.
+
+## Depth & feel: mastery, renown, luck, the codex
+
+The grind should feel rewarding at every scale — the first tap, the first
+hundred planks, the hundred-thousandth. Four layers reward volume and choices.
+
+### Item mastery (every item is a long ladder)
+- Every item made (harvested, crafted, sifted, generated, drilled) counts
+  toward its mastery: ★I–★V at `B, 10B, 100B, 1000B, 10000B` where
+  `B = round(40 / (1 + tier/2))` (planks: 40 / 400 / 4k / 40k / 400k).
+- Each star: +5 % speed for every machine whose product is that item, and
+  renown (10 × star). Stars show beside items in the stash and on panels.
+
+### Renown & perks (a build to plan)
+- Renown XP from discoveries (25), mastery stars (10 × ★), contracts (½ of
+  the Marks), forge stages (100), resonance levels (50), codex sets (100).
+  Level L → L+1 needs `round(80 · 1.22^L)`. Each level = 1 perk point.
+  The island banner shows the renown level.
+- 12 perks in three branches, 3 ranks each (36 points to max):
+  - *Hands*: Green Thumb (trees regrow +10 %), Bountiful (harvest crit
+    chance +5 %), Sure Sift (sifting taps +1 roll), Forager (+1 fiber per tuft).
+  - *Industry*: Well Oiled (machines +5 %), Swift Belts (conveyors +10 %),
+    Deep Cellars (stash +10 %), Lucky Gears (lucky output +1 %).
+  - *Commerce*: Haggler (contract Marks +10 %), Good Name (reputation
+    +15 %), Bargains (market −5 %), Night Shift (offline +5 % efficiency).
+- Respec any time for 5 Marks per point spent.
+
+### Luck & combos (moment-to-moment joy)
+- **Lucky output:** every machine cycle has a 2 % (+perk) chance to double
+  its output, with a golden sparkle.
+- **Bountiful harvest:** hand-gathering a tree has an 8 % (+perk) chance to
+  give triple.
+- **Gathering combo:** taps within 2 s chain a combo (shown by the finger);
+  every 5th tap in a chain gives one extra of the main item.
+
+### Codex (collections)
+- Rare gems with tiny chances in existing chains: Topaz (sifting loam,
+  0.2 %), Ruby (sifting gravel, 0.15 %), Opal (millstone, 0.25 %), Emerald
+  (core drill on an ore heart, 0.5 %). Prized by traders.
+- Sets: Gems (4), Fruits (6), Biomes (4 grounds discovered), Wonders
+  (forge completed, all islets home). Each completed set: +1 perk point and
+  100 renown.
+
+## Ambitions, farming, settlers and designs (choice over sequence)
+
+The player chooses what to develop. Nothing below is a gate on the core
+chain; every system feeds the others.
+
+### Ambitions (replaces the linear chapters)
+- Seven paths — Land, Industry, Trade, Nature, Settlement, Aether,
+  Invention — each a short ladder of ambitions. Every path's next
+  ambition is open at the same time; finish them in any order.
+- Rewards: materials, Marks, perk points, decor patterns (Land I → garden,
+  Industry II → mason, Settlement I → town, Aether II → sky, Aether III →
+  monument). The player pins one ambition to the quest card (default: the
+  one closest to done).
+
+### Farming & ranching
+- **Field** (grass): a crafter growing wheat (1 dew → 4 wheat / 40 s) or
+  carrots (1 dew → 3 carrots / 45 s). Marsh +25 %, dunes −25 %, frost −40 %.
+  Uses all machine rules: conveyors, upgrades, mastery, lucky crops.
+- **Sheep Pen** (1 wheat → 2 wool / 20 s), **Chicken Coop** (1 wheat →
+  2 eggs / 15 s), **Loom** (3 wool → 1 cloth), **Millstone** (2 wheat → 1
+  flour), **Bakery Oven** (fuel): bread (2 flour → 2), stew (3 carrots +
+  1 egg → 2), pie (1 flour + 2 apples + 1 egg → 1).
+
+### Settlers (people to feed, roles to choose)
+- **Cottage** houses 2. A settler arrives every 45 s while there is room
+  and food in the stash. Each settler eats one food every 90 s, preferring
+  what they have not had lately (then what you have most of). Foods: bread, stew, pie, eggs, carrots, any fruit,
+  cider, juice, preserves, honey.
+- **Contentment** = 1 + 0.1 × (distinct foods among the last 8 meals − 1)
+  (max +50 %), +10 % with charm ≥ 60. Hungry settlers give nothing; after
+  5 hungry minutes one leaves.
+- **Roles** (assigned freely in the Settlers panel): Forester (trees,
+  Treewrights, fields, pens, hives), Mason (sieves, presses, millstones,
+  kilns, clay), Smith (furnaces, assemblers, crucibles, sawmills), Mystic
+  (condensers, distillers, resonators, star nets, drills), Merchant
+  (contract Marks). Each specialist: +6 % × contentment to their group;
+  idle settlers +1 % to everything.
+
+### Designs (everything is crafted, built and earned)
+- No expeditions, no random loot. A **Drafting Table** (unlock: Designs,
+  after the assembler and 2 mechanisms) lets the player draft eight designs
+  — alternative recipes (Twin Saw, Charcoal Clamp, Ore Wash, Compact
+  Gears, Sky Loom, Quick Bread, Aether Still, Crystal Lattice) — each for a
+  fixed material cost, once its machine and ingredients are understood.
+- A drafted design becomes a recipe choice on its machine; it is never the
+  default, so the player decides where it is worth using.
+
+## Ambition details, decor and charm
+
+- **Ambitions** (`content/ambitions.ts`, `core/ambitions.ts`): 7 paths × 4
+  rungs = 28. Goals: build, make, grow, trade, charm, upgrade, biomes,
+  islets, forge, resonance, renown, codex, settlers, designs drafted.
+  Rungs climb in order within a path; paths are independent. The quest card
+  shows early tips, then the pinned ambition (or the open one closest to
+  done); the board opens from the quest card or the journal. v6 saves drop
+  the chapter counter and catch up from the world on load (ambitions whose
+  goals are already met pay out once).
+- Blueprints live in `s.known` (ids `bp_*`) but are not discoveries; they
+  are never a machine's default recipe.
+- **Decor** (Build › Decor): 20 pieces in five pattern sets — paths, fences,
+  hedges, flower beds, benches; cobble paths, stone walls, planters,
+  banners, wells; lamp posts, brick arches, fountains, gazebos; skystone
+  paths, crystal lamps, statues, star arches; the Forge Monument.
+- **Charm** = sum of decor charm (first ten of a kind full, then a quarter).
+  Contracts pay +1 % per 5 charm (max +30 %); milestones 20/60/150/300/600/
+  1000 give 40 renown each.
+- Bot: reaches every discovery (farming → designs included), drafts a
+  design, unlocks all five decor pattern sets via ambitions and
+  completes the forge in ≈15.3 h (it now widens a
+  starving production chain like a player noticing a bottleneck).
+
+## Endless play and seasons
+
+The game never runs out of things to aim for, and none of it is random loot.
+
+- **Legacy ambitions** (`legacyAmbition` in `content/ambitions.ts`): past
+  rung IV every path keeps going — Vast Isle, Great Works, Merchant Prince,
+  Evergreen, Sky City, Endless Song, Perfectionist — with goals that grow
+  each rung (linear for counts, ×2 for production) and pay
+  150 × 1.5^(L−1) Marks plus a perk point. Ids are `<path>_<rung>`.
+- **Legend perks**: Evergreen (+3 % tree and field growth), Craftsman
+  (+2 % machine speed), Renowned (+2 % contract Marks) — no rank cap, so
+  perk points from endless renown always have a use.
+- **Grandmaster stars**: mastery continues past V at each further ×10
+  (renown only; the speed bonus stops at V, +25 %).
+- **Charm milestones** continue every 500 past 1000.
+- **Resonance** (already endless) remains the Aether path's long goal.
+- **Seasons** (`content/seasons.ts`): spring, summer, autumn, winter, four
+  days each (a 160-minute year). Multipliers on field crops, tree regrowth,
+  wind, dew, bees and settler appetite; every season helps something and
+  slows something. Shown on the clock (coloured bar, tap for details), with
+  snow in winter, falling leaves in autumn and a gentle colour grade.
+
+## Review fixes (this pass)
+- Offline progress no longer replays items sent into the forge or a
+  trading post as a loss; the away screen lists what machines used up.
+- Settler roles and the idle bonus apply to every machine (via
+  `machineSpeed`), as their descriptions say.
+- Removing a Wisp Roost returns what its wisps carried and frees their
+  claimed machines.
+- A summon with no room to dock refunds its cost.
+- Felling a fruit tree returns its own sapling.
+- Contract notifications show the Marks actually paid; machine panels show
+  the true cycle time and buffer sizes.
+- Saves clamp settler roles to the settlers there are, drop unknown
+  ambition ids and refund the retired air dock.
+- Bursts of notifications are folded (at most three on screen).

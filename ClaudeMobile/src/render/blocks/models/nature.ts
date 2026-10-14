@@ -1,5 +1,5 @@
 import type { Canvas, Face, Tex, V3 } from '../iso';
-import type { TexLib } from '../tex';
+import { Paint, type TexLib } from '../tex';
 
 const h = (a: number, b: number, c = 0) => {
   let x = (Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263) + Math.imul(c | 0, 1274126177)) | 0;
@@ -16,12 +16,13 @@ const CUT: Record<Wood, number> = { oak: 92, beech: 96, maple: 80, pine: 26, euc
  * Block tree on one tile: a slim log trunk and a crown of leaf blocks in
  * half-block steps that spills a little over the neighbours.
  */
-export function tree(c: Canvas, L: TexLib, wood: Wood, seed: number, sway = 0, fruit = 0): void {
+export function tree(c: Canvas, L: TexLib, wood: Wood, seed: number, sway = 0, fruit = 0, tint: [number, number, number] = [1, 1, 1], leafWood: Wood = wood, leafTex?: Tex): void {
   const log: Face = { tex: L.get(`a/${wood}_log_side`) };
   const logTop: Face = { tex: L.get(`a/${wood}_log_top`) };
   // airy outer leaves (dark texels cut away) over a shaded inner core
-  const leaves: Face = { tex: L.get(`a/${wood}_leaves`), cut: CUT[wood] };
-  const core: Face = { tex: L.get(`a/${wood}_leaves`), tint: [0.62, 0.68, 0.72] };
+  const lt = leafTex ?? L.get(`a/${leafWood}_leaves`);
+  const leaves: Face = { tex: lt, cut: CUT[leafWood], tint };
+  const core: Face = { tex: lt, tint: [0.62 * tint[0], 0.68 * tint[1], 0.72 * tint[2]] };
   const trunkH = wood === 'pine' ? 2.5 : 2;
   c.box([0.3125, 0.3125, 0], [0.6875, 0.6875, trunkH], logTop, log, log, 2);
   // roots
@@ -57,8 +58,8 @@ export function tree(c: Canvas, L: TexLib, wood: Wood, seed: number, sway = 0, f
 
 /** The great elder tree: a wide maple crown with lanterns hung under it. */
 export function elderTree(c: Canvas, L: TexLib, sway = 0): void {
-  const log: Face = { tex: L.get('a/maple_log_side') };
-  const logTop: Face = { tex: L.get('a/maple_log_top') };
+  const log: Face = { tex: L.get('a/oak_log_side'), tint: [0.8, 0.72, 0.68] };
+  const logTop: Face = { tex: L.get('a/oak_log_top') };
   const leaves: Face = { tex: L.get('a/maple_leaves'), cut: CUT.maple };
   const core: Face = { tex: L.get('a/maple_leaves'), tint: [0.62, 0.66, 0.72] };
   c.box([0.25, 0.25, 0], [0.75, 0.75, 2.6], logTop, log, log, 2);
@@ -96,11 +97,18 @@ export function sapling(c: Canvas, L: TexLib, stage: number, sway = 0): void {
 }
 
 /** A clump of tall fibrous grass. */
-export function tuft(c: Canvas, L: TexLib, sway = 0): void {
-  const names = ['grass_tall', 'sedge', 'grass3', 'horsetail', 'grass_tall', 'fern2'];
+export function tuft(c: Canvas, L: TexLib, sway = 0, biome: 'meadow' | 'marsh' | 'dunes' | 'frost' = 'meadow'): void {
+  const sets = {
+    meadow: ['grass_tall', 'sedge', 'grass3', 'horsetail', 'grass_tall', 'fern2'],
+    marsh: ['cattail', 'horsetail', 'cattail', 'sedge', 'horsetail', 'cattail'],
+    dunes: ['grass3', 'sagebrush', 'grass3', 'grass2', 'creosote', 'grass3'],
+    frost: ['grass_tall', 'grass3', 'grass_tall', 'grass2', 'grass_tall', 'grass3'],
+  };
+  const tint: [number, number, number] = biome === 'dunes' ? [1.15, 1, 0.6] : biome === 'frost' ? [0.85, 0.98, 1.12] : [1, 1, 1];
+  const names = sets[biome];
   for (let i = 0; i < 6; i++) {
     const x = 0.5 + (h(i, 1, 4) - 0.5) * 0.6 + (i % 2 ? sway * 0.02 : 0), y = 0.5 + (h(i, 2, 4) - 0.5) * 0.6;
-    c.sprite([x, y, 0], { tex: L.get('a/plants/' + names[i]) }, 2, 2);
+    c.sprite([x, y, 0], { tex: L.get('a/plants/' + names[i]), tint }, 2, 2);
   }
 }
 
@@ -161,4 +169,168 @@ export function islet(c: Canvas, L: TexLib, seed: number, withTree: boolean): vo
     }
   }
   if (withTree) { c.castOn = true; tree(c, L, h(seed, 9) > 0.5 ? 'pine' : 'oak', seed); c.castOn = false; }
+}
+
+/** Fruit tree: a beech-like crown heavy with apples. */
+export function fruitTree(c: Canvas, L: TexLib, sway = 0, apples = 12): void {
+  tree(c, L, 'beech', 5, sway, 0);
+  // plump apples on the crown's visible faces
+  const ap = (p: V3) => c.box(p, [p[0] + 0.14, p[1] + 0.14, p[2] + 0.14], { tex: L.get('as/default_apple'), uv: [6, 6, 9, 9] }, { tex: L.get('as/default_apple'), uv: [5, 6, 8, 9] }, { tex: L.get('as/default_apple'), uv: [5, 6, 8, 9], tint: [0.8, 0.8, 0.85] }, 4);
+  for (let i = 0; i < apples; i++) {
+    const side = i % 3, t1 = h(5, i, 7), t2 = h(5, i, 8);
+    ap(side === 0 ? [-0.3 + t1 * 1.6, 1.37, 1.85 + t2 * 0.7] : side === 1 ? [1.37, -0.3 + t1 * 1.6, 1.85 + t2 * 0.7] : [-0.2 + t1 * 1.3, -0.2 + t2 * 1.3, 2.76]);
+  }
+}
+
+/** Young fruit tree in three growth stages. */
+export function fruitSapling(c: Canvas, L: TexLib, stage: number, sway = 0): void {
+  if (stage === 0) { c.sprite([0.5, 0.5, 0], { tex: L.get('a/plants/sapling_beech') }, 2, 2); return; }
+  const log: Face = { tex: L.get('a/beech_log_side') };
+  const leaves: Face = { tex: L.get('a/beech_leaves'), cut: CUT.beech };
+  const tH = stage === 1 ? 0.75 : 1.25;
+  c.box([0.4375, 0.4375, 0], [0.5625, 0.5625, tH], log, log, log, 2);
+  const r = stage === 1 ? 0.3 : 0.5, s = sway * 0.04;
+  c.box([0.5 - r + s, 0.5 - r, tH - 0.125], [0.5 + r + s, 0.5 + r, tH + r * 1.2], leaves, leaves, leaves, 3);
+  if (stage === 2) for (const [x, y, z] of [[0.05, 0.6, 1.4], [0.6, 0.02, 1.6], [0.95, 0.5, 1.3]] as V3[]) c.box([x, y, z], [x + 0.1, y + 0.1, z + 0.1], { tex: L.get('as/default_apple'), uv: [6, 6, 8, 8] }, { tex: L.get('as/default_apple'), uv: [5, 7, 7, 9] }, { tex: L.get('as/default_apple'), uv: [5, 7, 7, 9] }, 4);
+}
+
+
+// ───────────────────────── biome trees & fruit species ─────────────────────────
+
+/** Small fruit boxes dotted over a crown's visible faces. */
+function fruitOnCrown(c: Canvas, col: [number, number, number, number], n: number, size: number, seed: number, crown = { x0: -0.3, x1: 1.3, z0: 1.85, z1: 2.6, top: 2.76, face: 1.37 }): void {
+  const p = new Paint(4, 4);
+  const [r, g, b] = col;
+  const shade = (k: number) => ((Math.min(255, r * k) << 16) | (Math.min(255, g * k) << 8) | Math.min(255, b * k));
+  p.rect(0, 0, 4, 4, shade(1)).rect(0, 0, 2, 1, shade(1.35)).rect(3, 1, 1, 3, shade(0.7)).rect(0, 3, 4, 1, shade(0.75));
+  const F: Face = { tex: p };
+  for (let i = 0; i < n; i++) {
+    const side = i % 3, t1 = h(seed, i, 7), t2 = h(seed, i, 8);
+    const q: V3 = side === 0 ? [crown.x0 + t1 * (crown.x1 - crown.x0), crown.face, crown.z0 + t2 * (crown.z1 - crown.z0)] : side === 1 ? [crown.face, crown.x0 + t1 * (crown.x1 - crown.x0), crown.z0 + t2 * (crown.z1 - crown.z0)] : [crown.x0 + 0.1 + t1 * (crown.x1 - crown.x0 - 0.2), crown.x0 + 0.1 + t2 * (crown.x1 - crown.x0 - 0.2), crown.top];
+    c.box(q, [q[0] + size, q[1] + size, q[2] + size], F, F, F, 4);
+  }
+}
+
+/** A palm: a leaning ringed trunk and drooping fronds. */
+export function palm(c: Canvas, L: TexLib, seed: number, sway = 0, dates = 0): void {
+  const bark = new Paint(16, 16, L.get('a/eucalyptus_log_side')).tint([0.9, 0.78, 0.6]);
+  for (let y = 0; y < 16; y += 4) bark.rect(0, y, 16, 1, 0x5a4428);
+  const log: Face = { tex: bark };
+  const top: Face = { tex: L.get('a/eucalyptus_log_top') };
+  let x = 0.4, y = 0.4;
+  for (let k = 0; k < 9; k++) {
+    const z = k * 0.3;
+    c.box([x, y, z], [x + 0.22, y + 0.22, z + 0.3], top, log, log, 2);
+    x += 0.02 + k * 0.004; y -= 0.012;
+  }
+  const cx = x + 0.11, cy = y + 0.11, cz = 2.7, s = sway * 0.05;
+  const frond: Face = { tex: L.get('a/oak_leaves'), tint: [0.9, 1.15, 0.75] };
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2 + h(seed, i, 3) * 0.4;
+    const dx = Math.cos(a), dy = Math.sin(a);
+    for (let k = 0; k < 4; k++) {
+      const r = 0.2 + k * 0.26, dz = -k * k * 0.07;
+      const px = cx + dx * r + s * k, py = cy + dy * r, pz = cz + dz;
+      c.box([px - 0.16, py - 0.16, pz], [px + 0.16, py + 0.16, pz + 0.1], frond, frond, frond, 3);
+    }
+  }
+  c.box([cx - 0.18, cy - 0.18, cz - 0.05], [cx + 0.18, cy + 0.18, cz + 0.18], frond, frond, frond, 3);
+  if (dates) {
+    const d = new Paint(4, 4).rect(0, 0, 4, 4, 0x8a4a1a).rect(0, 0, 2, 1, 0xb8743a).rect(3, 0, 1, 4, 0x5a2a0a);
+    for (let i = 0; i < dates; i++) {
+      const a = (i / dates) * Math.PI * 2;
+      const px = cx + Math.cos(a) * 0.3, py = cy + Math.sin(a) * 0.3;
+      c.box([px - 0.08, py - 0.08, cz - 0.42 - (i % 2) * 0.1], [px + 0.08, py + 0.08, cz - 0.12], { tex: d }, { tex: d }, { tex: d }, 4);
+    }
+  }
+}
+
+/** A willow: a broad crown with leafy curtains hanging to the ground. */
+export function willow(c: Canvas, L: TexLib, seed: number, sway = 0, fruit = 0): void {
+  tree(c, L, 'eucalyptus', seed, sway, 0, [0.9, 1.08, 0.85]);
+  const curtain: Face = { tex: L.get('a/eucalyptus_leaves'), cut: CUT.eucalyptus, tint: [0.85, 1.05, 0.8] };
+  const s = sway * 0.05;
+  for (let i = 0; i < 10; i++) {
+    const side = i % 2, t = -0.3 + h(seed, i, 11) * 1.55, len = 0.6 + h(seed, i, 12) * 0.7;
+    const p: V3 = side === 0 ? [t + s, 1.3, 1.85 - len] : [1.3, t, 1.85 - len];
+    c.box(p, side === 0 ? [p[0] + 0.14, p[1] + 0.08, 1.85] : [p[0] + 0.08, p[1] + 0.14, 1.85], curtain, curtain, curtain, 3);
+  }
+  void fruit;
+}
+
+/** The island tree's look by biome (oak in meadow). */
+export function islandTree(c: Canvas, L: TexLib, look: 'oak' | 'willow' | 'palm' | 'pine', sway: number, fruit: number): void {
+  if (look === 'palm') return palm(c, L, 3, sway, 0);
+  if (look === 'willow') return willow(c, L, 2, sway, fruit);
+  if (look === 'pine') {
+    tree(c, L, 'pine', 3, sway);
+    // snow on every tier
+    const snow: Face = { tex: L.get('a/snow') };
+    for (let k = 0; k < 4; k++) {
+      const r = 0.9 - k * 0.2 - 0.06, z = 1.75 + k * 0.5;
+      c.box([0.5 - r + sway * 0.0625 * k, 0.5 - r, z], [0.5 + r + sway * 0.0625 * k, 0.5 + r, z + 0.0625], snow, snow, snow, 3);
+    }
+    return;
+  }
+  tree(c, L, 'oak', 1, sway, fruit);
+}
+
+/** Repaint a texture through a colour ramp by luminance (keeps its pattern, alpha and darks). */
+function recolor(t: Tex, ramp: number[]): Paint {
+  const p = new Paint(t.w, t.h);
+  for (let i = 0; i < t.w * t.h; i++) {
+    if (t.data[i * 4 + 3] < 128) continue;
+    const l = (t.data[i * 4] * 0.3 + t.data[i * 4 + 1] * 0.59 + t.data[i * 4 + 2] * 0.11) / 255;
+    const k = Math.min(ramp.length - 1, Math.floor(l * ramp.length * 1.25));
+    p.set(i % t.w, Math.floor(i / t.w), ramp[k]);
+  }
+  return p;
+}
+const BLOSSOM = [0x5a2a3a, 0x8a3a5a, 0xc8608a, 0xe890b0, 0xf8c0d4, 0xfff0f4];
+const PLUMLEAF = [0x1a2a2a, 0x2a3a3a, 0x3a5a4a, 0x4a6a58, 0x6a8a6a, 0x8aa88a];
+
+const RGB = (c: number): [number, number, number, number] => [(c >> 16) & 255, (c >> 8) & 255, c & 255, 255];
+
+/** Grown fruit tree of a species. */
+export function fruitSpecies(c: Canvas, L: TexLib, species: string, sway = 0): void {
+  switch (species) {
+    case 'apple': return fruitTree(c, L, sway);
+    case 'cherry':
+      tree(c, L, 'beech', 7, sway, 0, [1, 1, 1], 'beech', recolor(L.get('a/beech_leaves'), BLOSSOM));
+      return fruitOnCrown(c, RGB(0xa01828), 16, 0.09, 7);
+    case 'orange':
+      tree(c, L, 'oak', 8, sway, 0, [0.82, 1, 0.82]);
+      return fruitOnCrown(c, RGB(0xf08a20), 12, 0.14, 8);
+    case 'pear':
+      tree(c, L, 'beech', 9, sway, 0, [1, 1.05, 0.9]);
+      return fruitOnCrown(c, RGB(0xc8d040), 11, 0.14, 9);
+    case 'plum':
+      tree(c, L, 'maple', 10, sway, 0, [1, 1, 1], 'beech', recolor(L.get('a/beech_leaves'), PLUMLEAF));
+      return fruitOnCrown(c, RGB(0x6a2a8a), 14, 0.11, 10);
+    case 'date': return palm(c, L, 11, sway, 8);
+  }
+}
+
+/** Young fruit tree of a species in three growth stages. */
+export function fruitSaplingOf(c: Canvas, L: TexLib, species: string, stage: number, sway = 0): void {
+  if (species === 'apple') return fruitSapling(c, L, stage, sway);
+  const sp: Record<string, string> = { cherry: 'sapling_maple', orange: 'sapling_oak', pear: 'sapling_beech', plum: 'sapling_maple', date: 'sapling_eucalyptus' };
+  if (stage === 0) { c.sprite([0.5, 0.5, 0], { tex: L.get('a/plants/' + sp[species]) }, 2, 2); return; }
+  if (species === 'date') {
+    const log: Face = { tex: L.get('a/eucalyptus_log_side'), tint: [0.9, 0.78, 0.6] };
+    const fr: Face = { tex: L.get('a/oak_leaves'), tint: [0.9, 1.15, 0.75] };
+    const hgt = stage === 1 ? 0.6 : 1.2;
+    c.box([0.42, 0.42, 0], [0.58, 0.58, hgt], log, log, log, 2);
+    for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; const px = 0.5 + Math.cos(a) * 0.3, py = 0.5 + Math.sin(a) * 0.3; c.box([px - 0.14, py - 0.14, hgt - 0.1], [px + 0.14, py + 0.14, hgt], fr, fr, fr, 3); }
+    return;
+  }
+  const leaf: Record<string, [Wood, [number, number, number]]> = { cherry: ['beech', [1, 1, 1]], orange: ['oak', [0.82, 1, 0.82]], pear: ['beech', [1, 1.05, 0.9]], plum: ['beech', [1, 1, 1]] };
+  const [w, tint] = leaf[species];
+  const log: Face = { tex: L.get('a/beech_log_side') };
+  const lt = species === 'cherry' ? recolor(L.get('a/beech_leaves'), BLOSSOM) : species === 'plum' ? recolor(L.get('a/beech_leaves'), PLUMLEAF) : L.get(`a/${w}_leaves`);
+  const leaves: Face = { tex: lt, cut: CUT[w], tint };
+  const tH = stage === 1 ? 0.75 : 1.25;
+  c.box([0.4375, 0.4375, 0], [0.5625, 0.5625, tH], log, log, log, 2);
+  const r = stage === 1 ? 0.3 : 0.5, s = sway * 0.04;
+  c.box([0.5 - r + s, 0.5 - r, tH - 0.125], [0.5 + r + s, 0.5 + r, tH + r * 1.2], leaves, leaves, leaves, 3);
 }

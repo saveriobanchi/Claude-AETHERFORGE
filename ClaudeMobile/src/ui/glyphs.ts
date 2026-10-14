@@ -218,7 +218,7 @@ export function thumb(type: string): string {
 }
 
 /** Land tile thumbnail: a lone top piece of that floor. */
-export function landThumb(floor: 'grass' | 'stone' | 'sky'): string {
+export function landThumb(floor: string): string {
   return art.url(`top:${floor}:15:0`);
 }
 

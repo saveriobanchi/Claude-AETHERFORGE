@@ -2,7 +2,7 @@ import { BUILDINGS, TREE } from './content/buildings';
 import { ITEM_IDS, type ItemId, type Stack } from './content/items';
 import { OFFLINE } from './content/world';
 import { run } from './sim';
-import { type GameState, attuneRank, capacity, stashAdd } from './state';
+import { type GameState, attuneRank, capacity, perkRank, stashAdd } from './state';
 
 export interface OfflineReport {
   seconds: number;
@@ -19,7 +19,8 @@ export function flowRates(s: GameState): { rate: Partial<Record<ItemId, number>>
   for (const b of buckets) {
     window += b.dt;
     for (const k in b.inn) net[k as ItemId] = (net[k as ItemId] ?? 0) + (b.inn[k as ItemId] ?? 0);
-    for (const k in b.out) net[k as ItemId] = (net[k as ItemId] ?? 0) - (b.out[k as ItemId] ?? 0);
+    // what went into the forge or a trading post is not replayed offline (those don't progress while away)
+    for (const k in b.out) net[k as ItemId] = (net[k as ItemId] ?? 0) - Math.max(0, (b.out[k as ItemId] ?? 0) - (b.sunk?.[k as ItemId] ?? 0));
   }
   const rate: Partial<Record<ItemId, number>> = {};
   if (window < 20) return { rate, window };
@@ -44,7 +45,7 @@ export function applyOffline(s: GameState, seconds: number): OfflineReport | nul
     return null;
   }
   const counted = Math.min(seconds, offlineCap(s));
-  const eff = OFFLINE.efficiency + 0.05 * attuneRank(s, 'dreams');
+  const eff = OFFLINE.efficiency + 0.05 * attuneRank(s, 'dreams') + 0.05 * perkRank(s, 'night_shift');
   let t = counted * eff;
   const { rate } = flowRates(s);
   for (const k of ITEM_IDS) {

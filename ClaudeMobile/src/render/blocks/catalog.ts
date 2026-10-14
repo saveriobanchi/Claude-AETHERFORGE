@@ -1,4 +1,5 @@
-import { CONTEXT_ID, columnPiece, decor, type Floor, fallTex, topPiece } from './models/terrain';
+import { CONTEXT_ID, DECOR_SETS, columnPiece, decor, fallTex, topPiece, type TopKind } from './models/terrain';
+import { FRUITS } from '../../core/content/biomes';
 import * as B from './models/buildings';
 import * as N from './models/nature';
 import { Canvas, type Tex } from './iso';
@@ -35,6 +36,12 @@ export const SPRITES: Record<string, SpriteSpec> = {
   elder_tree: { frames: 2, fps: 1.2, make: (c, L, f) => N.elderTree(c, L, sway(f)) },
   sapling: { frames: 2, fps: 1.2, main: 'g0', variants: { g0: 2, g1: 2, g2: 2 }, make: (c, L, f, v) => N.sapling(c, L, Number(v.slice(1)), sway(f)) },
   tuft: { frames: 2, fps: 1.5, make: (c, L, f) => N.tuft(c, L, sway(f)) },
+  tuft_marsh: { frames: 2, fps: 1.5, make: (c, L, f) => N.tuft(c, L, sway(f), 'marsh') },
+  tuft_dunes: { frames: 2, fps: 1.5, make: (c, L, f) => N.tuft(c, L, sway(f), 'dunes') },
+  tuft_frost: { frames: 2, fps: 1.5, make: (c, L, f) => N.tuft(c, L, sway(f), 'frost') },
+  tree_willow: { frames: 2, fps: 1.2, make: (c, L, f) => N.islandTree(c, L, 'willow', sway(f), 0) },
+  tree_palm: { frames: 2, fps: 1.2, make: (c, L, f) => N.islandTree(c, L, 'palm', sway(f), 0) },
+  tree_pine: { frames: 2, fps: 1.2, make: (c, L, f) => N.islandTree(c, L, 'pine', sway(f), 0) },
   node_vein: { frames: 1, fps: 1, make: (c, L) => N.node(c, L, 'node_vein') },
   node_spring: { frames: 4, fps: 5, make: (c, L, f) => N.node(c, L, 'node_spring', f) },
   node_shard: { frames: 2, fps: 2, make: (c, L, f) => N.node(c, L, 'node_shard', f) },
@@ -69,8 +76,43 @@ export const SPRITES: Record<string, SpriteSpec> = {
   pylon: { frames: 6, fps: 6, make: (c, L, f) => B.pylon(c, L, f) },
   beacon: { frames: 6, fps: 6, make: (c, L, f) => B.beacon(c, L, f) },
   roost: { frames: 4, fps: 4, make: (c, L, f) => B.roost(c, L, f), lamp: true },
+  field: { frames: 2, fps: 1.2, main: 'w0', variants: { w0: 2, w1: 2, w2: 2, c0: 2, c1: 2, c2: 2 }, make: (c, L, f, v) => B.field(c, L, v[0] === 'c' ? 'carrot' : 'wheat', Number(v.slice(1)), f) },
+  sheep_pen: { frames: 4, fps: 3, make: (c, L, f) => B.sheepPen(c, L, f) },
+  chicken_coop: { frames: 4, fps: 4, make: (c, L, f) => B.chickenCoop(c, L, f) },
+  loom: { frames: 8, fps: 8, make: (c, L, f) => B.loom(c, L, f), lamp: true },
+  oven: { frames: 4, fps: 6, make: (c, L, f) => B.oven(c, L, f), lamp: true, smoke: [0.755, 0.355, 1.6] },
+  cottage: { frames: 1, fps: 1, make: (c, L) => B.cottage(c, L), smoke: [0.775, 0.775, 1.85] },
+  drafting_table: { frames: 1, fps: 1, make: (c, L) => B.draftingTable(c, L) },
+  trading_post: { frames: 4, fps: 3, make: (c, L, f) => B.tradingPost(c, L, f) },
+  hive: { frames: 4, fps: 6, make: (c, L, f) => B.hive(c, L, f) },
+  lantern: { frames: 2, fps: 2, make: (c, L, f) => B.lanternPost(c, L, f) },
+  plank_path: { frames: 1, fps: 1, make: (c, L) => B.path(c, L, 'a/oak_planks') },
+  stone_path: { frames: 1, fps: 1, make: (c, L) => B.path(c, L, 'b/cobblestone') },
+  sky_path: { frames: 1, fps: 1, make: (c, L) => B.path(c, L, 'a/marble_bricks', true) },
+  fence: { frames: 1, fps: 1, main: 'd0', variants: { d0: 1, d1: 1 }, make: (c, L, _f, v) => B.fence(c, L, Number(v.slice(1))) },
+  bench: { frames: 1, fps: 1, main: 'd0', variants: { d0: 1, d1: 1 }, make: (c, L, _f, v) => B.bench(c, L, Number(v.slice(1))) },
+  hedge: { frames: 1, fps: 1, make: (c, L) => B.hedge(c, L) },
+  flower_bed: { frames: 1, fps: 1, make: (c, L) => B.flowerBed(c, L) },
+  stone_wall: { frames: 1, fps: 1, make: (c, L) => B.stoneWall(c, L) },
+  planter: { frames: 2, fps: 1.2, make: (c, L, f) => B.planter(c, L, f) },
+  banner: { frames: 4, fps: 4, make: (c, L, f) => B.bannerPole(c, L, f) },
+  well: { frames: 2, fps: 2, make: (c, L, f) => B.well(c, L, f) },
+  lamp_post: { frames: 1, fps: 1, make: (c, L) => B.lampPost(c, L) },
+  brick_arch: { frames: 1, fps: 1, make: (c, L) => B.brickArch(c, L) },
+  fountain: { frames: 4, fps: 6, make: (c, L, f) => B.fountain(c, L, f) },
+  gazebo: { frames: 1, fps: 1, make: (c, L) => B.gazebo(c, L) },
+  crystal_lamp: { frames: 4, fps: 3, make: (c, L, f) => B.crystalLamp(c, L, f) },
+  statue: { frames: 1, fps: 1, make: (c, L) => B.statue(c, L) },
+  star_arch: { frames: 4, fps: 3, make: (c, L, f) => B.starArch(c, L, f) },
+  monument: { frames: 4, fps: 3, make: (c, L, f) => B.monument(c, L, f) },
+
   forge: { frames: 1, fps: 8, main: 'st0', variants: { st0: 1, st1: 1, st2: 1, st3: 8 }, make: (c, L, f, v) => B.forge(c, L, Number(v.slice(2)), f) },
 };
+
+for (const fr of FRUITS) {
+  SPRITES[fr.tree] = { frames: 2, fps: 1.2, make: (c, L, f) => N.fruitSpecies(c, L, fr.id, sway(f)) };
+  SPRITES[fr.sapling] = { frames: 2, fps: 1.2, main: 'g0', variants: { g0: 2, g1: 2, g2: 2 }, make: (c, L, f, v) => N.fruitSaplingOf(c, L, fr.id, Number(v.slice(1)), sway(f)) };
+}
 
 const SIZE: Record<string, number> = { forge: 3 };
 
@@ -193,7 +235,7 @@ for (const d of DEPTHS) JOBS[`col:${d}`] = () => {
   }
   return out;
 };
-const FLOORS: Floor[] = ['grass', 'stone', 'sky'];
+const FLOORS: TopKind[] = ['grass', 'stone', 'sky', 'marsh', 'dunes', 'frost'];
 for (const fl of FLOORS) JOBS[`top:${fl}`] = () => {
   const out: JobOut = [];
   for (let mask = 0; mask < 16; mask++) for (let v = 0; v < TOP_VARIANTS; v++) {
@@ -205,7 +247,8 @@ for (const fl of FLOORS) JOBS[`top:${fl}`] = () => {
   return out;
 };
 
-export const DECOR_KINDS = ['tuft', 'flowers', 'bush', 'stone'] as const;
+export const DECOR_KINDS = [...new Set(Object.values(DECOR_SETS).flat())];
+export { DECOR_SETS };
 export const DECOR_VARIANTS = 4;
 JOBS['decor'] = () => {
   const out: JobOut = [];
@@ -233,9 +276,28 @@ JOBS['islets'] = () => {
     N.islet(c, L(), i * 7 + 3, i % 2 === 0);
     c.at(0, 0);
     c.finish({ haze: false, outline: 0.4 });
-    out.push([`islet:${i}`, cropSet([image(c, ax, ay)])[0]]);
+    // far away: fade toward the sky haze, more toward the bottom
+    const im = image(c, ax, ay);
+    for (let k = 0; k < im.w * im.h; k++) {
+      if (!im.data[k * 4 + 3]) continue;
+      const t = 0.32 + 0.25 * (Math.floor(k / im.w) / im.h);
+      im.data[k * 4] += (200 - im.data[k * 4]) * t; im.data[k * 4 + 1] += (214 - im.data[k * 4 + 1]) * t; im.data[k * 4 + 2] += (238 - im.data[k * 4 + 2]) * t;
+    }
+    out.push([`islet:${i}`, cropSet([im])[0]]);
   }
   return out;
+};
+
+/** Trader airship frames (the world floats it beside a trading post). */
+JOBS['ship'] = () => {
+  const imgs = [0, 1, 2, 3].map((i) => {
+    // floats beyond the island: no ground shadow
+    const { c, ax, ay } = canvas({ size: 2, above: 4 });
+    B.airship(c, L(), i / 4);
+    c.finish({});
+    return image(c, ax, ay);
+  });
+  return cropSet(imgs).map((im, i) => [`ship:${i}`, im]);
 };
 
 // ───────────────────────── icons ─────────────────────────
@@ -244,6 +306,7 @@ type Cube = { cube: [string | Tex, (string | Tex)?, (string | Tex)?]; h?: number
 type Flat = { flat: string | Tex; tint?: [number, number, number] };
 type IconDef = Cube | Flat;
 
+const TAU2 = Math.PI * 2;
 const disc = (p: Paint, cx: number, cy: number, r: number, col: number, hi?: number, lo?: number) => {
   for (let y = 0; y < p.h; y++) for (let x = 0; x < p.w; x++) {
     const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
@@ -263,6 +326,231 @@ const ring = (p: Paint, cx: number, cy: number, r0: number, r1: number, a: numbe
 
 function painted(): Record<string, () => Tex> {
   return {
+    flour: () => new Paint().draw([
+      '................',
+      '......aaaa......',
+      '.....abbbba.....',
+      '......acca......',
+      '.....abbbba.....',
+      '....abbbbbba....',
+      '...abbbbbbbba...',
+      '...abbddbbbba...',
+      '...abdeedbbba...',
+      '...abbddbbbba...',
+      '...abbbbbbbca...',
+      '....abbbbbca....',
+      '.....aaaaaa.....',
+    ], { a: 0x6a5a48, b: 0xf0ead8, c: 0xc8bca0, d: 0xd8a848, e: 0xf8d880 }, 0, 1),
+    egg: () => new Paint().draw([
+      '................',
+      '................',
+      '.......aa.......',
+      '......abba......',
+      '.....abbbba.....',
+      '.....abcbba.....',
+      '....abcbbbba....',
+      '....abbbbbba....',
+      '....abbbbbda....',
+      '....abbbbdda....',
+      '.....abbdda.....',
+      '......aaaa......',
+    ], { a: 0x6a4a30, b: 0xf4e4c8, c: 0xffffff, d: 0xd8bc98 }, 0, 1),
+    cloth: () => new Paint().draw([
+      '................',
+      '................',
+      '...aaaaaaaaaa...',
+      '..abbbbbbbbbba..',
+      '..abcbbcbbcbba..',
+      '..adddddddddda..',
+      '..abbbbbbbbbba..',
+      '..abcbbcbbcbba..',
+      '..adddddddddda..',
+      '..abbbbbbbbbba..',
+      '..abcbbcbbcbba..',
+      '..adddddddddda..',
+      '...aaaaaaaaaa...',
+    ], { a: 0x2a3a5a, b: 0x5a8ad0, c: 0x9ac0f0, d: 0x3a5a9a }, 0, 1),
+    pie: () => new Paint().draw([
+      '................',
+      '................',
+      '................',
+      '.....aaaaaa.....',
+      '...aabbcbbbaa...',
+      '..abbcbbbcbbba..',
+      '..abdbbcbbdbba..',
+      '.abbbbdbbbbbbba.',
+      '.abcbbbbbcbbbba.',
+      '.eaabbbbbbbbaae.',
+      '.efeaaaaaaaaefe.',
+      '..eeffffffffee..',
+      '....eeeeeeee....',
+    ], { a: 0x8a4a1a, b: 0xd89a4a, c: 0xf0c880, d: 0x8a1a3a, e: 0x6a6a7a, f: 0xc8c8d8 }, 0, 1),
+    settler: () => new Paint().draw([
+      '......aaaa......',
+      '.....abbbba.....',
+      '.....abccba.....',
+      '.....acccca.....',
+      '......acca......',
+      '....aaddddaa....',
+      '...adddddddda...',
+      '...adaddddada...',
+      '...acaddddaca...',
+      '.....aeeeea.....',
+      '.....aeaaea.....',
+      '.....afa.afa....',
+    ], { a: 0x2a1a12, b: 0x8a5a2a, c: 0xf0c8a0, d: 0x4a8a4a, e: 0x5a4a3a, f: 0x3a2a1a }, 0, 2),
+    house: () => new Paint().draw([
+      '.......aa.......',
+      '......abba......',
+      '.....abbbba.....',
+      '....abbbbbba....',
+      '...abbbbbbbba...',
+      '..aaaaaaaaaaaa..',
+      '...cddddddddc...',
+      '...cdeedddffc...',
+      '...cdeeddfffc...',
+      '...cddddddffc...',
+      '...cddddddffc...',
+      '...cccccccccc...',
+    ], { a: 0x5a1a12, b: 0xc84a2a, c: 0x5a3a22, d: 0xe8d0a0, e: 0x8ad0ff, f: 0x7a4a2a }, 0, 2),
+    star: () => new Paint().draw([
+      '.......a........',
+      '......aba.......',
+      '......aba.......',
+      '.....abbba......',
+      'aaaaaabcbaaaaaa.',
+      '.abbbbcccbbbba..',
+      '..abbbcccbbba...',
+      '...abbbcbbba....',
+      '....abbbbba.....',
+      '...abbbabbba....',
+      '..abbaa.aabba...',
+      '..aaa.....aaa...',
+    ], { a: 0x7a4a0a, b: 0xffd040, c: 0xfff6c0 }, 0, 2),
+    wool: () => {
+      const p = new Paint();
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+        const n = ((x * 7 + y * 13 + ((x * y) % 5)) % 9) / 9;
+        p.set(x, y, n > 0.75 ? 0xffffff : n < 0.2 ? 0xd0ccc4 : 0xece8e0);
+      }
+      return p;
+    },
+    jar: () => new Paint().draw([
+      '................',
+      '....aaaaaaaa....',
+      '....abbbbbba....',
+      '...cccccccccc...',
+      '...cddddddddc...',
+      '...cdeeeeeedc...',
+      '...cdeffeeedc...',
+      '...cdeffeeedc...',
+      '...cdeeeeeedc...',
+      '...cdeeeeeedc...',
+      '...cdeeeeeedc...',
+      '...cddddddddc...',
+      '...cccccccccc...',
+    ], { a: 0x6a4a2a, b: 0xc89a64, c: 0x5a6a78, d: 0xb8e0f0, e: 0xffb83a, f: 0xfff0b0 }, 0, 1),
+    preserves: () => new Paint().draw([
+      '................',
+      '....aaaaaaaa....',
+      '...abbbbbbbba...',
+      '...cccccccccc...',
+      '...cddddddddc...',
+      '...cdeeffeedc...',
+      '...cdeeeeeedc...',
+      '...cdgggggedc...',
+      '...cdghhhhgdc...',
+      '...cdgggggedc...',
+      '...cdeeeeeedc...',
+      '...cddddddddc...',
+      '...cccccccccc...',
+    ], { a: 0x8a2a2a, b: 0xd84a3a, c: 0x5a6a78, d: 0xb8e0f0, e: 0xc8402a, f: 0xff9a6a, g: 0xf0e2c4, h: 0x8a5a36 }, 0, 1),
+    candle: () => new Paint().draw([
+      '.......y........',
+      '......yoy.......',
+      '......yoy.......',
+      '.......k........',
+      '.....wwwww......',
+      '.....wvvvw......',
+      '.....wvvvw......',
+      '.....wvvvw......',
+      '.....wvvvw......',
+      '.....wvvvw......',
+      '.....wvvvw......',
+      '....bbbbbbb.....',
+      '...bcccccccb....',
+      '....bbbbbbb.....',
+    ], { y: 0xfff2a0, o: 0xff8a2a, k: 0x3a2418, w: 0xe8d8a8, v: 0xf8ecc8, b: 0x8a5a2a, c: 0xc8962a }, 0, 1),
+    cider: () => new Paint().draw([
+      '......aa........',
+      '......bb........',
+      '......cc........',
+      '.....cddc.......',
+      '....cddddc......',
+      '....ceeeec......',
+      '....cefffc......',
+      '....cefeec......',
+      '....ceeeec......',
+      '....ceeeec......',
+      '....ceeeec......',
+      '....cccccc......',
+    ], { a: 0x8a5a2a, b: 0xc89a64, c: 0x3a5a3a, d: 0x6a9a6a, e: 0xe89a3a, f: 0xffe0a0 }, 3, 2),
+    orange: () => { const p = disc(new Paint(), 8, 9, 5.5, 0xf08a20, 0xffc060, 0xb85a10); p.rect(7, 2, 2, 2, 0x4a7a2a).rect(9, 2, 2, 1, 0x6aa63c); p.set(6, 7, 0xfff0c0); return p; },
+    pear: () => { const p = disc(new Paint(), 8, 10, 4.8, 0xc8d040, 0xe8f080, 0x8a9a20); disc(p, 8, 6, 3, 0xc8d040, 0xe8f080, 0x8a9a20); p.rect(8, 1, 1, 3, 0x5a4428).rect(9, 2, 2, 1, 0x6aa63c); return p; },
+    plum: () => { const p = disc(new Paint(), 6, 9, 3.6, 0x6a2a8a, 0x9a5ab8, 0x3a1a4a); disc(p, 10.5, 10, 3.6, 0x7a3a9a, 0xaa6ac8, 0x3a1a4a); return p.rect(8, 3, 1, 4, 0x5a4428).rect(9, 3, 2, 1, 0x6aa63c); },
+    date: () => { const p = new Paint(); for (const [x, y] of [[5, 6], [9, 5], [7, 9], [11, 9], [4, 11]]) { p.rect(x, y, 3, 4, 0x8a4a1a); p.set(x, y, 0xc07a3a); p.set(x + 2, y + 3, 0x4a2008); } return p.rect(7, 2, 1, 4, 0x6a8a3a); },
+    juice: () => new Paint().draw([
+      '................',
+      '...aaaaaaaaaa...',
+      '...a........a...',
+      '...abbbbbbbba...',
+      '...abccccccba...',
+      '...abccdcccba...',
+      '...abcccccdba...',
+      '...abccccccba...',
+      '...abccccccba...',
+      '...abccccccba...',
+      '...abccccccba...',
+      '....abbbbbba....',
+      '....aaaaaaaa....',
+    ], { a: 0x5a6a78, b: 0xb8e0f0, c: 0xf8a028, d: 0xffe0a0 }, 0, 1),
+    basket: () => { const p = new Paint(); disc(p, 5, 6, 2.6, 0xc81828); disc(p, 9, 5, 2.8, 0xf08a20); disc(p, 12, 7, 2.4, 0x6a2a8a); disc(p, 7, 8, 2.4, 0xc8d040);
+      for (let y = 8; y < 15; y++) for (let x = 2 + (y - 8) / 3; x < 14 - (y - 8) / 3; x++) p.set(Math.round(x), y, (Math.round(x) + y) % 3 ? 0xb8864a : 0x7a5228);
+      return p.rect(2, 8, 12, 1, 0x5a3a1a); },
+    coin: () => { const p = disc(new Paint(), 8, 8, 6.5, 0xe8b440, 0xfff0a0, 0x9a6a1a); disc(p, 8, 8, 4.2, 0xd8a03a); p.rect(7, 5, 2, 6, 0xfff0a0).rect(6, 6, 4, 1, 0xfff0a0).rect(6, 9, 4, 1, 0xfff0a0); return p; },
+    up: () => new Paint().draw([
+      '.......aa.......',
+      '......abba......',
+      '.....abbbba.....',
+      '....abbbbbba....',
+      '...aaabbbbaaa...',
+      '.....abbbba.....',
+      '.....abbbba.....',
+      '.....abbbba.....',
+      '.....aaaaaa.....',
+      '................',
+      '...cccccccccc...',
+      '...cddddddddc...',
+      '...cccccccccc...',
+    ], { a: 0x2a5a1a, b: 0x8ae85a, c: 0x7a5a1a, d: 0xe8b440 }, 0, 1),
+    sun: () => { const p = new Paint(); for (let i = 0; i < 8; i++) { const a = (i / 8) * TAU2; p.set(Math.round(8 + Math.cos(a) * 6.5), Math.round(8 + Math.sin(a) * 6.5), 0xffd040); } return disc(p, 8, 8, 4.2, 0xffd040, 0xfff2a0, 0xe8962a); },
+    cloud: () => { const p = new Paint(); disc(p, 6, 9, 3.6, 0xe8f0f8, 0xffffff, 0xa8b8c8); disc(p, 10, 8, 4.2, 0xe8f0f8, 0xffffff, 0xa8b8c8); return p.rect(3, 10, 11, 2, 0xe8f0f8); },
+    rain: () => { const p = new Paint(); disc(p, 6, 6, 3.4, 0xc8d4e0, 0xe8f0f8, 0x8898a8); disc(p, 10, 5, 3.8, 0xc8d4e0, 0xe8f0f8, 0x8898a8); p.rect(3, 6, 11, 2, 0xc8d4e0); for (const [x, y] of [[4, 11], [8, 12], [12, 11], [6, 14], [10, 14]]) p.rect(x, y, 1, 2, 0x4a92cc); return p; },
+    breeze: () => new Paint().draw([
+      '................',
+      '..........aa....',
+      '...........a....',
+      '.aaaaaaaaaa.....',
+      '................',
+      '...aaaaaaaaaaaa.',
+      '..............a.',
+      '.............a..',
+      '..aaaaaaaa......',
+      '..........a.....',
+      '.........a......',
+    ], { a: 0xd8eef8 }, 0, 2),
+    fog: () => new Paint().rect(2, 4, 12, 2, 0xd8e0e8).rect(4, 7, 11, 2, 0xb8c4d0).rect(1, 10, 12, 2, 0xd8e0e8).rect(5, 13, 9, 2, 0xb8c4d0),
+    stars: () => { const p = new Paint(); for (const [x, y, r] of [[5, 5, 2], [11, 9, 2], [4, 12, 1], [12, 3, 1]]) { p.rect(x - r, y, r * 2 + 1, 1, 0xfff2a0); p.rect(x, y - r, 1, r * 2 + 1, 0xfff2a0); p.set(x, y, 0xffffff); } return p.rect(8, 12, 6, 1, 0xffd040); },
     mist: () => { const p = new Paint(); disc(p, 5.5, 10, 3.6, 0xc8e6f2, 0xf2fbff, 0x8ec4dc); disc(p, 10.5, 9, 4.2, 0xd8f0f8, 0xffffff, 0x9acce0); disc(p, 8, 6, 3.2, 0xe8f8ff, 0xffffff, 0xb0d8ea); return p; },
     pebble: () => { const p = new Paint(); disc(p, 5, 10, 3, 0x8a8890, 0xb8b6c0, 0x5a5862); disc(p, 11, 11, 2.6, 0x9a9488, 0xc8c2b4, 0x6a6458); disc(p, 8, 5.5, 2.2, 0x7a7c88, 0xa8aab4, 0x4a4c58); return p; },
     dew: () => {
@@ -360,6 +648,38 @@ function itemDefs(): Record<ItemId, IconDef> {
     cell: { flat: 'as/glass bottle 2', tint: [0.7, 1, 1.25] },
     coil: { flat: P.coil() },
     core: { cube: ['as/default_diamond_block'], glow: true, tint: [1.15, 0.7, 0.85] },
+    fruit_sapling: { flat: 'a/plants/sapling_beech' },
+    apple: { flat: 'as/default_apple' },
+    honey: { flat: P.jar() },
+    wax: { cube: ['as/default_gold_block'], h: 0.5, tint: [1.05, 1, 0.72] },
+    cider: { flat: P.cider() },
+    candle: { flat: P.candle() },
+    preserves: { flat: P.preserves() },
+    cherry_sapling: { flat: 'a/plants/sapling_maple', tint: [1.2, 0.8, 0.9] },
+    orange_sapling: { flat: 'a/plants/sapling_oak' },
+    date_sapling: { flat: 'a/plants/sapling_eucalyptus' },
+    pear_sapling: { flat: 'a/plants/sapling_beech', tint: [1, 1.05, 0.85] },
+    plum_sapling: { flat: 'a/plants/sapling_maple', tint: [0.85, 0.85, 1.1] },
+    cherry: { flat: 'as/cherry' },
+    orange: { flat: P.orange() },
+    date: { flat: P.date() },
+    pear: { flat: P.pear() },
+    plum: { flat: P.plum() },
+    juice: { flat: P.juice() },
+    fruit_basket: { flat: P.basket() },
+    topaz: { flat: 'as/default_diamond', tint: [1.25, 0.95, 0.45] },
+    ruby: { flat: 'as/ruby' },
+    opal: { flat: 'as/crystal 2', tint: [1.15, 1.05, 1.15] },
+    emerald: { flat: 'as/emerald' },
+    wheat: { flat: 'a/plants/crops/wheat_stage5' },
+    carrot: { flat: 'as/carrot' },
+    flour: { flat: P.flour() },
+    bread: { flat: 'as/farming_bread' },
+    wool: { cube: [P.wool()] },
+    cloth: { flat: P.cloth() },
+    egg: { flat: P.egg() },
+    stew: { flat: 'as/ethereal_hearty_stew' },
+    pie: { flat: P.pie() },
   };
 }
 
@@ -409,6 +729,23 @@ const UI: Record<string, () => Image> = {
   sack: () => flatImage(painted().sack(), 2),
   gear: () => flatImage(B.gearTex(0xc8c0b0, 0x5a5462, 0), 2),
   compass: () => flatImage(painted().compass(), 2),
+  marks: () => flatImage(painted().coin(), 2),
+  upgrade: () => flatImage(painted().up(), 2),
+  charm: () => flatImage(new Paint().draw(['................', '..aa......aa....', '.abba....abba...', 'abbbbaaaabbbba..', 'abbbbbbbbbbbba..', 'abbbcbbbbbbbba..', '.abbbbbbbbbba...', '..abbbbbbbba....', '...abbbbbba.....', '....abbbba......', '.....abba.......', '......aa........'], { a: 0x5a1a2a, b: 0xe85a7a, c: 0xffc0d0 }, 1, 2), 2),
+  chapter: () => flatImage(painted().book(), 2),
+  ambition: () => flatImage(painted().star(), 2),
+  expand: () => cubeImage({ cube: ['a/grass_top', 'a/grass_side'] }, 0.5),
+  leaf: () => cubeImage({ cube: ['a/oak_leaves'] }, 0.5),
+  home: () => flatImage(painted().house(), 2),
+  star: () => flatImage(painted().star(), 2),
+  settler: () => flatImage(painted().settler(), 2),
+  market: () => flatImage(painted().sack(), 2),
+  w_clear: () => flatImage(painted().sun(), 2),
+  w_calm: () => flatImage(painted().sun(), 2, [1, 0.95, 0.85]),
+  w_breezy: () => flatImage(painted().breeze(), 2),
+  w_rain: () => flatImage(painted().rain(), 2),
+  w_fog: () => flatImage(painted().fog(), 2),
+  w_starfall: () => flatImage(painted().stars(), 2),
   island: () => {
     const { c } = canvas({ size: 3, S: 0.5, above: 4, below: 6 });
     c.at(1, 1); N.islet(c, L(), 3, true); c.at(0, 0);
@@ -423,7 +760,7 @@ JOBS['icons'] = () => {
   const defs = itemDefs();
   for (const id of ICON_IDS) {
     const d = defs[id];
-    if ('cube' in d) { out.push([`icon:${id}`, cubeImage(d, 0.5)], [`iconw:${id}`, cubeImage(d, 0.25)]); }
+    if ('cube' in d) { out.push([`icon:${id}`, cubeImage(d, 0.5)], [`iconw:${id}`, cubeImage(d, 0.1875)]); }
     else { out.push([`icon:${id}`, flatImage(tex(d.flat), 2, d.tint)], [`iconw:${id}`, flatImage(tex(d.flat), 1, d.tint)]); }
   }
   for (const [name, f] of Object.entries(UI)) out.push([`ui:${name}`, f()]);
@@ -447,19 +784,16 @@ function bevel(p: Paint, x: number, y: number, w: number, hh: number, lo: number
 function img(p: Paint): Image { return { w: p.w, h: p.h, data: new Uint8ClampedArray(p.data), ax: 0, ay: 0 }; }
 
 const UITEX: Record<string, () => Paint> = {
-  // 24×24, slice 8: oak frame with iron corner plates around dark slate
+  // 16×16, slice 5: slim oak frame with iron corner rivets around dark slate
   panel: () => {
-    const p = new Paint(24, 24);
-    fillTex(p, L().get('a/slate'), 0, 0, 24, 24, [0.27, 0.28, 0.34]);
+    const p = new Paint(16, 16);
+    fillTex(p, L().get('a/slate'), 0, 0, 16, 16, [0.27, 0.28, 0.34]);
     const wood = L().get('a/oak_planks');
-    fillTex(p, wood, 0, 0, 24, 4, [0.9, 0.85, 0.8]); fillTex(p, wood, 0, 20, 24, 4, [0.7, 0.62, 0.58], 0, 8);
-    fillTex(p, wood, 0, 0, 4, 24, [0.85, 0.8, 0.76], 4, 0); fillTex(p, wood, 20, 0, 4, 24, [0.72, 0.66, 0.62], 8, 0);
-    p.frame(0, 0, 24, 24, 0x1a1210).frame(4, 4, 16, 16, 0x1a1210);
-    p.rect(1, 1, 22, 1, 0xd8a868).rect(5, 5, 14, 1, 0x0e0e14);
-    for (const [x, y] of [[0, 0], [17, 0], [0, 17], [17, 17]]) {
-      p.rect(x + 1, y + 1, 5, 5, 0x8a8a96).frame(x + 1, y + 1, 5, 5, 0x3a3a46).set(x + 2, y + 2, 0xd8d8e0);
-      p.set(x + 3, y + 3, 0x4a4a56);
-    }
+    fillTex(p, wood, 0, 0, 16, 3, [0.9, 0.85, 0.8]); fillTex(p, wood, 0, 13, 16, 3, [0.7, 0.62, 0.58], 0, 8);
+    fillTex(p, wood, 0, 0, 3, 16, [0.85, 0.8, 0.76], 4, 0); fillTex(p, wood, 13, 0, 3, 16, [0.72, 0.66, 0.62], 8, 0);
+    p.frame(0, 0, 16, 16, 0x1a1210).frame(4, 4, 8, 8, 0x0e0e14);
+    p.rect(1, 1, 14, 1, 0xd8a868).rect(4, 4, 8, 1, 0x1a1210);
+    for (const [x, y] of [[1, 1], [12, 1], [1, 12], [12, 12]]) p.rect(x, y, 3, 3, 0x8a8a96).set(x, y, 0xd8d8e0);
     return p;
   },
   // 16×16, slice 4: plank button

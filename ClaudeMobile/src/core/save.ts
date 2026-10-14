@@ -2,16 +2,23 @@ import { BUILDINGS } from './content/buildings';
 import { isItemId, type ItemId, type Stack } from './content/items';
 import type { Floor } from './content/buildings';
 import {
-  type Building, type Dir, type GameState, SAVE_VERSION, createState, emptyStash, newBuilding, key, hashSeed, emptyCache,
+  type Building, type Dir, type GameState, type Tile, SAVE_VERSION, createState, emptyStash, newBuilding, key, hashSeed, emptyCache, emptyTrade, emptyRenown, emptyPeople,
 } from './state';
 import { rebuildCache } from './sim';
+import type { Contract } from './content/trade';
+import { BIOMES, type BiomeId } from './content/biomes';
+import { ambitionById } from './content/ambitions';
+import { ROLES } from './content/people';
+
+const RETIRED_AIRDOCK: Stack = { plank: 40, cloth: 12, gear: 10, iron: 10 };
 
 /** On-disk shape (current version). Plain JSON; Maps flattened to arrays. */
 export interface SaveData {
   v: number;
+  seed: number;
   rng: number;
   time: number;
-  tiles: [number, number, Floor, string?][];
+  tiles: [number, number, Floor, string?, string?][];
   buildings: SavedBuilding[];
   stash: Stack;
   stats: GameState['stats'];
@@ -20,6 +27,13 @@ export interface SaveData {
   nextId: number;
   islets: GameState['islets'];
   forge: GameState['forge'];
+  trade: GameState['trade'];
+  renown?: GameState['renown'];
+  chapters?: number;
+  people?: GameState['people'];
+  ambitions?: string[];
+  pinned?: string | null;
+  charmHigh?: number;
   flow: GameState['flow'];
   tuftTimer: number;
   savedAt: number;
@@ -28,7 +42,7 @@ export interface SaveData {
 
 type SavedBuilding = [
   id: number, type: string, x: number, y: number, dir: number,
-  extra: Partial<Pick<Building, 'recipe' | 'progress' | 'working' | 'inBuf' | 'outBuf' | 'fuel' | 'stock' | 'timer' | 'hold' | 'filter' | 'rr'>> & { items?: [ItemId, number][] },
+  extra: Partial<Pick<Building, 'recipe' | 'progress' | 'working' | 'inBuf' | 'outBuf' | 'fuel' | 'stock' | 'timer' | 'hold' | 'filter' | 'rr' | 'level'>> & { items?: [ItemId, number][] },
 ];
 
 function cleanStack(st: Stack | undefined): Stack {
@@ -56,6 +70,7 @@ export function serialize(s: GameState, view?: SaveData['view']): SaveData {
     if (b.hold) e.hold = b.hold;
     if (b.filter) e.filter = b.filter;
     if (b.rr) e.rr = b.rr;
+    if (b.level > 1) e.level = b.level;
     if (b.items.length) e.items = b.items.map((i) => [i.item, i.pos]);
     buildings.push([b.id, b.type, b.x, b.y, b.dir, e]);
   }
@@ -65,9 +80,10 @@ export function serialize(s: GameState, view?: SaveData['view']): SaveData {
   for (const w of s.wisps) if (w.carry && w.n) stash[w.carry] = (stash[w.carry] ?? 0) + w.n;
   return {
     v: SAVE_VERSION,
+    seed: s.seed,
     rng: s.rng,
     time: s.time,
-    tiles: [...s.tiles.values()].map((t) => (t.islet ? [t.x, t.y, t.floor, t.islet] : [t.x, t.y, t.floor])),
+    tiles: [...s.tiles.values()].map((t) => (t.biome ? [t.x, t.y, t.floor, t.islet ?? '', t.biome] : t.islet ? [t.x, t.y, t.floor, t.islet] : [t.x, t.y, t.floor])),
     buildings,
     stash,
     stats: s.stats,
@@ -76,6 +92,11 @@ export function serialize(s: GameState, view?: SaveData['view']): SaveData {
     nextId: s.nextId,
     islets: s.islets,
     forge: s.forge,
+    trade: s.trade,
+    renown: s.renown,
+    ambitions: [...s.ambitions],
+    pinned: s.pinned,
+    people: s.people,
     flow: s.flow,
     tuftTimer: s.tuftTimer,
     savedAt: s.savedAt,
@@ -101,6 +122,16 @@ export const MIGRATIONS: Record<number, (d: AnySave) => AnySave> = {
       tuftTimer: 0,
     };
   },
+  // v2 → v3: world seed (weather), trade state, machine levels (default 1).
+  2: (d) => ({ ...d, v: 3, seed: (d.seed ?? d.rng ?? 1) >>> 0, trade: d.trade ?? emptyTrade() }),
+  // v3 → v4: tiles may carry a biome (5th field); older tiles are meadow.
+  3: (d) => ({ ...d, v: 4 }),
+  // v4 → v5: renown and perks; mastery counts start from what was gathered.
+  // v5 → v6: chapters (older worlds catch up — finished chapters pay out on load).
+  5: (d) => ({ ...d, v: 6, chapters: d.chapters ?? 0 }),
+  // v6 → v7: settlers and ambitions. Chapters are dropped; ambitions whose goals the world already meets are achieved (and paid) on load.
+  6: (d) => ({ ...d, v: 7, people: d.people ?? emptyPeople() }),
+  4: (d) => ({ ...d, v: 5, renown: d.renown ?? emptyRenown(), stats: { ...(d.stats ?? {}), made: d.stats?.made ?? d.stats?.obtained ?? {} } }),
 };
 
 export function migrate(d: AnySave): SaveData {
@@ -123,16 +154,21 @@ export function deserialize(raw: unknown): { state: GameState; view?: SaveData['
   s.buildings.clear();
   s.occ.clear();
   s.rng = d.rng >>> 0;
+  s.seed = (d.seed ?? d.rng) >>> 0;
   s.time = +d.time || 0;
-  for (const [x, y, floor, islet] of d.tiles ?? []) {
+  for (const [x, y, floor, islet, biome] of d.tiles ?? []) {
     if (!Number.isInteger(x) || !Number.isInteger(y)) continue;
-    s.tiles.set(key(x, y), { x, y, floor: floor === 'stone' || floor === 'sky' ? floor : 'grass', seed: hashSeed(x, y), islet });
+    const t: Tile = { x, y, floor: floor === 'stone' || floor === 'sky' ? floor : 'grass', seed: hashSeed(x, y), islet: islet || undefined };
+    if (biome && biome in BIOMES && biome !== 'meadow') t.biome = biome as BiomeId;
+    s.tiles.set(key(x, y), t);
   }
   if (!s.tiles.size) throw new Error('Save has no ground');
   let maxId = 0;
+  const pendingRefund: Stack[] = [];
   for (const [id, type, x, y, dir, e] of d.buildings ?? []) {
     const def = BUILDINGS[type];
-    if (!def) continue;
+    // a building that no longer exists gives its materials back (the retired air dock)
+    if (!def) { if (type === 'airdock') pendingRefund.push(RETIRED_AIRDOCK); continue; }
     const b = newBuilding(id, type, x, y, ((dir | 0) & 3) as Dir);
     b.recipe = e.recipe ?? null;
     b.progress = e.progress ?? 0;
@@ -145,6 +181,7 @@ export function deserialize(raw: unknown): { state: GameState; view?: SaveData['
     b.hold = e.hold && isItemId(e.hold) ? e.hold : null;
     b.filter = e.filter && isItemId(e.filter) ? e.filter : null;
     b.rr = e.rr ?? 0;
+    b.level = Math.max(1, Math.min(5, Math.floor(e.level ?? 1)));
     b.items = (e.items ?? []).filter(([it]) => isItemId(it)).map(([item, pos]) => ({ item, pos, prev: pos }));
     let clash = false;
     for (let dy = 0; dy < def.size; dy++) for (let dx = 0; dx < def.size; dx++) if (s.occ.has(key(x + dx, y + dy))) clash = true;
@@ -158,6 +195,21 @@ export function deserialize(raw: unknown): { state: GameState; view?: SaveData['
   for (const k in st) s.stash[k as ItemId] = st[k as ItemId] ?? 0;
   s.stats = { ...s.stats, ...(d.stats ?? {}) };
   s.stats.obtained = cleanStack(s.stats.obtained);
+  s.stats.made = cleanStack(s.stats.made);
+  const rn = d.renown ?? emptyRenown();
+  for (const c of pendingRefund) for (const k in c) if (isItemId(k)) s.stash[k] += c[k as ItemId] ?? 0;
+  s.ambitions = new Set((d.ambitions ?? []).filter((a) => typeof a === 'string' && !!ambitionById(a)));
+  s.pinned = typeof d.pinned === 'string' ? d.pinned : null;
+  const pp = d.people ?? emptyPeople();
+  s.people = { ...emptyPeople(), count: Math.max(0, Math.floor(pp.count ?? 0)), mealT: pp.mealT ?? 0, arriveT: pp.arriveT ?? 0, hungry: pp.hungry ?? 0, roles: {}, meals: (pp.meals ?? []).filter((m) => isItemId(m)) as ItemId[] };
+  // roles: whole, non-negative, and never more than there are settlers
+  let free = s.people.count;
+  for (const r of ROLES) {
+    const n = Math.min(free, Math.max(0, Math.floor(Number(pp.roles?.[r.id] ?? 0) || 0)));
+    if (n) s.people.roles[r.id] = n;
+    free -= n;
+  }
+  s.renown = { ...emptyRenown(), ...rn, perks: { ...(rn.perks ?? {}) }, codex: [...(rn.codex ?? [])] };
   s.known = new Set(d.known ?? ['start']);
   s.known.add('start');
   s.flags = new Set(d.flags ?? []);
@@ -165,6 +217,15 @@ export function deserialize(raw: unknown): { state: GameState; view?: SaveData['
   s.islets = d.islets ?? { docked: 0, summon: null };
   s.forge = { ...s.forge, ...(d.forge ?? {}) };
   s.flow = d.flow ?? s.flow;
+  const tr = d.trade ?? emptyTrade();
+  const okContract = (c: Contract | null): Contract | null => (c && isItemId(c.item) && c.n > 0 ? { item: c.item, n: c.n | 0, got: Math.min(c.n, c.got | 0), marks: c.marks | 0 } : null);
+  s.trade = {
+    ...emptyTrade(),
+    ...tr,
+    board: [0, 1, 2].map((i) => okContract(tr.board?.[i] ?? null)),
+    refresh: [0, 1, 2].map((i) => +(tr.refresh?.[i] ?? 0) || 0),
+    bought: { ...(tr.bought ?? {}) },
+  };
   s.tuftTimer = d.tuftTimer ?? 0;
   s.savedAt = d.savedAt ?? 0;
   s.cache = emptyCache();

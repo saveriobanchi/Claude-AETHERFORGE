@@ -42,6 +42,8 @@ export function guideNote(s: GameState): string | null {
   if (!k.has('copper')) return 'Kilns smelt copper flakes from the sieve. Load it with charcoal or timber.';
   if (!k.has('automation')) return 'Copper becomes gears at the Workbench.';
   if (!has('harvester')) return 'Build a Treewright among your trees.';
+  if (k.has('trade') && !has('trading_post')) return 'Sails on the horizon: build a Trading Post at the edge.';
+  if (has('trading_post') && s.trade.done === 0) return 'Tap the Trading Post and fill a contract to earn Marks.';
   if (!k.has('wind')) {
     if (!has('depot')) return 'Point the Treewright at a Depot — or run conveyors into one.';
     return 'Let the Treewright work. Lay conveyors to carry things to depots.';

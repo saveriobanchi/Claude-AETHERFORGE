@@ -52,12 +52,32 @@ describe('full playthrough', () => {
     until('iron', () => bot.ensure('iron_grit', 3));
     bot.ensure('sand', 2);
     bot.automate('smelt_iron', 1);
+    // trade: contracts for Marks, then the market's orchard, hives and lanterns
+    until('trade', () => bot.wait(10));
+    bot.buy('fruit');
+    bot.buy('hive');
+    bot.buy('lanterns');
+    // fields, flocks and kitchens; settlers
+    until('farming', () => bot.ensure('dew', 15));
+    bot.automate('grow_wheat', 2);
+    until('ranching', () => bot.ensure('wheat', 20));
+    until('baking', () => bot.ensure('wheat', 30));
+    until('weaving', () => bot.ensure('wool', 6));
+    until('settlers', () => bot.ensure('bread', 4));
+    bot.achieve('settlement_1');
+    bot.settle(1);
+    bot.achieve('land_1');
     until('assembler', () => bot.ensure('iron', 6));
     bot.build('assembler');
     bot.buildGrove();
     bot.automate('compost', 2);
     bot.automate('saw', 1);
     bot.automate('gear', 1);
+    until('tinker', () => bot.ensure('gear', 20));
+    bot.buy('master');
+    // a design drafted at the table: compact gears
+    until('drafting', () => bot.ensure('mechanism', 2));
+    bot.draft('bp_gears');
     until('aether', () => { bot.ensure('mechanism', 4); bot.ensure('lens', 2); });
     tAether = bot.t;
     until('distill', () => bot.ensure('mist', 4));
@@ -78,7 +98,18 @@ describe('full playthrough', () => {
     tForgeKnown = bot.t;
     bot.automate('plate', 1);
     bot.automate('wire', 1);
+    // the Heart stage eats copper (wire, sunmetal): widen the copper line first
+    bot.automate('crush', 1);
+    bot.automate('sift_gravel', 2);
+    bot.automate('smelt_copper', 1);
+    // and the Heart stage's sunmetal: more iron, aether and a second crucible
+    bot.automate('smelt_iron', 1);
+    bot.automate('distill', 1);
+    bot.automate('sunmetal', 1);
     bot.buildForge();
+    // ambitions that unlock the rest of the decor patterns
+    bot.achieve('industry_2');
+    bot.achieve('aether_3');
     } finally { dump(); }
 
     const missing = DISCOVERY_LIST.filter((d) => !bot.s.known.has(d.id)).map((d) => d.id);

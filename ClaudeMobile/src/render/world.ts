@@ -1,9 +1,14 @@
 import { Application, Container, Graphics, Rectangle, RenderTexture, Sprite, Texture, TextureSource } from 'pixi.js';
-import { BUILDINGS } from '../core/content/buildings';
+import { BUILDINGS, TREE } from '../core/content/buildings';
+import { BIOMES } from '../core/content/biomes';
 import { ITEM_IDS, type ItemId } from '../core/content/items';
 import { RECIPES } from '../core/content/recipes';
 import { ISLETS, SUMMON_TIME } from '../core/content/world';
-import { currentRecipe } from '../core/sim';
+import { seasonFor } from '../core/content/seasons';
+
+/** A gentle colour grade per season (multiplies the time-of-day tint). */
+const SEASON_GRADE: Record<string, [number, number, number]> = { spring: [1, 1, 1], summer: [1, 0.99, 0.95], autumn: [1, 0.94, 0.86], winter: [0.9, 0.95, 1] };
+import { currentRecipe, weatherNow } from '../core/sim';
 import { type Building, type GameState, type SimEvent, DX, DY, dayFraction, key, stackTotal } from '../core/state';
 import { P } from './art/palette';
 import { PixelCanvas, rgb } from './art/pixel';
@@ -99,6 +104,9 @@ export class WorldView {
   private arrowTex: Texture[] = [];
   private breezeTex!: Texture;
   private isletArrival: Sprite | null = null;
+  private ship: Sprite | null = null;
+  private state: GameState | null = null;
+  private shipFrames: ArtImage[] = [];
   private time = 0;
   private shakeT = 0;
   bloom = false;
@@ -235,7 +243,8 @@ export class WorldView {
       const v = Math.floor(hashTile(t.y * 3 + 1, t.x * 7) * art.colVariants);
       const mask = (has(t.x + 1, t.y) ? 0 : 1) | (has(t.x, t.y + 1) ? 0 : 2) | (has(t.x - 1, t.y) ? 0 : 4) | (has(t.x, t.y - 1) ? 0 : 8);
       const tv = Math.floor(hashTile(t.x * 5 + 2, t.y * 11) * art.topVariants);
-      for (const k of [`col:${depth}:${v}`, `top:${t.floor}:${mask}:${tv}`]) {
+      const kind = t.floor === 'grass' && t.biome ? t.biome : t.floor;
+      for (const k of [`col:${depth}:${v}`, `top:${kind}:${mask}:${tv}`]) {
         const sp = new Sprite();
         setArt(sp, art.img(k));
         sp.scale.set(1 / art.R);
@@ -262,24 +271,28 @@ export class WorldView {
       const size = BUILDINGS[b.type].size;
       for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) busy.add(key(b.x + x, b.y + y));
     }
+    // keep a clear ring around buildings so machines read cleanly
+    const near = (x: number, y: number) => { for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (busy.has(key(x + dx, y + dy))) return true; return false; };
+    const kinds = art.decorKinds;
     for (const t of s.tiles.values()) {
-      if (t.floor !== 'grass' || busy.has(key(t.x, t.y))) continue;
-      for (let q = 0; q < 3; q++) {
-        const h = hashTile(t.x * 5 + q * 31, t.y * 3 - q * 17);
-        if (h > 0.3) continue;
-        const kind = art.decorKinds[Math.floor(hashTile(t.x + q * 13, t.y * 11 + q) * art.decorKinds.length)];
-        const v = Math.floor(hashTile(t.y * 7 + q, t.x * 5 - q) * art.decorVariants);
-        const ox = hashTile(t.x * 13 + q, t.y * 7) - 0.5, oy = hashTile(t.x * 3, t.y * 17 + q) - 0.5;
-        const fx = t.x + ox * 0.7, fy = t.y + oy * 0.7;
-        const sp = new Sprite();
-        setArt(sp, art.img(`decor:${kind}:${v}`));
-        sp.scale.set(1 / art.R);
-        const [wx, wy] = tileCenter(fx, fy);
-        sp.position.set(wx, wy);
-        sp.zIndex = (fx + fy) * 512 + fx + 256;
-        this.objects.addChild(sp);
-        this.decorSprites.push(sp);
-      }
+      if (t.floor !== 'grass' || near(t.x, t.y)) continue;
+      // at most one piece per tile, sparse, and grouped in small patches of one kind
+      if (hashTile(t.x * 5 + 31, t.y * 3 - 17) > 0.22) continue;
+      const patch = hashTile(Math.floor(t.x / 3) * 7 + 3, Math.floor(t.y / 3) * 11 + 5);
+      const set = art.decorSets[t.biome ?? 'grass'] ?? art.decorSets.grass ?? kinds;
+      const kind = set[patch < 0.5 ? 0 : patch < 0.78 ? 1 : patch < 0.92 ? 2 : 3] ?? set[0];
+      if (!kinds.includes(kind)) continue;
+      const v = Math.floor(hashTile(Math.floor(t.x / 3), Math.floor(t.y / 3) + 9) * art.decorVariants);
+      const ox = hashTile(t.x * 13, t.y * 7) - 0.5, oy = hashTile(t.x * 3, t.y * 17) - 0.5;
+      const fx = t.x + ox * 0.4, fy = t.y + oy * 0.4;
+      const sp = new Sprite();
+      setArt(sp, art.img(`decor:${kind}:${v}`));
+      sp.scale.set(1 / art.R);
+      const [wx, wy] = tileCenter(fx, fy);
+      sp.position.set(wx, wy);
+      sp.zIndex = (fx + fy) * 512 + fx + 256;
+      this.objects.addChild(sp);
+      this.decorSprites.push(sp);
     }
   }
 
@@ -294,7 +307,7 @@ export class WorldView {
     const sites: [number, number, number][] = [];
     const centres = [...s.tiles.values()].map((t) => tileCenter(t.x, t.y));
     for (const t of s.tiles.values()) {
-      if (t.floor !== 'grass') continue;
+      if (t.floor !== 'grass' || t.biome === 'dunes' || t.biome === 'frost') continue;
       const [cx, cy] = tileCenter(t.x, t.y);
       for (const side of [0, 1]) {
         const open = side === 0 ? !s.tiles.has(key(t.x, t.y + 1)) : !s.tiles.has(key(t.x + 1, t.y));
@@ -357,7 +370,7 @@ export class WorldView {
     const def = BUILDINGS[b.type];
     const root = new Container();
     const isBelt = def.kind === 'belt';
-    const st = isBelt ? null : this.spr.get(b.type)!;
+    const st = isBelt ? null : this.spr.get(this.artKey(b))!;
     const sprite = new Sprite();
     setArt(sprite, isBelt ? this.belt[b.dir][0] : st!.def.frames[0]);
     sprite.scale.set(1 / art.R);
@@ -376,7 +389,7 @@ export class WorldView {
         root.addChild(v.mote);
         v.mote.y = -st!.top - 5;
       }
-      if (def.rotatable && def.kind !== 'belt') {
+      if (def.rotatable && def.kind !== 'belt' && def.kind !== 'decor') {
         v.arrow = new Sprite(this.arrowTex[b.dir]);
         v.arrow.anchor.set(0.5);
         this.floor.addChild(v.arrow);
@@ -439,6 +452,15 @@ export class WorldView {
           else if (b.type === 'resonator' || b.type === 'distiller' || b.type === 'condenser') this.fx.emit('mote', wx, wy - 26, 3, { up: 16, spread: 10, life: 1 });
           break;
         }
+        case 'lucky': {
+          const b = s.buildings.get(e.id);
+          const v = this.views.get(e.id);
+          if (!b || !v || !v.root.visible) break;
+          v.bounce = Math.max(v.bounce, 0.7);
+          const [wx, wy] = this.centerOf(b);
+          this.fx.emit('gold', wx, wy - 30, reduced ? 4 : 12, { up: 40, spread: 22, life: 1.2 });
+          break;
+        }
         case 'harvest': {
           const [wx, wy] = tileCenter(e.x, e.y);
           this.fx.emit('leaf', wx, wy - 40, reduced ? 3 : 8, { up: 30, spread: 26, g: 50, life: 1.4, drag: 0.4 });
@@ -499,6 +521,7 @@ export class WorldView {
   // ───────────────────────── frame ─────────────────────────
 
   render(s: GameState, alpha: number, dt: number, o: ViewOptions): void {
+    this.state = s;
     const t0 = performance.now();
     this.time += dt;
     this.vw = this.app.screen.width;
@@ -529,9 +552,13 @@ export class WorldView {
     this.worldView.scale.set(z / k);
     this.worldView.position.set(this.vw / 2 - (this.cam.x - shx / z) * z - rx * z / k, this.vh / 2 - (this.cam.y - shy / z) * z - ry * z / k);
 
+    this.sky.weather = weatherNow(s).id;
+    this.sky.season = seasonFor(s.time).id;
     const sky = this.sky.update(dayFraction(s), this.time, this.cam.x * z, this.cam.y * z, this.vw, this.vh, o.reduced, !o.observe || true, (this.islandBottom - this.cam.y) * z + this.vh / 2);
     this.night = sky.night;
-    for (const layer of [this.terrain, this.shadows, this.floor, this.items, this.objects, this.fx.layer]) layer.tint = sky.tint;
+    const grade = SEASON_GRADE[this.sky.season] ?? [1, 1, 1];
+    const tint = ((Math.min(255, ((sky.tint >> 16) & 255) * grade[0]) << 16) | (Math.min(255, ((sky.tint >> 8) & 255) * grade[1]) << 8) | Math.min(255, (sky.tint & 255) * grade[2])) >>> 0;
+    for (const layer of [this.terrain, this.shadows, this.floor, this.items, this.objects, this.fx.layer]) layer.tint = tint;
 
     // visible world rect
     const margin = 140;
@@ -579,6 +606,7 @@ export class WorldView {
     this.renderWisps(s, alpha);
     this.renderOverlay(s, o);
     this.renderIsletArrival(s, dt);
+    this.renderShip(s);
     // hide unused item sprites
     for (let i = this.itemUsed; i < this.itemPool.length; i++) this.itemPool[i].visible = false;
 
@@ -590,7 +618,11 @@ export class WorldView {
     this.fx.update(dt);
     if (this.falls.children.length) {
       const fi = Math.floor(this.time * 12) % this.fallFrames.length;
-      for (const c of this.falls.children) setArt(c as Sprite, this.fallFrames[fi]);
+      for (const c of this.falls.children) {
+        setArt(c as Sprite, this.fallFrames[fi]);
+        // soft spray where the ribbon thins out
+        if (!o.reduced && c.visible && Math.random() < dt * 3) this.fx.emit('steam', c.x + (Math.random() - 0.5) * 16, c.y + 112, 1, { up: 6, spread: 10, life: 1.4, g: -4, drag: 0.6 });
+      }
     }
     const t1 = performance.now();
     this.app.renderer.render({ container: this.world, target: this.rt!, clear: true });
@@ -598,6 +630,16 @@ export class WorldView {
     const t2 = performance.now();
     this.frameMs = this.frameMs * 0.9 + (t2 - t0) * 0.1;
     this.updateMs = this.updateMs * 0.9 + (t1 - t0) * 0.1;
+  }
+
+  /** Sprite set for a building: island trees and tall grass take their biome's look. */
+  private artKey(b: Building): string {
+    if (b.type !== 'tree' && b.type !== 'tuft') return b.type;
+    const t = this.state?.tiles.get(key(b.x, b.y));
+    const bio = t && t.floor === 'grass' ? t.biome : undefined;
+    if (!bio) return b.type;
+    const k = b.type === 'tree' ? `tree_${BIOMES[bio].treeLook}` : `tuft_${bio}`;
+    return this.spr.has(k) ? k : b.type;
   }
 
   private updateView(s: GameState, b: Building, v: BView, kind: string, t: number, dt: number, o: ViewOptions): void {
@@ -616,20 +658,26 @@ export class WorldView {
       this.renderBeltItems(b, v, s);
       return;
     }
-    const st = this.spr.get(b.type)!;
+    const st = this.spr.get(this.artKey(b)) ?? this.spr.get(b.type)!;
     const vars = st.def.variants;
     let frames = st.def.frames;
     if (kind === 'tree') {
       if (b.type === 'tree') frames = vars[b.stock >= 4 ? 's5' : b.stock >= 1 ? 's3' : 's0'] ?? frames;
     } else if (kind === 'sapling') {
-      const stage = Math.min(2, Math.floor((b.progress / 45) * 3));
+      const stage = Math.min(2, Math.floor((b.progress / TREE.saplingGrowTime) * 3));
       frames = vars['g' + stage] ?? frames;
     } else if (kind === 'storage') {
       frames = vars['f' + this.fillLevel] ?? frames;
+    } else if (b.type === 'field') {
+      const time = b.recipe ? RECIPES[b.recipe]?.time ?? 40 : 40;
+      const stage = b.status === 'working' || b.progress > 0 ? Math.min(2, Math.floor((b.progress / time) * 3)) : b.status === 'blocked' || b.status === 'ready' ? 2 : 0;
+      frames = vars[(b.recipe === 'grow_carrot' ? 'c' : 'w') + stage] ?? frames;
     } else if (kind === 'forge') {
       frames = vars['st' + Math.max(0, Math.min(3, s.forge.stage))] ?? frames;
+    } else if (vars['d' + (b.dir % 2)]) {
+      frames = vars['d' + (b.dir % 2)];
     }
-    const animated = b.status === 'working' || ['tree', 'tuft', 'node', 'pylon', 'beacon', 'sapling', 'forge', 'elder'].includes(kind) || b.type === 'elder_tree';
+    const animated = b.status === 'working' || ['home', 'tree', 'tuft', 'node', 'pylon', 'beacon', 'sapling', 'forge', 'elder', 'post', 'decor'].includes(kind) || b.type === 'elder_tree';
     const raw = animated && frames.length > 1 ? Math.floor((t + v.phase) * st.def.fps) % frames.length : 0;
     const fr = frames[Number.isFinite(raw) && raw >= 0 ? raw : 0];
     if (v.sprite.texture !== fr.tex) setArt(v.sprite, fr);
@@ -647,7 +695,7 @@ export class WorldView {
     // problem bubbles after a short grace period
     const problem = status === 'noinput' || status === 'blocked' || status === 'nopower' || status === 'ready';
     v.problem = problem ? v.problem + dt : 0;
-    const show = o.bubbles && !o.observe && problem && v.problem > (status === 'ready' ? 1.5 : 3) && (kind === 'crafter' || kind === 'harvester' || kind === 'generator' || kind === 'drill' || kind === 'engine');
+    const show = o.bubbles && !o.observe && problem && v.problem > (status === 'ready' ? 1.5 : 3) && (kind === 'crafter' || kind === 'harvester' || kind === 'generator' || kind === 'drill' || kind === 'engine' || kind === 'hive');
     if (show) {
       if (!v.bubble) {
         v.bubble = new Container();
@@ -831,18 +879,35 @@ export class WorldView {
     for (let i = gi; i < this.ghostPool.length; i++) this.ghostPool[i].visible = false;
   }
 
+  /** A trader's airship hovers beside the first trading post while contracts are open. */
+  private renderShip(s: GameState): void {
+    let post: Building | undefined;
+    for (const b of s.buildings.values()) if (b.type === 'trading_post') { post = b; break; }
+    const show = !!post && s.trade.board.some((c) => c) && art.has('ship:0');
+    if (!show) { if (this.ship) this.ship.visible = false; return; }
+    if (!this.ship) {
+      this.shipFrames = [0, 1, 2, 3].map((i) => art.img(`ship:${i}`));
+      this.ship = new Sprite();
+      this.ship.scale.set(1 / art.R);
+      this.objects.addChild(this.ship);
+    }
+    // float off the open side of the post
+    let d = 1;
+    for (const k of [1, 0, 3, 2]) if (!s.tiles.has(key(post!.x + DX[k], post!.y + DY[k]))) { d = k; break; }
+    const fx = post!.x + DX[d] * 3 - 0.5, fy = post!.y + DY[d] * 3 - 0.5;
+    const [wx, wy] = tileCenter(fx + 0.5, fy + 0.5);
+    setArt(this.ship, this.shipFrames[Math.floor(this.time * 3) % 4]);
+    this.ship.visible = true;
+    this.ship.position.set(wx, wy);
+    this.ship.zIndex = (fx + fy + 1) * 512 + fx + 256;
+  }
+
   private renderIsletArrival(s: GameState, _dt: number): void {
     const sm = s.islets.summon;
     if (!sm) { if (this.isletArrival) this.isletArrival.visible = false; return; }
     if (!this.isletArrival) {
-      const st = this.spr.get('tree')!;
-      void st;
-      const c = new PixelCanvas(48, 54);
-      c.ellipse(24, 12, 22, 7, (_x, y) => (y < 12 ? P.grass[4] : P.grass[3]));
-      for (let y = 12; y < 54; y++) { const half = 22 * (1 - (y - 12) / 42); for (let x = Math.round(24 - half); x <= 24 + half; x++) c.set(x, y, P.rock[2 + ((x + y) % 7 === 0 ? 1 : 0)]); }
-      c.outline(0.5);
-      const tex = Texture.from(c.toCanvas());
-      tex.source.scaleMode = 'nearest';
+      const im = art.img('islet:0');
+      const tex = im.tex;
       this.isletArrival = new Sprite(tex);
       this.isletArrival.anchor.set(0.5, 0.25);
       this.overlay.addChild(this.isletArrival);
