@@ -209,15 +209,66 @@ hundred planks, the hundred-thousandth. Four layers reward volume and choices.
   (forge completed, all islets home). Each completed set: +1 perk point and
   100 renown.
 
-## Chapters, decor and charm
+## Ambitions, farming, settlers and expeditions (choice over sequence)
 
-- **Chapters** (`content/chapters.ts`): ten chapters, one active at a time,
-  from the first workbench to resonance 3. Each has 1–4 goals (build, make,
-  grow, trade, charm, upgrade, biomes, islets, forge, renown, codex) and a
-  reward (items, Marks, perk points); chapters 1/3/5/7/9 unlock decor
-  patterns. The quest card shows the early tips, then the active chapter's
-  next goal; the journal lists the chapter with progress. Old saves catch up
-  on load.
+The player chooses what to develop. Nothing below is a gate on the core
+chain; every system feeds the others.
+
+### Ambitions (replaces the linear chapters)
+- Seven paths — Land, Industry, Trade, Nature, Settlement, Aether,
+  Exploration — each a short ladder of ambitions. Every path's next
+  ambition is open at the same time; finish them in any order.
+- Rewards: materials, Marks, perk points, decor patterns (Land I → garden,
+  Industry II → mason, Settlement I → town, Aether II → sky, Aether III →
+  monument). The player pins one ambition to the quest card (default: the
+  one closest to done).
+
+### Farming & ranching
+- **Field** (grass): a crafter growing wheat (1 dew → 4 wheat / 40 s) or
+  carrots (1 dew → 3 carrots / 45 s). Marsh +25 %, dunes −25 %, frost −40 %.
+  Uses all machine rules: conveyors, upgrades, mastery, lucky crops.
+- **Sheep Pen** (1 wheat → 2 wool / 20 s), **Chicken Coop** (1 wheat →
+  2 eggs / 15 s), **Loom** (3 wool → 1 cloth), **Millstone** (2 wheat → 1
+  flour), **Bakery Oven** (fuel): bread (2 flour → 2), stew (3 carrots +
+  1 egg → 2), pie (1 flour + 2 apples + 1 egg → 1).
+
+### Settlers (people to feed, roles to choose)
+- **Cottage** houses 2. A settler arrives every 45 s while there is room
+  and food in the stash. Each settler eats one food every 90 s, preferring
+  what they have not had lately (then what you have most of). Foods: bread, stew, pie, eggs, carrots, any fruit,
+  cider, juice, preserves, honey.
+- **Contentment** = 1 + 0.1 × (distinct foods among the last 8 meals − 1)
+  (max +50 %), +10 % with charm ≥ 60. Hungry settlers give nothing; after
+  5 hungry minutes one leaves.
+- **Roles** (assigned freely in the Settlers panel): Forester (trees,
+  Treewrights, fields, pens, hives), Mason (sieves, presses, millstones,
+  kilns, clay), Smith (furnaces, assemblers, crucibles, sawmills), Mystic
+  (condensers, distillers, resonators, star nets, drills), Merchant
+  (contract Marks). Each specialist: +6 % × contentment to their group;
+  idle settlers +1 % to everything.
+
+### Expeditions (risk-free variance, choice of where)
+- **Air Dock** (edge). Choose a destination, a crew (1–3 settlers, away for
+  the trip) and pay provisions; loot scales with crew. Destinations unlock
+  with progress: Old Orchard, Sunken Quarry, Crystal Reef, Storm Front,
+  Ancient Ruins.
+- Loot: bulk materials, rare saplings, gems and **blueprints** — eight
+  alternative recipes (e.g. Twin Saw, Charcoal Clamp, Ore Wash, Aether
+  Still, Compact Gears, Sky Loom, Quick Bread, Crystal Lattice). Owning a
+  blueprint adds the recipe as an option; the player chooses per machine.
+
+## Ambition details, decor and charm
+
+- **Ambitions** (`content/ambitions.ts`, `core/ambitions.ts`): 7 paths × 4
+  rungs = 28. Goals: build, make, grow, trade, charm, upgrade, biomes,
+  islets, forge, resonance, renown, codex, settlers, voyages, blueprints.
+  Rungs climb in order within a path; paths are independent. The quest card
+  shows early tips, then the pinned ambition (or the open one closest to
+  done); the board opens from the quest card or the journal. v6 saves drop
+  the chapter counter and catch up from the world on load (ambitions whose
+  goals are already met pay out once).
+- Blueprints live in `s.known` (ids `bp_*`) but are not discoveries; they
+  are never a machine's default recipe.
 - **Decor** (Build › Decor): 20 pieces in five pattern sets — paths, fences,
   hedges, flower beds, benches; cobble paths, stone walls, planters,
   banners, wells; lamp posts, brick arches, fountains, gazebos; skystone
@@ -225,5 +276,7 @@ hundred planks, the hundred-thousandth. Four layers reward volume and choices.
 - **Charm** = sum of decor charm (first ten of a kind full, then a quarter).
   Contracts pay +1 % per 5 charm (max +30 %); milestones 20/60/150/300/600/
   1000 give 40 renown each.
-- Bot: completes chapters 1–9 and every discovery in ≈16 h (it now widens a
+- Bot: reaches every discovery (farming → expeditions included), runs an
+  expedition, unlocks all five decor pattern sets via ambitions and
+  completes the forge in ≈15.3 h (it now widens a
   starving production chain like a player noticing a bottleneck).

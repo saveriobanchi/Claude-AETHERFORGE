@@ -661,12 +661,18 @@ export class WorldView {
       frames = vars['g' + stage] ?? frames;
     } else if (kind === 'storage') {
       frames = vars['f' + this.fillLevel] ?? frames;
+    } else if (b.type === 'field') {
+      const time = b.recipe ? RECIPES[b.recipe]?.time ?? 40 : 40;
+      const stage = b.status === 'working' || b.progress > 0 ? Math.min(2, Math.floor((b.progress / time) * 3)) : b.status === 'blocked' || b.status === 'ready' ? 2 : 0;
+      frames = vars[(b.recipe === 'grow_carrot' ? 'c' : 'w') + stage] ?? frames;
+    } else if (b.type === 'airdock') {
+      frames = vars[s.voyages.some((x) => x.dock === b.id) ? 'h0' : 'h1'] ?? frames;
     } else if (kind === 'forge') {
       frames = vars['st' + Math.max(0, Math.min(3, s.forge.stage))] ?? frames;
     } else if (vars['d' + (b.dir % 2)]) {
       frames = vars['d' + (b.dir % 2)];
     }
-    const animated = b.status === 'working' || ['tree', 'tuft', 'node', 'pylon', 'beacon', 'sapling', 'forge', 'elder', 'post', 'decor'].includes(kind) || b.type === 'elder_tree';
+    const animated = b.status === 'working' || ['dock', 'home', 'tree', 'tuft', 'node', 'pylon', 'beacon', 'sapling', 'forge', 'elder', 'post', 'decor'].includes(kind) || b.type === 'elder_tree';
     const raw = animated && frames.length > 1 ? Math.floor((t + v.phase) * st.def.fps) % frames.length : 0;
     const fr = frames[Number.isFinite(raw) && raw >= 0 ? raw : 0];
     if (v.sprite.texture !== fr.tex) setArt(v.sprite, fr);

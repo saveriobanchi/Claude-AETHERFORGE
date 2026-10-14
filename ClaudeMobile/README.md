@@ -47,9 +47,14 @@ camera drifts so you can simply watch the island live.
 - Long-term goals for the grind: item mastery stars, renown levels with a
   perk build to plan, lucky output and bountiful harvests, gathering combos,
   rare gems and a codex of collections.
-- Ten chapters of goals that carry you from a single tree to the Aetherforge
-  and beyond, and twenty decor pieces to make the island your own (charm
-  makes traders pay more).
+- No fixed storyline: seven paths of ambitions (land, industry, trade,
+  nature, settlement, aether, exploration), all open at once — grow the
+  island in the order you choose, and pin the one you are chasing.
+- Fields, flocks and kitchens; settlers who need varied meals and take the
+  roles you give them; air-dock expeditions that bring back loot and
+  blueprints for alternative recipes.
+- Twenty decor pieces to make the island your own (charm makes traders pay
+  more).
 - An endgame that keeps going.
 
 The rest is meant to be discovered. (Developers: see `docs/dev/DESIGN.md`,

@@ -2,7 +2,7 @@ import { BUILDINGS } from './content/buildings';
 import { isItemId, type ItemId, type Stack } from './content/items';
 import type { Floor } from './content/buildings';
 import {
-  type Building, type Dir, type GameState, type Tile, SAVE_VERSION, createState, emptyStash, newBuilding, key, hashSeed, emptyCache, emptyTrade, emptyRenown,
+  type Building, type Dir, type GameState, type Tile, SAVE_VERSION, createState, emptyStash, newBuilding, key, hashSeed, emptyCache, emptyTrade, emptyRenown, emptyPeople,
 } from './state';
 import { rebuildCache } from './sim';
 import type { Contract } from './content/trade';
@@ -26,6 +26,11 @@ export interface SaveData {
   trade: GameState['trade'];
   renown?: GameState['renown'];
   chapters?: number;
+  people?: GameState['people'];
+  voyages?: GameState['voyages'];
+  lastVoyage?: GameState['lastVoyage'];
+  ambitions?: string[];
+  pinned?: string | null;
   charmHigh?: number;
   flow: GameState['flow'];
   tuftTimer: number;
@@ -87,7 +92,11 @@ export function serialize(s: GameState, view?: SaveData['view']): SaveData {
     forge: s.forge,
     trade: s.trade,
     renown: s.renown,
-    chapters: s.chapters,
+    ambitions: [...s.ambitions],
+    pinned: s.pinned,
+    people: s.people,
+    voyages: s.voyages,
+    lastVoyage: s.lastVoyage,
     flow: s.flow,
     tuftTimer: s.tuftTimer,
     savedAt: s.savedAt,
@@ -120,6 +129,8 @@ export const MIGRATIONS: Record<number, (d: AnySave) => AnySave> = {
   // v4 → v5: renown and perks; mastery counts start from what was gathered.
   // v5 → v6: chapters (older worlds catch up — finished chapters pay out on load).
   5: (d) => ({ ...d, v: 6, chapters: d.chapters ?? 0 }),
+  // v6 → v7: settlers, voyages, ambitions (chapters are converted on load).
+  6: (d) => ({ ...d, v: 7, people: d.people ?? emptyPeople(), voyages: d.voyages ?? [] }),
   4: (d) => ({ ...d, v: 5, renown: d.renown ?? emptyRenown(), stats: { ...(d.stats ?? {}), made: d.stats?.made ?? d.stats?.obtained ?? {} } }),
 };
 
@@ -184,7 +195,12 @@ export function deserialize(raw: unknown): { state: GameState; view?: SaveData['
   s.stats.obtained = cleanStack(s.stats.obtained);
   s.stats.made = cleanStack(s.stats.made);
   const rn = d.renown ?? emptyRenown();
-  s.chapters = Math.max(0, Math.floor(d.chapters ?? 0));
+  s.ambitions = new Set((d.ambitions ?? []).filter((a) => typeof a === 'string'));
+  s.pinned = typeof d.pinned === 'string' ? d.pinned : null;
+  const pp = d.people ?? emptyPeople();
+  s.people = { ...emptyPeople(), ...pp, roles: { ...(pp.roles ?? {}) }, meals: (pp.meals ?? []).filter((m) => isItemId(m)) as ItemId[] };
+  s.voyages = (d.voyages ?? []).filter((v) => v && typeof v.dest === 'string').map((v) => ({ ...v }));
+  s.lastVoyage = d.lastVoyage ?? null;
   s.renown = { ...emptyRenown(), ...rn, perks: { ...(rn.perks ?? {}) }, codex: [...(rn.codex ?? [])] };
   s.known = new Set(d.known ?? ['start']);
   s.known.add('start');

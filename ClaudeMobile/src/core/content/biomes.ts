@@ -17,6 +17,8 @@ export interface BiomeDef {
   compost: number;
   hive: number;
   regrow: number;
+  /** Field growth speed. */
+  crop: number;
   /** Island tree harvest on this biome. */
   tree: Stack;
   treeFiber: number;
@@ -27,10 +29,10 @@ export interface BiomeDef {
 }
 
 export const BIOMES: Record<BiomeId, BiomeDef> = {
-  meadow: { id: 'meadow', name: 'Meadow', desc: 'Soft grass and wildflowers. Bees love it.', dew: 1, wind: 1, compost: 1, hive: 1.2, regrow: 1, tree: { wood: 1, leaf: 2 }, treeFiber: 0.2, tuftFiber: 2, treeLook: 'oak' },
-  marsh: { id: 'marsh', name: 'Marsh', desc: 'Wet and green: more dew, faster compost, reeds full of fiber.', dew: 1.5, wind: 0.9, compost: 1.5, hive: 1, regrow: 1.2, tree: { wood: 1, leaf: 3 }, treeFiber: 0.3, tuftFiber: 4, treeLook: 'willow' },
-  dunes: { id: 'dunes', name: 'Dunes', desc: 'Warm sand: dry air, steady wind, palms and citrus.', dew: 0.5, wind: 1.1, compost: 0.75, hive: 0.9, regrow: 0.9, tree: { wood: 1, leaf: 1 }, treeFiber: 0.5, tuftFiber: 1, treeLook: 'palm' },
-  frost: { id: 'frost', name: 'Frost', desc: 'Snow and pines: strong wind and twice the timber, slow to grow.', dew: 1, wind: 1.25, compost: 0.6, hive: 0.6, regrow: 0.75, tree: { wood: 2, leaf: 1 }, treeFiber: 0.1, tuftFiber: 1, treeLook: 'pine' },
+  meadow: { id: 'meadow', name: 'Meadow', desc: 'Soft grass and wildflowers. Bees love it.', dew: 1, wind: 1, compost: 1, hive: 1.2, regrow: 1, crop: 1, tree: { wood: 1, leaf: 2 }, treeFiber: 0.2, tuftFiber: 2, treeLook: 'oak' },
+  marsh: { id: 'marsh', name: 'Marsh', desc: 'Wet and green: more dew, faster compost, reeds full of fiber.', dew: 1.5, wind: 0.9, compost: 1.5, hive: 1, regrow: 1.2, crop: 1.25, tree: { wood: 1, leaf: 3 }, treeFiber: 0.3, tuftFiber: 4, treeLook: 'willow' },
+  dunes: { id: 'dunes', name: 'Dunes', desc: 'Warm sand: dry air, steady wind, palms and citrus.', dew: 0.5, wind: 1.1, compost: 0.75, hive: 0.9, regrow: 0.9, crop: 0.75, tree: { wood: 1, leaf: 1 }, treeFiber: 0.5, tuftFiber: 1, treeLook: 'palm' },
+  frost: { id: 'frost', name: 'Frost', desc: 'Snow and pines: strong wind and twice the timber, slow to grow.', dew: 1, wind: 1.25, compost: 0.6, hive: 0.6, regrow: 0.75, crop: 0.6, tree: { wood: 2, leaf: 1 }, treeFiber: 0.1, tuftFiber: 1, treeLook: 'pine' },
 };
 export const BIOME_IDS = Object.keys(BIOMES) as BiomeId[];
 

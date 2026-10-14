@@ -86,13 +86,31 @@ export type SimEvent =
   | { type: 'renown_level'; level: number }
   | { type: 'lucky'; id: number }
   | { type: 'codex'; set: string }
-  | { type: 'chapter'; id: number }
+  | { type: 'ambition'; id: string }
+  | { type: 'settler'; n: number }
+  | { type: 'settler_left'; n: number }
+  | { type: 'voyage'; dest: string; got: Stack; blueprint: string | null }
   | { type: 'charm'; milestone: number };
 
 export interface FlowBucket {
   dt: number;
   inn: Stack;
   out: Stack;
+}
+
+export interface PeopleState {
+  count: number;
+  /** Settlers away on expeditions. */
+  away: number;
+  roles: Partial<Record<'forester' | 'mason' | 'smith' | 'mystic' | 'merchant', number>>;
+  meals: ItemId[];
+  mealT: number;
+  arriveT: number;
+  hungry: number;
+}
+
+export function emptyPeople(): PeopleState {
+  return { count: 0, away: 0, roles: {}, meals: [], mealT: 0, arriveT: 0, hungry: 0 };
 }
 
 export interface RenownState {
@@ -140,6 +158,7 @@ export interface GameState {
     built: number;
     playSeconds: number;
     spilled: number;
+    voyages?: number;
   };
   known: Set<string>;
   flags: Set<string>;
@@ -149,8 +168,13 @@ export interface GameState {
   forge: { id: number; stage: number; progress: Stack; level: number; sparks: number; attune: Record<string, number>; request: Stack };
   trade: TradeState;
   renown: RenownState;
-  /** Chapters completed (the active chapter is this + 1). */
-  chapters: number;
+  /** Ambitions achieved (`<path>_<rung>`). */
+  ambitions: Set<string>;
+  /** Ambition pinned to the quest card. */
+  pinned: string | null;
+  people: PeopleState;
+  voyages: { dock: number; dest: string; crew: number; t: number; total: number }[];
+  lastVoyage: { dest: string; got: Stack; blueprint: string | null } | null;
   /** Hand-gathering combo: chain length and when the last tap happened (sim time). */
   combo: { n: number; t: number };
   wisps: Wisp[];
@@ -229,7 +253,11 @@ export function createState(seed = 1234567): GameState {
     forge: { id: 0, stage: -1, progress: {}, level: 0, sparks: 0, attune: {}, request: {} },
     trade: emptyTrade(),
     renown: emptyRenown(),
-    chapters: 0,
+    ambitions: new Set(),
+    pinned: null,
+    people: emptyPeople(),
+    voyages: [],
+    lastVoyage: null,
     combo: { n: 0, t: -99 },
     wisps: [],
     flow: { cur: { dt: 0, inn: {}, out: {} }, hist: [] },
@@ -248,7 +276,7 @@ export function createState(seed = 1234567): GameState {
   return s;
 }
 
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 
 export function emptyRenown(): RenownState {
   return { xp: 0, level: 0, points: 0, perks: {}, codex: [] };

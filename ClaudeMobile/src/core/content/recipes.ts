@@ -65,6 +65,28 @@ const R: RecipeDef[] = [
   { id: 'crystal', name: 'Aether Crystal', inputs: { aether: 2, stardust: 1 }, outputs: { crystal: 1 }, time: 12, stations: ['resonator'], unlock: 'resonance' },
   { id: 'skystone', name: 'Skystone', inputs: { stone: 3, aether: 1 }, outputs: { skystone: 2 }, time: 6, stations: ['resonator'], unlock: 'resonance' },
   { id: 'sunmetal', name: 'Sunmetal', inputs: { iron: 2, copper: 2, aether: 1 }, outputs: { sunmetal: 1 }, time: 10, stations: ['crucible'], unlock: 'alloy' },
+
+  // ── Farming, ranching, cooking ───────────────────────────────────────────
+  { id: 'grow_wheat', name: 'Wheat', inputs: { dew: 1 }, outputs: { wheat: 4 }, time: 40, stations: ['field'], unlock: 'farming' },
+  { id: 'grow_carrot', name: 'Carrots', inputs: { dew: 1 }, outputs: { carrot: 3 }, time: 45, stations: ['field'], unlock: 'farming' },
+  { id: 'shear', name: 'Wool', inputs: { wheat: 1 }, outputs: { wool: 2 }, time: 20, stations: ['sheep_pen'], unlock: 'ranching' },
+  { id: 'lay', name: 'Eggs', inputs: { wheat: 1 }, outputs: { egg: 2 }, time: 15, stations: ['chicken_coop'], unlock: 'ranching' },
+  { id: 'weave', name: 'Cloth', inputs: { wool: 3 }, outputs: { cloth: 1 }, time: 6, stations: ['loom', 'assembler'], unlock: 'weaving' },
+  { id: 'grind_wheat', name: 'Flour', inputs: { wheat: 2 }, outputs: { flour: 1 }, time: 4, stations: ['millstone'], unlock: 'baking' },
+  { id: 'hand_flour', name: 'Flour', inputs: { wheat: 3 }, outputs: { flour: 1 }, time: 3, stations: ['hand'], unlock: 'baking' },
+  { id: 'bake', name: 'Bread', inputs: { flour: 2 }, outputs: { bread: 2 }, time: 8, fuel: 1, stations: ['oven'], unlock: 'baking' },
+  { id: 'stew', name: 'Stew', inputs: { carrot: 3, egg: 1 }, outputs: { stew: 2 }, time: 10, fuel: 1, stations: ['oven'], unlock: 'baking' },
+  { id: 'pie', name: 'Apple Pie', inputs: { flour: 1, apple: 2, egg: 1 }, outputs: { pie: 1 }, time: 12, fuel: 1, stations: ['oven'], unlock: 'baking' },
+
+  // ── Blueprints (found on expeditions; alternatives the player opts into) ──
+  { id: 'bp_twin_saw', name: 'Twin Saw', inputs: { wood: 2 }, outputs: { plank: 2 }, time: 3, stations: ['sawmill'], unlock: 'bp_twin_saw' },
+  { id: 'bp_clamp', name: 'Charcoal Clamp', inputs: { wood: 2, loam: 1 }, outputs: { charcoal: 1 }, time: 6, stations: ['kiln'], unlock: 'bp_clamp' },
+  { id: 'bp_ore_wash', name: 'Ore Wash', inputs: { gravel: 1, dew: 1 }, outputs: { iron_grit: 1 }, chance: { copper_grit: 0.3 }, time: 3, stations: ['wind_sifter'], unlock: 'bp_ore_wash' },
+  { id: 'bp_still', name: 'Aether Still', inputs: { mist: 2, charcoal: 1 }, outputs: { aether: 1 }, time: 6, stations: ['distiller'], unlock: 'bp_still' },
+  { id: 'bp_gears', name: 'Compact Gears', inputs: { copper: 2 }, outputs: { gear: 3 }, time: 3, stations: ['assembler'], unlock: 'bp_gears' },
+  { id: 'bp_sky_loom', name: 'Sky Loom', inputs: { wool: 2, fiber: 2 }, outputs: { cloth: 1 }, time: 5, stations: ['loom'], unlock: 'bp_sky_loom' },
+  { id: 'bp_quick_bread', name: 'Quick Bread', inputs: { wheat: 3 }, outputs: { bread: 2 }, time: 8, fuel: 1, stations: ['oven'], unlock: 'bp_quick_bread' },
+  { id: 'bp_lattice', name: 'Crystal Lattice', inputs: { aether: 3, glass: 1 }, outputs: { crystal: 1 }, time: 14, stations: ['resonator'], unlock: 'bp_lattice' },
 ];
 
 export const RECIPES: Record<string, RecipeDef> = Object.fromEntries(R.map((r) => [r.id, r]));

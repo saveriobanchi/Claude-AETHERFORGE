@@ -10,8 +10,9 @@ import {
   rand, isNight, isEdgeTile, computeCapacity, attuneRank, addBuilding, addTile, tileAt, removeBuildingRaw, addXp, made, perkRank,
 } from './state';
 import { checkDiscoveries } from './progression';
-import { charm, checkChapters } from './chapters';
-import { charmTradeBonus } from './content/chapters';
+import { charm, checkAmbitions } from './ambitions';
+import { merchantBonus, present, settlerBonus, tickPeople, tickVoyages } from './people';
+import { charmTradeBonus } from './content/ambitions';
 import { CODEX, FRUIT_ITEMS, GEMS, LUCK, MASTERY_SPEED, XP, masteryStar } from './content/renown';
 
 export const TICK = 0.05; // 20 Hz fixed simulation step
@@ -126,7 +127,8 @@ export function currentRecipe(b: Building): RecipeDef | undefined {
 }
 
 export function defaultRecipe(type: string): string | null {
-  const list = recipesFor(type);
+  // blueprints are opt-in alternatives, never the default
+  const list = recipesFor(type).filter((r) => !r.unlock.startsWith('bp_'));
   return list.length ? list[0].id : null;
 }
 
@@ -339,6 +341,8 @@ function tickCrafter(s: GameState, b: Building, dt: number): void {
     if (s.power.ratio <= 0) { b.status = 'nopower'; return; }
   }
   if (r.id === 'compost') rate *= biomeAt(s, b.x, b.y)?.compost ?? 1;
+  else if (b.type === 'field') rate *= biomeAt(s, b.x, b.y)?.crop ?? 1;
+  rate *= settlerBonus(s, b);
   b.status = 'working';
   b.progress += dt * rate;
   if (b.progress >= r.time) {
@@ -780,7 +784,7 @@ export function completeContract(s: GameState, i: number): void {
   const tr = s.trade;
   const c = tr.board[i];
   if (!c) return;
-  const pay = Math.round(c.marks * (1 + 0.1 * perkRank(s, 'haggler') + charmTradeBonus(s.cache.charm)));
+  const pay = Math.round(c.marks * (1 + 0.1 * perkRank(s, 'haggler') + charmTradeBonus(s.cache.charm) + merchantBonus(s)));
   tr.marks += pay;
   tr.earned += pay;
   tr.rep += Math.round(c.marks * (1 + 0.15 * perkRank(s, 'good_name')));
@@ -946,6 +950,8 @@ export function tick(s: GameState, dt = TICK): void {
       case 'splitter': case 'sorter': tickRouter(s, b); break;
       case 'tree': case 'sapling': tickNature(s, b, dt); break;
       case 'hive': tickHive(s, b, dt); pushOutput(s, b, dt); break;
+      case 'home': b.status = present(s) > 0 && s.people.hungry === 0 ? 'working' : 'idle'; break;
+      case 'dock': b.status = 'idle'; break;
       case 'post': hasPost = true; b.status = s.trade.board.some((c) => c) ? 'working' : 'idle'; break;
       case 'roost':
         s.power.nextDemand += def.power ?? 0;
@@ -963,6 +969,8 @@ export function tick(s: GameState, dt = TICK): void {
   spawnTufts(s, dt);
   tickSummon(s, dt);
   tickTrade(s, dt, hasPost);
+  tickPeople(s, dt);
+  tickVoyages(s, dt);
 
   const f = s.flow.cur;
   f.dt += dt;
@@ -973,7 +981,7 @@ export function tick(s: GameState, dt = TICK): void {
   }
 
   // Discoveries once per simulated second (cheap, and deterministic).
-  if (Math.floor(s.time) !== Math.floor(s.time - dt)) { checkDiscoveries(s); checkCodex(s); checkChapters(s); }
+  if (Math.floor(s.time) !== Math.floor(s.time - dt)) { checkDiscoveries(s); checkCodex(s); checkAmbitions(s); }
 }
 
 /** Codex sets: each completed set grants a perk point and renown. */

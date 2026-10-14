@@ -10,7 +10,8 @@ export type ItemId =
   | 'fruit_sapling' | 'apple' | 'honey' | 'wax' | 'cider' | 'candle' | 'preserves'
   | 'cherry_sapling' | 'orange_sapling' | 'date_sapling' | 'pear_sapling' | 'plum_sapling'
   | 'cherry' | 'orange' | 'date' | 'pear' | 'plum' | 'juice' | 'fruit_basket'
-  | 'topaz' | 'ruby' | 'opal' | 'emerald';
+  | 'topaz' | 'ruby' | 'opal' | 'emerald'
+  | 'wheat' | 'carrot' | 'flour' | 'bread' | 'wool' | 'cloth' | 'egg' | 'stew' | 'pie';
 
 export interface ItemDef {
   id: ItemId;
@@ -75,6 +76,15 @@ const list: ItemDef[] = [
   { id: 'plum', name: 'Plums', desc: 'Frost makes them sweeter.', tier: 3 },
   { id: 'juice', name: 'Orange Juice', desc: 'Pressed oranges. Traders pay well.', tier: 3 },
   { id: 'fruit_basket', name: 'Fruit Basket', desc: 'Every fruit of the sky, woven together.', tier: 4 },
+  { id: 'wheat', name: 'Wheat', desc: 'Golden grain from your fields.', tier: 1 },
+  { id: 'carrot', name: 'Carrots', desc: 'Crunchy and sweet.', tier: 1 },
+  { id: 'flour', name: 'Flour', desc: 'Milled wheat.', tier: 2 },
+  { id: 'bread', name: 'Bread', desc: 'Warm loaves. Settlers love it.', tier: 2 },
+  { id: 'wool', name: 'Wool', desc: 'Soft and warm, shorn from sky sheep.', tier: 1 },
+  { id: 'cloth', name: 'Cloth', desc: 'Woven wool, for homes and sails.', tier: 2 },
+  { id: 'egg', name: 'Eggs', desc: 'Fresh from the coop.', tier: 1 },
+  { id: 'stew', name: 'Stew', desc: 'Carrots and egg, slow-cooked.', tier: 3 },
+  { id: 'pie', name: 'Apple Pie', desc: 'The best thing on any island.', tier: 3 },
   { id: 'topaz', name: 'Topaz', desc: 'A honey-coloured stone, very rarely sifted from loam.', tier: 4 },
   { id: 'ruby', name: 'Ruby', desc: 'A red spark, very rarely sifted from gravel.', tier: 4 },
   { id: 'opal', name: 'Opal', desc: 'Milky fire, very rarely ground from stone.', tier: 4 },

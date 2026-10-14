@@ -68,7 +68,7 @@ export function demoWorld(): GameState {
   for (const [x, y] of [[-6, -3], [1, -4]]) { s.stash.sapling = 9; A.place(s, 'sapling', x, y); }
   s.trade.marks = 140;
   // a decorated corner: paths, a fountain, gazebo, lamps, hedges and a garden
-  s.chapters = 5;
+  for (const id of ['land_1', 'land_2', 'industry_1', 'industry_2', 'trade_1', 'nature_1']) s.ambitions.add(id);
   for (const id of ['patterns1', 'patterns2', 'patterns3', 'patterns4']) s.known.add(id);
   // free grass west of the trees becomes a little park
   const spots: [number, number][] = [];

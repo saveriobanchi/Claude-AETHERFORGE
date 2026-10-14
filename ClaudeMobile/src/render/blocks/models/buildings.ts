@@ -847,3 +847,143 @@ export function monument(c: Canvas, L: TexLib, f = 0): void {
   }
   c.light([0.5, 0.5, 1.6], [90, 70, 150], 1.8);
 }
+
+// ───────────────────────── farm, home and dock ─────────────────────────
+
+/** A tilled field with rows of wheat or carrots at a growth stage (0–2). */
+export function field(c: Canvas, L: TexLib, crop: 'wheat' | 'carrot', stage: number, f = 0): void {
+  const ctx = { c, L };
+  blk(ctx, [0.02, 0.02, 0], [0.98, 0.98, 0.1], 'a/farmland', 'a/dirt');
+  for (const [a, b] of [[[0, 0, 0], [1, 0.06, 0.16]], [[0, 0.94, 0], [1, 1, 0.16]]] as [V3, V3][]) blk(ctx, a, b, 'a/oak_log_top', 'a/oak_log_side');
+  const names = crop === 'wheat' ? ['wheat_stage2', 'wheat_stage3', 'wheat_stage5'] : ['carrots_stage1', 'carrots_stage3', 'carrots_stage4'];
+  const tex = L.get('a/plants/crops/' + names[Math.max(0, Math.min(2, stage))]);
+  const sw = Math.sin(f * TAU) * 0.015;
+  for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) {
+    const x = 0.2 + i * 0.3 + (hsh(i, j, 7) - 0.5) * 0.06 + (stage ? sw : 0), y = 0.2 + j * 0.3 + (hsh(i, j, 9) - 0.5) * 0.06;
+    c.sprite([x, y, 0.1], { tex }, 3, crop === 'wheat' && stage === 2 ? 2.4 : 2);
+  }
+}
+
+function woolly(c: Canvas, x: number, y: number, z: number, dir: number): void {
+  const wool = new Paint();
+  for (let j = 0; j < 16; j++) for (let i = 0; i < 16; i++) wool.set(i, j, (i * 7 + j * 13 + ((i * j) % 5)) % 9 > 6 ? 0xffffff : (i + j) % 5 === 0 ? 0xd0ccc4 : 0xece8e0);
+  const face = new Paint().rect(0, 0, 16, 16, 0x3a302a).rect(3, 5, 3, 2, 0xf0f0f0).rect(10, 5, 3, 2, 0xf0f0f0).rect(4, 5, 1, 2, 0x101010).rect(11, 5, 1, 2, 0x101010).rect(5, 11, 6, 2, 0x5a4a44);
+  c.box([x, y, z + 0.08], [x + 0.36, y + 0.22, z + 0.32], F(wool), F(wool), F(wool), 5);
+  const hx = dir ? x + 0.36 : x - 0.12;
+  c.box([hx, y + 0.04, z + 0.2], [hx + 0.12, y + 0.18, z + 0.36], F(new Paint().rect(0, 0, 16, 16, 0x3a302a)), F(face), F(new Paint().rect(0, 0, 16, 16, 0x3a302a)), 5);
+  for (const lx of [x + 0.05, x + 0.27]) c.box([lx, y + 0.08, z], [lx + 0.05, y + 0.14, z + 0.08], F(new Paint().rect(0, 0, 16, 16, 0x2a2420)), F(new Paint().rect(0, 0, 16, 16, 0x2a2420)), F(new Paint().rect(0, 0, 16, 16, 0x2a2420)), 5);
+}
+
+/** Low rail pen with a hay bale and two sheep. */
+export function sheepPen(c: Canvas, L: TexLib, f = 0): void {
+  const ctx = { c, L };
+  blk(ctx, [0.02, 0.02, 0], [0.98, 0.98, 0.04], 'a/grass_top', 'a/dirt');
+  for (const [x, y] of [[0.02, 0.02], [0.88, 0.02], [0.02, 0.88], [0.88, 0.88], [0.45, 0.02], [0.02, 0.45]]) blk(ctx, [x, y, 0], [x + 0.1, y + 0.1, 0.42], 'a/oak_log_top', 'a/oak_log_side');
+  for (const z of [0.18, 0.34]) {
+    blk(ctx, [0.02, 0.04, z], [0.98, 0.1, z + 0.05], 'a/oak_planks');
+    blk(ctx, [0.04, 0.02, z], [0.1, 0.98, z + 0.05], 'a/oak_planks');
+  }
+  blk(ctx, [0.6, 0.6, 0.04], [0.9, 0.9, 0.3], 'a/hay_top', 'a/hay_side');
+  const bob = Math.abs(Math.sin(f * TAU)) * 0.03;
+  woolly(c, 0.3, 0.68, 0.04 + bob, 0);
+  woolly(c, 0.5, 0.25, 0.04, 1);
+}
+
+function hen(c: Canvas, x: number, y: number, z: number, peck: number): void {
+  const w = new Paint().rect(0, 0, 16, 16, 0xf4ece0).rect(0, 12, 16, 4, 0xd8ccbc);
+  c.box([x, y, z + 0.05], [x + 0.18, y + 0.14, z + 0.2], F(w), F(w), F(w), 5);
+  c.box([x + 0.14, y + 0.03, z + 0.15 - peck], [x + 0.24, y + 0.11, z + 0.28 - peck], F(w), F(new Paint(16, 16, w).rect(2, 2, 3, 3, 0x101010).rect(12, 6, 4, 4, 0xf0a020).rect(6, 0, 4, 3, 0xd82a2a)), F(w), 5);
+  c.box([x + 0.06, y + 0.06, z], [x + 0.1, y + 0.09, z + 0.05], F(new Paint().rect(0, 0, 16, 16, 0xf0a020)), F(new Paint().rect(0, 0, 16, 16, 0xf0a020)), F(new Paint().rect(0, 0, 16, 16, 0xf0a020)), 5);
+}
+
+/** Little raised hen house with a ramp, and hens pecking. */
+export function chickenCoop(c: Canvas, L: TexLib, f = 0): void {
+  const ctx = { c, L };
+  blk(ctx, [0.02, 0.02, 0], [0.98, 0.98, 0.04], 'a/grass_top', 'a/dirt');
+  for (const [x, y] of [[0.42, 0.08], [0.82, 0.08], [0.42, 0.48], [0.82, 0.48]]) blk(ctx, [x, y, 0.04], [x + 0.08, y + 0.08, 0.32], 'a/oak_log_top', 'a/oak_log_side');
+  const front = new Paint(16, 16, L.get('a/beech_planks')).rect(5, 8, 6, 8, 0x24181a).frame(0, 0, 16, 16, 0x4a2e1e);
+  c.box([0.4, 0.06, 0.32], [0.92, 0.58, 0.78], F(L.get('a/beech_planks')), F(front), F(new Paint(16, 16, L.get('a/beech_planks')).frame(0, 0, 16, 16, 0x4a2e1e)), 5);
+  for (let k = 0; k < 3; k++) blk(ctx, [0.36 + k * 0.06, 0.02 + k * 0.06, 0.78 + k * 0.08], [0.96 - k * 0.06, 0.62 - k * 0.06, 0.86 + k * 0.08], 'a/maple_planks');
+  for (let k = 0; k < 4; k++) blk(ctx, [0.55, 0.58 + k * 0.08, 0.28 - k * 0.07], [0.75, 0.66 + k * 0.08, 0.32 - k * 0.07], 'a/oak_planks');
+  blk(ctx, [0.06, 0.62, 0.04], [0.32, 0.9, 0.12], 'a/hay_top', 'a/hay_side');
+  const p = Math.max(0, Math.sin(f * TAU)) * 0.06, q = Math.max(0, Math.sin(f * TAU + 2)) * 0.06;
+  hen(c, 0.1, 0.25, 0.04, p);
+  hen(c, 0.22, 0.7, 0.12, q);
+}
+
+/** Wooden loom with a cloth web and a moving shuttle. */
+export function loom(c: Canvas, L: TexLib, f = 0): void {
+  const ctx = { c, L };
+  base(ctx);
+  for (const [x, y] of [[0.12, 0.2], [0.78, 0.2], [0.12, 0.7], [0.78, 0.7]]) blk(ctx, [x, y, 0.06], [x + 0.1, y + 0.1, 1.1], 'a/oak_log_top', 'a/oak_log_side');
+  blk(ctx, [0.12, 0.2, 1.1], [0.88, 0.8, 1.18], 'a/oak_planks');
+  blk(ctx, [0.12, 0.2, 0.5], [0.88, 0.3, 0.58], 'a/oak_planks');
+  const web = new Paint();
+  const rows = Math.floor(f * 8);
+  for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+    const woven = y >= 15 - rows - 6;
+    web.set(x, y, woven ? ((x + y) % 2 ? 0x5a8ad0 : 0x4a72b8) : x % 2 ? 0xe8e0d0 : 0);
+  }
+  c.quad([0.22, 0.5, 1.08], [0.56, 0, 0], [0, 0, -0.5], F(web), [1, 1, 1], 5, 0.02);
+  const sx = 0.22 + (0.5 + 0.5 * Math.sin(f * TAU)) * 0.48;
+  blk(ctx, [sx, 0.44, 0.58], [sx + 0.1, 0.56, 0.64], 'a/maple_planks');
+  blk(ctx, [0.3, 0.75, 0.06], [0.7, 0.95, 0.3], new Paint().rect(0, 0, 16, 16, 0x5a8ad0).rect(0, 7, 16, 2, 0x3a5a9a));
+}
+
+/** Brick bakery oven with a glowing mouth and a chimney. */
+export function oven(c: Canvas, L: TexLib, f = 0): void {
+  const ctx = { c, L };
+  base(ctx);
+  blk(ctx, [0.1, 0.1, 0.06], [0.9, 0.9, 0.5], 'a/limestone_bricks');
+  const mouth = fireFace(L.get('a/mud_bricks'), f, 4, 5, 8, 7);
+  c.box([0.16, 0.16, 0.5], [0.84, 0.84, 0.95], F(L.get('a/mud_bricks')), F(mouth), F(L.get('a/mud_bricks')), 5);
+  for (let k = 0; k < 2; k++) blk(ctx, [0.22 + k * 0.1, 0.22 + k * 0.1, 0.95 + k * 0.1], [0.78 - k * 0.1, 0.78 - k * 0.1, 1.05 + k * 0.1], 'a/mud_bricks');
+  chimney(ctx, 0.6, 0.2, 1.05, 0.5);
+  blk(ctx, [0.6, 0.86, 0.06], [0.94, 0.98, 0.35], 'a/oak_planks');
+  c.box([0.64, 0.87, 0.35], [0.9, 0.97, 0.45], F(L.get('as/farming_bread')), F(L.get('as/farming_bread')), F(L.get('as/farming_bread')), 5);
+  c.light([0.5, 0.95, 0.7], [150, 80, 30], 1.3);
+}
+
+/** Timber cottage: brick footing, plaster walls, red roof, lit window and a smoking chimney. */
+export function cottage(c: Canvas, L: TexLib): void {
+  const ctx = { c, L };
+  blk(ctx, [0.06, 0.06, 0], [0.94, 0.94, 0.2], 'a/cobblestone_bricks');
+  const plaster = new Paint(16, 16, L.get('a/limestone')).tint([1.1, 1.05, 0.95]).rect(0, 0, 2, 16, 0x5a3a22).rect(14, 0, 2, 16, 0x5a3a22).rect(0, 0, 16, 2, 0x5a3a22);
+  const front = new Paint(16, 16, plaster).rect(3, 7, 4, 9, 0x6a4024).rect(3, 7, 4, 1, 0x3a2418).rect(6, 11, 1, 1, 0xd8a040).rect(9, 6, 4, 4, 0xffd27a).frame(9, 6, 4, 4, 0x3a2418).rect(10, 7, 2, 2, 0xfff2b0);
+  const side = new Paint(16, 16, plaster).rect(5, 6, 6, 4, 0xffd27a).frame(5, 6, 6, 4, 0x3a2418).rect(7, 6, 1, 4, 0x3a2418);
+  c.box([0.1, 0.1, 0.2], [0.9, 0.9, 0.95], F(plaster), F(front, { glow: false }), F(side), 5);
+  const roof = new Paint(16, 16, L.get('a/mud_bricks')).tint([1.35, 0.7, 0.55]);
+  for (let k = 0; k < 4; k++) blk(ctx, [0.02 + k * 0.1, 0.02, 0.95 + k * 0.14], [0.98 - k * 0.1, 0.98, 1.09 + k * 0.14], roof, roof, roof);
+  blk(ctx, [0.42, 0.0, 1.47], [0.58, 1.0, 1.55], 'a/maple_planks');
+  chimney(ctx, 0.62, 0.62, 1.1, 0.7);
+  c.light([0.6, 0.92, 0.6], [140, 100, 40], 1.2);
+  blk(ctx, [0.2, 0.92, 0.0], [0.5, 1.0, 0.1], 'a/cobblestone');
+}
+
+/** Plank landing stage on the edge; the dock's airship rides at the end when home. */
+export function airdock(c: Canvas, L: TexLib, home: boolean, f = 0): void {
+  const ctx = { c, L };
+  blk(ctx, [0.05, 0.05, 0], [0.95, 0.95, 0.12], 'a/cobblestone_bricks');
+  blk(ctx, [0.15, 0.0, 0.12], [0.85, 1.0, 0.22], 'a/oak_planks', 'a/oak_log_side');
+  for (const [x, y] of [[0.12, 0.05], [0.8, 0.05], [0.12, 0.88], [0.8, 0.88]]) blk(ctx, [x, y, 0.0], [x + 0.1, y + 0.1, 0.6], 'a/oak_log_top', 'a/oak_log_side');
+  blk(ctx, [0.15, 0.06, 0.48], [0.25, 0.98, 0.53], new Paint().rect(0, 0, 16, 16, 0xc8a86a).rect(0, 7, 16, 2, 0x8a6a3a));
+  blk(ctx, [0.75, 0.06, 0.48], [0.85, 0.98, 0.53], new Paint().rect(0, 0, 16, 16, 0xc8a86a).rect(0, 7, 16, 2, 0x8a6a3a));
+  // signal mast with a pennant
+  blk(ctx, [0.06, 0.6, 0.12], [0.14, 0.68, 1.6], 'a/oak_log_top', 'a/oak_log_side');
+  const flag = new Paint(16, 8);
+  for (let x = 0; x < 16; x++) { const h = Math.round(3 - x / 6 + Math.sin(f * TAU + x * 0.6) * 1.2); for (let y = 4 - h; y <= 3 + h; y++) flag.set(x, y, x % 6 < 3 ? 0x5a8ad0 : 0xf0e2c4); }
+  c.quad([0.1, 0.68, 1.58], [0, 0.5, 0], [0, 0, -0.26], F(flag), [1, 1, 1], 6, 0.2);
+  lantern(ctx, [0.8, 0.12, 0.6]);
+  if (!home) return;
+  // a small skiff moored off the end
+  const z0 = 1.05 + Math.sin(f * TAU) * 0.05;
+  blk(ctx, [0.3, 0.3, z0], [0.7, 0.85, z0 + 0.2], 'a/maple_planks', 'a/maple_log_side');
+  blk(ctx, [0.26, 0.26, z0 + 0.2], [0.74, 0.9, z0 + 0.27], 'a/oak_log_side');
+  const cloth = new Paint();
+  for (let x = 0; x < 16; x++) for (let y = 0; y < 16; y++) cloth.set(x, y, (x >> 2) % 2 ? 0x5a8ad0 : 0xf0e2c4);
+  for (let k = 0; k < 4; k++) {
+    const r = [0.16, 0.22, 0.22, 0.14][k];
+    c.box([0.5 - r, 0.58 - r * 1.4, z0 + 0.7 + k * 0.13], [0.5 + r, 0.58 + r * 1.4, z0 + 0.83 + k * 0.13], F(cloth), F(cloth), F(cloth), 6);
+  }
+  for (const [x, y] of [[0.32, 0.4], [0.68, 0.4], [0.32, 0.78], [0.68, 0.78]]) c.quad([x, y, z0 + 0.27], [0, 0, 0.43], [0.002, 0, 0], F(new Paint().rect(0, 0, 16, 16, 0x8a6a3a)), [1, 1, 1], 6, 0.1);
+}

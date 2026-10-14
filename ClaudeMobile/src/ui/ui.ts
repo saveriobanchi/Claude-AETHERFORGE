@@ -3,8 +3,10 @@ import { BUILDINGS, BUILDING_LIST, HIVE, NODE_YIELD, TREE, type BuildCategory } 
 import { BIOMES, FRUIT_BY_TREE, OFF_HOME } from '../core/content/biomes';
 import { MARKET, CONTRACT_REFRESH, levelSpeed, marketPrice, repForLevel, upgradable, upgradeCost } from '../core/content/trade';
 import { dayIndex, weatherFor } from '../core/content/weather';
-import { charmTradeBonus, CHAPTERS } from '../core/content/chapters';
-import { activeChapter, goalDone, goalText, goalValue } from '../core/chapters';
+import { AMBITION, AMBITIONS, PATHS, type Reward, charmTradeBonus } from '../core/content/ambitions';
+import { focus, goalDone, goalText, goalValue, openRung } from '../core/ambitions';
+import { BLUEPRINTS, DESTINATIONS, FOODS, MAX_CREW, ROLES, SPECIALIST_BONUS } from '../core/content/people';
+import { assigned, canLaunch, contentment, destinationOpen, housing, idle, present } from '../core/people';
 import { CODEX, PERKS, type PerkBranch, masteryStar, masteryThresholds, xpForLevel } from '../core/content/renown';
 import { DISCOVERIES, DISCOVERY_LIST } from '../core/content/discoveries';
 import { ITEMS, ITEM_IDS, type ItemId, type Stack } from '../core/content/items';
@@ -36,6 +38,17 @@ const CATS: { id: BuildCategory | 'land'; name: string }[] = [
 const GEAR_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#efe2c4" stroke-width="1.8" stroke-linejoin="round"><path d="M10.3 2.6h3.4l.5 2.6 1.9.8 2.2-1.5 2.4 2.4-1.5 2.2.8 1.9 2.6.5v3.4l-2.6.5-.8 1.9 1.5 2.2-2.4 2.4-2.2-1.5-1.9.8-.5 2.6h-3.4l-.5-2.6-1.9-.8-2.2 1.5-2.4-2.4 1.5-2.2-.8-1.9-2.6-.5v-3.4l2.6-.5.8-1.9-1.5-2.2 2.4-2.4 2.2 1.5 1.9-.8z"/><circle cx="12" cy="12" r="3.4"/></svg>';
 
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
+const PATH_NAME = Object.fromEntries(PATHS.map((p) => [p.id, p.name])) as Record<string, string>;
+const PATH_ICON = Object.fromEntries(PATHS.map((p) => [p.id, p.icon])) as Record<string, string>;
+
+function rewardText(r: Reward): string {
+  const parts: string[] = [];
+  if (r.marks) parts.push(`${r.marks} Marks`);
+  if (r.points) parts.push(`${r.points} perk point${r.points > 1 ? 's' : ''}`);
+  if (r.items) for (const k in r.items) parts.push(`${r.items[k as ItemId]} ${ITEMS[k as ItemId].name}`);
+  if (r.unlock) parts.push('new decor patterns');
+  return parts.join(' · ');
+}
 const STATUS_TEXT: Record<string, string> = {
   working: 'Working', idle: 'Idle', noinput: 'Waiting for input', blocked: 'Output full', nopower: 'No breeze', night: 'Waiting for night', ready: 'Ready to collect',
 };
@@ -55,6 +68,8 @@ export class UI {
   private renownTab: 'perks' | 'mastery' | 'codex' = 'perks';
   private weatherId = '';
   private questIcon!: HTMLImageElement;
+  private questTip = false;
+  private crew = 1;
   private btnBuild!: HTMLButtonElement;
   private btnCraft!: HTMLButtonElement;
   private btnStash!: HTMLButtonElement;
@@ -117,7 +132,7 @@ export class UI {
     const left = h('div', { class: 'hud-left' }, this.iconBtn('compass', 'Centre view', () => this.g.view.cam.focus(0, -10, this.g.defaultZoom())));
     this.note = h('div', { class: 'qtext' });
     this.questIcon = img(uiIcon('book'));
-    this.quest = h('button', { class: 'quest panel hide', onclick: () => this.openJournal() }, h('div', { class: 'qicon' }, this.questIcon), h('div', { class: 'qbody' }, this.questCaps = h('div', { class: 'caps', text: 'Next step' }), this.note), h('span', { class: 'chev', text: '›' }));
+    this.quest = h('button', { class: 'quest panel hide', onclick: () => (this.questTip ? this.openJournal() : this.openAmbitions()) }, h('div', { class: 'qicon' }, this.questIcon), h('div', { class: 'qbody' }, this.questCaps = h('div', { class: 'caps', text: 'Next step' }), this.note), h('span', { class: 'chev', text: '›' }));
     this.btnBuild = this.mainBtn('build', 'Build', () => this.toggleBuild());
     this.btnBuild.classList.add('big');
     this.btnCraft = this.mainBtn('craft', 'Craft', () => this.toggleCraft());
@@ -234,12 +249,13 @@ export class UI {
       }
     }
     // note
-    // the quest card: early tips first, then the active chapter's next goal
+    // the quest card: early tips first, then the pinned (or nearest) ambition's next goal
     const tip = this.g.observe ? null : guideNote(s);
-    const ch = this.g.observe ? null : activeChapter(s);
-    const goal = ch?.goals.find((g) => !goalDone(s, g));
+    this.questTip = !!tip;
+    const am = this.g.observe || tip ? null : focus(s);
+    const goal = am?.goals.find((g) => !goalDone(s, g));
     const n = tip ?? (goal ? `${goalText(goal)}${goal.n > 1 ? ` · ${fmt(Math.min(goal.n, goalValue(s, goal)))}/${fmt(goal.n)}` : ''}` : null);
-    const caps = tip ? 'Next step' : ch ? `Chapter ${ch.id} · ${ch.title}` : '';
+    const caps = tip ? 'Next step' : am ? `${s.pinned === am.id ? '★ ' : ''}${PATH_NAME[am.path]} · ${am.title}` : '';
     if ((n ?? '') + caps !== this.lastNote) {
       this.lastNote = (n ?? '') + caps;
       if (n) {
@@ -247,7 +263,7 @@ export class UI {
         this.questCaps.textContent = caps;
         this.quest.classList.remove('hide');
         const named = BUILDING_LIST.find((d) => n.includes(d.name));
-        this.questIcon.src = named ? thumb(named.id) : goal?.t === 'made' ? itemIcon(goal.item) : uiIcon(tip ? 'book' : 'chapter');
+        this.questIcon.src = named ? thumb(named.id) : goal?.t === 'made' ? itemIcon(goal.item) : uiIcon(tip ? 'book' : 'ambition');
       }
       else this.quest.classList.add('hide');
     }
@@ -557,6 +573,7 @@ export class UI {
       Math.floor(this.progressOf(b) * (def.kind === 'sapling' ? 20 : 0)),
       b.level, upgradable(def) ? s.trade.marks + ':' + s.known.has('tinker') + s.known.has('master') : '',
       def.kind === 'post' ? JSON.stringify(s.trade) : '', s.tileRev,
+      def.kind === 'home' || def.kind === 'dock' ? JSON.stringify(s.people) + s.voyages.map((v) => v.dock + ':' + Math.ceil(v.t)).join() + FOODS.map((f) => s.stash[f]).join() + s.trade.marks : '',
     ].join('|');
     if (sig === this.panelSig) return;
     this.panelSig = sig;
@@ -571,7 +588,7 @@ export class UI {
     if (def.kind === 'harvester' && b.status === 'noinput') statusText = 'No trees ready nearby';
     if (def.kind === 'hive' && b.status === 'noinput') statusText = 'Needs trees within reach';
     if (def.kind === 'post') statusText = '';
-    if (['tree', 'sapling', 'node', 'storage', 'workbench', 'depot', 'forge', 'beacon', 'pylon', 'splitter', 'sorter', 'manual'].includes(def.kind)) statusText = '';
+    if (['tree', 'sapling', 'node', 'storage', 'workbench', 'depot', 'forge', 'beacon', 'pylon', 'splitter', 'sorter', 'manual', 'home', 'dock', 'decor'].includes(def.kind)) statusText = '';
     const head = h('div', { class: 'panel-head' },
       h('div', { class: 'thumb' }, img(thumb(b.type))),
       h('div', { class: 't' }, h('div', { class: 'name', text: def.name + (b.level > 1 ? ' · ' + ROMAN[b.level] : '') }),
@@ -766,6 +783,8 @@ export class UI {
         break;
       }
       case 'post': this.fillPost(body, actions); addCommon(); break;
+      case 'home': this.fillHome(body); addCommon(); break;
+      case 'dock': this.fillDock(body, b); addCommon(); break;
       case 'hive': {
         const trees = [-1, 0, 1].flatMap((dy) => [-1, 0, 1].map((dx) => [dx, dy])).filter(([dx, dy]) => (dx || dy) && [...s.buildings.values()].some((t) => t.x === b.x + dx && t.y === b.y + dy && BUILDINGS[t.type].kind === 'tree')).length;
         body.append(h('div', { class: 'flow' }, this.slot('honey', fmt(b.outBuf.honey ?? 0)), this.slot('wax', fmt(b.outBuf.wax ?? 0))), this.bar());
@@ -854,6 +873,95 @@ export class UI {
     actions.append(h('button', { class: 'btn primary', onclick: () => this.openMarket() }, img(uiIcon('market'), 'ui'), 'Market'));
   }
 
+  private fillHome(body: HTMLElement): void {
+    const g = this.g, s = g.s, p = s.people;
+    const c = contentment(s);
+    const room = housing(s);
+    body.append(h('div', { class: 'stats' },
+      h('span', { text: 'Settlers' }), h('span', { class: 'num', text: `${p.count} / ${room}` }),
+      p.away ? h('span', { text: 'Away exploring' }) : null, p.away ? h('span', { class: 'num', text: String(p.away) }) : null,
+      h('span', { text: 'Contentment' }), h('span', { class: 'num' + (p.hungry ? ' bad' : ''), text: p.count ? (p.hungry ? 'Hungry!' : Math.round(c * 100) + '%') : '—' }),
+      h('span', { text: 'Idle (+1% to all)' }), h('span', { class: 'num', text: String(Math.floor(idle(s))) })));
+    if (p.meals.length) {
+      const row = h('div', { class: 'flow meals' }, h('span', { class: 'caps', text: 'Recent meals' }));
+      for (const m of p.meals.slice(-8)) row.append(img(itemIcon(m), 'px'));
+      body.append(row);
+    }
+    if (!p.count) body.append(h('div', { class: 'muted', style: 'font-size:0.78rem', text: room ? 'Keep food in the stash — bread, stew, eggs, fruit, honey… — and settlers will come.' : '' }));
+    const roles = h('div', { class: 'roles' });
+    const free = p.count - assigned(s);
+    for (const r of ROLES) {
+      const n = p.roles[r.id] ?? 0;
+      roles.append(h('div', { class: 'role' },
+        h('div', { class: 'rt' }, h('div', { class: 'nm', text: r.name }), h('div', { class: 'sub', text: r.desc })),
+        h('button', { class: 'btn small ghost', 'aria-label': 'Fewer', onclick: () => g.act(() => A.assignRole(s, r.id, -1), 'tap') }, '−'),
+        h('span', { class: 'num', text: String(n) }),
+        h('button', { class: 'btn small' + (free > 0 ? ' primary' : ''), 'aria-label': 'More', onclick: () => g.act(() => A.assignRole(s, r.id, 1), 'tap') }, '+')));
+    }
+    body.append(this.section('Roles', free > 0 ? `${free} without a role` : '', roles));
+    body.append(h('div', { class: 'muted', style: 'font-size:0.72rem', text: `Each specialist speeds their machines by ${Math.round(SPECIALIST_BONUS * 100)}% × contentment (merchants: contract pay). Varied meals make settlers content.` }));
+  }
+
+  private fillDock(body: HTMLElement, b: Building): void {
+    const g = this.g, s = g.s;
+    const v = s.voyages.find((x) => x.dock === b.id);
+    if (v) {
+      const d = DESTINATIONS.find((x) => x.id === v.dest)!;
+      body.append(h('div', { class: 'caps', text: `Away: ${d.name} · crew ${v.crew}` }), h('div', { class: 'bar' }, h('i', { style: `width:${Math.round((1 - v.t / v.total) * 100)}%` })),
+        h('div', { class: 'muted', style: 'font-size:0.8rem', text: `Back in ${duration(Math.max(0, v.t))}.` }));
+    } else {
+      const crewBox = h('div', { class: 'chips' }, h('span', { class: 'caps', text: 'Crew' }));
+      for (let n = 1; n <= MAX_CREW; n++) crewBox.append(h('button', { class: 'rchip' + (this.crew === n ? ' on' : ''), onclick: () => { this.crew = n; this.panelSig = ''; } }, String(n)));
+      body.append(crewBox, h('div', { class: 'muted', style: 'font-size:0.72rem', text: `${Math.floor(present(s))} settlers at home. More crew bring back more and find blueprints more often.` }));
+      for (const d of DESTINATIONS) {
+        const open = destinationOpen(s, d.id);
+        const why = open ? canLaunch(s, b.id, d.id, this.crew) : '';
+        const prov = h('div', { class: 'flow' });
+        for (const k in d.provisions) prov.append(this.slot(k as ItemId, String(d.provisions[k as ItemId]), s.stash[k as ItemId] < (d.provisions[k as ItemId] ?? 0)));
+        const loot = h('div', { class: 'loot' });
+        for (const l of d.loot) loot.append(img(itemIcon(l.item), 'px'));
+        body.append(h('div', { class: 'contract dest' + (open ? '' : ' locked') },
+          h('div', { class: 'ct' }, h('div', { class: 'nm', text: open ? `${d.name} · ${duration(d.time)}` : '??? · uncharted' }), h('div', { class: 'sub', text: open ? d.desc : 'Further discoveries will chart it.' }), open ? prov : null, open ? loot : null),
+          open ? h('div', { class: 'cb' }, h('button', { class: 'btn small' + (why ? '' : ' primary'), title: why, onclick: () => { const r = g.act(() => A.launchVoyage(s, b.id, d.id, this.crew), 'collect'); if (r.ok) this.panelSig = ''; } }, 'Go')) : null));
+      }
+    }
+    const found = BLUEPRINTS.filter((x) => s.known.has(x)).length;
+    const lv = s.lastVoyage;
+    body.append(h('div', { class: 'stats' }, h('span', { text: 'Blueprints found' }), h('span', { class: 'num', text: `${found} / ${BLUEPRINTS.length}` }),
+      lv ? h('span', { text: 'Last trip' }) : null, lv ? h('span', { class: 'num', text: Object.values(lv.got).reduce((a, n) => a + (n ?? 0), 0) + ' goods' + (lv.blueprint ? ' + blueprint' : '') }) : null));
+    if (found) body.append(h('div', { class: 'muted', style: 'font-size:0.72rem', text: 'Blueprints add alternative recipes — pick them on the machine.' }));
+  }
+
+  openAmbitions(): void {
+    const g = this.g, s = g.s;
+    const list = h('div', { class: 'entries scroll ambitions' });
+    const head = this.modalHead('Ambitions', '', uiIcon('ambition'));
+    const render = () => {
+      clear(list);
+      head.querySelector('.sub')!.textContent = `${s.ambitions.size} of ${AMBITIONS.length} achieved · pin one to follow it`;
+      for (const p of PATHS) {
+        const a = openRung(s, p.id);
+        const rungs = AMBITIONS.filter((x) => x.path === p.id);
+        const pips = h('span', { class: 'pips' }, ...rungs.map((x) => h('i', { class: s.ambitions.has(x.id) ? 'on' : a && x.id === a.id ? 'cur' : '' })));
+        const pinned = !!a && s.pinned === a.id;
+        const card = h('div', { class: 'entry amb' + (pinned ? ' pinned' : '') + (a ? '' : ' done') },
+          h('div', { class: 'amb-h' }, img(uiIcon(p.icon)), h('span', { class: 'pn', text: p.name }), pips,
+            a ? h('button', { class: 'btn small' + (pinned ? ' primary' : ' ghost'), title: pinned ? 'Unpin' : 'Pin to the quest card', onclick: () => { g.act(() => A.pinAmbition(s, a.id), 'select'); this.lastNote = ''; render(); } }, pinned ? '★ Pinned' : '☆ Pin') : null));
+        if (a) {
+          card.append(h('div', { class: 'h', text: `${ROMAN[a.rung]} · ${a.title}` }), h('p', { text: a.intro }));
+          for (const goal of a.goals) {
+            const v = Math.min(goal.n, goalValue(s, goal)), done = v >= goal.n;
+            card.append(h('div', { class: 'goal' + (done ? ' done' : '') }, h('span', { class: 'tick', text: done ? '✓' : '' }), h('span', { class: 'gt', text: goalText(goal) }), h('span', { class: 'num', text: `${fmt(v)}/${fmt(goal.n)}` })));
+          }
+          card.append(h('div', { class: 'reward-line', text: 'Reward: ' + rewardText(a.reward) }));
+        } else card.append(h('p', { text: `${p.desc} — path complete.` }));
+        list.append(card);
+      }
+    };
+    render();
+    this.openModal(h('div', { style: 'display:flex;flex-direction:column;min-height:0;max-height:inherit' }, head, list));
+  }
+
   openMarket(): void {
     const g = this.g, s = g.s;
     const list = h('div', { class: 'market scroll' });
@@ -888,10 +996,26 @@ export class UI {
     this.toast(`Renown ${level + 1}!`, 'A perk point to spend — tap your island’s banner.', uiIcon('island'), 'big');
   }
 
-  chapterDone(id: number): void {
-    const c = CHAPTERS[id - 1];
-    const next = CHAPTERS[id];
-    this.toast(`Chapter ${id} complete: ${c?.title ?? ''}`, next ? `Next — ${next.title}` : 'Every chapter told.', uiIcon('chapter'), 'big');
+  ambitionDone(id: string): void {
+    const a = AMBITION[id];
+    if (!a) return;
+    const next = AMBITIONS.find((x) => x.path === a.path && x.rung === a.rung + 1);
+    this.toast(`Ambition: ${a.title}`, rewardText(a.reward) + (next ? ` · next: ${next.title}` : ` · ${PATH_NAME[a.path]} path complete`), uiIcon(PATH_ICON[a.path]), 'big');
+  }
+
+  settlerArrived(n: number): void {
+    this.toast(n === 1 ? 'A settler arrives!' : `Settler ${n} arrives`, n === 1 ? 'Give them a role at the cottage.' : 'Another pair of hands — assign a role.', uiIcon('settler'));
+  }
+
+  settlerLeft(): void {
+    this.toast('A settler left', 'They went hungry. Keep food in the stash.', uiIcon('settler'));
+  }
+
+  voyageHome(dest: string, got: Stack, blueprint: string | null): void {
+    const d = DESTINATIONS.find((x) => x.id === dest);
+    const parts = Object.keys(got).map((k) => `${got[k as ItemId]} ${ITEMS[k as ItemId].name}`);
+    const bp = blueprint ? RECIPE_LIST.find((r) => r.unlock === blueprint) : null;
+    this.toast(`Back from ${d?.name ?? 'the haze'}`, (bp ? `Blueprint: ${bp.name}! · ` : '') + (parts.join(' · ') || 'Nothing worth keeping'), uiIcon('compass'), bp ? 'big' : '');
   }
 
   charmMilestone(m: number): void {
@@ -1097,26 +1221,23 @@ export class UI {
     s.flags.add('seen:journal:' + s.known.size);
     this.refreshHud();
     const entries = h('div', { class: 'entries scroll' });
-    const ch = activeChapter(s);
-    if (ch) {
-      const box = h('div', { class: 'entry chapter' }, h('div', { class: 'caps', text: `Chapter ${ch.id} of ${CHAPTERS.length}` }), h('div', { class: 'h', text: ch.title }), h('p', { text: ch.intro }));
-      for (const g of ch.goals) {
-        const v = Math.min(g.n, goalValue(s, g)), done = v >= g.n;
-        box.append(h('div', { class: 'goal' + (done ? ' done' : '') }, h('span', { class: 'tick', text: done ? '✓' : '' }), h('span', { class: 'gt', text: goalText(g) }), h('span', { class: 'num', text: `${fmt(v)}/${fmt(g.n)}` })));
-      }
-      const r = ch.reward, parts: string[] = [];
-      if (r.marks) parts.push(`${r.marks} Marks`);
-      if (r.points) parts.push(`${r.points} perk point${r.points > 1 ? 's' : ''}`);
-      if (r.items) for (const k in r.items) parts.push(`${r.items[k as ItemId]} ${ITEMS[k as ItemId].name}`);
-      if (r.unlock) parts.push('new decor patterns');
-      box.append(h('div', { class: 'reward-line', text: 'Reward: ' + parts.join(' · ') }));
-      entries.append(box);
-    } else entries.append(h('div', { class: 'entry chapter' }, h('div', { class: 'h', text: 'Every chapter told' }), h('p', { text: 'The island is yours. Keep the Aetherforge singing.' })));
+    {
+      const open = PATHS.map((p) => openRung(s, p.id)).filter(Boolean).length;
+      entries.append(h('button', { class: 'entry chapter link', onclick: () => this.openAmbitions() },
+        h('div', { class: 'caps', text: `Ambitions · ${s.ambitions.size}/${AMBITIONS.length}` }), h('div', { class: 'h', text: open ? 'Choose your next ambition ›' : 'Every ambition achieved' }),
+        h('p', { text: open ? 'Seven paths, all open at once. Grow in the order you like.' : 'The island is yours. Keep the Aetherforge singing.' })));
+    }
     const riddles = teasers(s);
     if (riddles.length) {
       const box = h('div', { class: 'entry' }, h('div', { class: 'caps', text: 'Unanswered' }));
       for (const r of riddles) box.append(h('div', { class: 'riddle' }, h('span', { style: 'flex:1', text: r.hint }), h('div', { class: 'bar' }, h('i', { style: `width:${Math.round(r.progress * 100)}%` }))));
       entries.append(box);
+    }
+    for (const bp of BLUEPRINTS) {
+      const r = RECIPE_LIST.find((x) => x.unlock === bp);
+      if (!r || !s.known.has(bp)) continue;
+      const fmtStack = (st: Stack) => Object.keys(st).map((k) => `${st[k as ItemId]} ${ITEMS[k as ItemId].name}`).join(' + ');
+      entries.append(h('div', { class: 'entry' }, h('div', { class: 'h', text: `Blueprint: ${r.name}` }), h('p', { text: `${fmtStack(r.inputs)} → ${fmtStack(r.outputs)} in the ${r.stations.map((x) => BUILDINGS[x]?.name ?? x).join(' or ')}. Choose it on the machine.` })));
     }
     const known = DISCOVERY_LIST.filter((d) => s.known.has(d.id)).reverse();
     for (const d of known) entries.append(h('div', { class: 'entry' }, h('div', { class: 'h', text: d.title }), h('p', { text: d.text })));
@@ -1126,12 +1247,14 @@ export class UI {
       h('span', { text: 'Time in this world' }), h('span', { class: 'num', text: duration(st.playSeconds) }),
       h('span', { text: 'Ground' }), h('span', { class: 'num', text: `${s.tiles.size} tiles` }),
       h('span', { text: 'Charm' }), h('span', { class: 'num', text: String(s.cache.charm) }),
-      h('span', { text: 'Chapters' }), h('span', { class: 'num', text: `${s.chapters}/${CHAPTERS.length}` }),
+      h('span', { text: 'Ambitions' }), h('span', { class: 'num', text: `${s.ambitions.size}/${AMBITIONS.length}` }),
+      s.people.count ? h('span', { text: 'Settlers' }) : null, s.people.count ? h('span', { class: 'num', text: String(s.people.count) }) : null,
+      st.voyages ? h('span', { text: 'Expeditions' }) : null, st.voyages ? h('span', { class: 'num', text: String(st.voyages) }) : null,
       h('span', { text: 'Structures' }), h('span', { class: 'num', text: String(count((b) => !['tree', 'tuft', 'sapling', 'elder_tree'].includes(b.type) && BUILDINGS[b.type].kind !== 'node')) }),
       h('span', { text: 'Trees' }), h('span', { class: 'num', text: String(count((b) => b.type === 'tree')) }),
       h('span', { text: 'Gathered by hand' }), h('span', { class: 'num', text: fmt(st.harvests) }),
       h('span', { text: 'Delivered by machine' }), h('span', { class: 'num', text: fmt(st.delivered) }),
-      h('span', { text: 'Discoveries' }), h('span', { class: 'num', text: `${s.known.size - 1}` }),
+      h('span', { text: 'Discoveries' }), h('span', { class: 'num', text: `${DISCOVERY_LIST.filter((d) => s.known.has(d.id)).length - 1}` }),
       s.islets.docked ? h('span', { text: 'Drifters home' }) : null, s.islets.docked ? h('span', { class: 'num', text: String(s.islets.docked) }) : null,
       s.forge.stage >= 3 ? h('span', { text: 'Resonance' }) : null, s.forge.stage >= 3 ? h('span', { class: 'num', text: String(s.forge.level) }) : null)));
     this.openModal(h('div', { style: 'display:flex;flex-direction:column;min-height:0;max-height:inherit' }, this.modalHead('Journal', 'What you have learned', glyph('journal')), entries));

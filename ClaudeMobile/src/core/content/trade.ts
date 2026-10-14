@@ -14,6 +14,7 @@ export const TRADE_VALUE: Partial<Record<ItemId, number>> = {
   apple: 0.8, honey: 2, wax: 1.6, cider: 5, candle: 2.2, preserves: 7,
   cherry: 1, orange: 1.2, date: 1.4, pear: 1, plum: 1.4, juice: 5, fruit_basket: 40,
   topaz: 30, ruby: 35, opal: 35, emerald: 45,
+  wheat: 0.4, carrot: 0.5, flour: 1.2, bread: 2.5, wool: 0.8, cloth: 3.5, egg: 0.6, stew: 4, pie: 6,
 };
 
 /** Base contract size per item (scaled by trade level). */
@@ -23,9 +24,10 @@ const BASE_AMOUNT: Partial<Record<ItemId, number>> = {
   skystone: 8, crystal: 2, sunmetal: 2,
   apple: 30, honey: 12, wax: 12, cider: 6, candle: 12, preserves: 5,
   cherry: 30, orange: 25, date: 25, pear: 25, plum: 25, juice: 6, fruit_basket: 2,
+  wheat: 60, carrot: 40, flour: 25, bread: 16, wool: 30, cloth: 10, egg: 30, stew: 10, pie: 6,
 };
 /** Goods traders favour (picked more often). */
-const FAVOURED = new Set<ItemId>(['apple', 'honey', 'wax', 'cider', 'candle', 'preserves', 'cherry', 'orange', 'date', 'pear', 'plum', 'juice', 'fruit_basket']);
+const FAVOURED = new Set<ItemId>(['apple', 'honey', 'wax', 'cider', 'candle', 'preserves', 'cherry', 'orange', 'date', 'pear', 'plum', 'juice', 'fruit_basket', 'bread', 'cloth', 'stew', 'pie']);
 
 export interface Contract { item: ItemId; n: number; got: number; marks: number }
 

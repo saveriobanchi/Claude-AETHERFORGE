@@ -1,6 +1,7 @@
 import { BUILDINGS } from './content/buildings';
 import { FRUIT_BY_TREE } from './content/biomes';
-import { CHAPTERS, CHARM_MILESTONES, CHARM_XP, type ChapterDef, type Goal } from './content/chapters';
+import { AMBITIONS, AMBITION_XP, PATHS, type AmbitionDef, type Goal, type PathId, CHARM_MILESTONES, CHARM_XP } from './content/ambitions';
+import { BLUEPRINTS } from './content/people';
 import { ITEMS, type ItemId } from './content/items';
 import { checkDiscoveries } from './progression';
 import { type GameState, addXp, stashAdd } from './state';
@@ -44,6 +45,9 @@ export function goalValue(s: GameState, g: Goal): number {
     case 'resonance': return s.forge.level;
     case 'renown': return s.renown.level + 1;
     case 'codex': return s.renown.codex.length;
+    case 'settlers': return s.people.count;
+    case 'voyages': return s.stats.voyages ?? 0;
+    case 'blueprints': return BLUEPRINTS.filter((b) => s.known.has(b)).length;
   }
 }
 
@@ -66,34 +70,58 @@ export function goalText(g: Goal): string {
     case 'resonance': return `Reach resonance ${g.n}`;
     case 'renown': return `Reach renown ${g.n}`;
     case 'codex': return `Complete ${g.n} codex sets`;
+    case 'settlers': return `Be home to ${g.n} settlers`;
+    case 'voyages': return g.n > 1 ? `Return from ${g.n} expeditions` : 'Return from an expedition';
+    case 'blueprints': return `Find ${g.n} blueprints`;
   }
 }
 
-/** The active chapter, or null when every chapter is done. */
-export function activeChapter(s: GameState): ChapterDef | null {
-  return CHAPTERS[s.chapters] ?? null;
+/** The open rung of a path (the first not yet achieved), or null when the path is done. */
+export function openRung(s: GameState, path: PathId): AmbitionDef | null {
+  return AMBITIONS.find((a) => a.path === path && !s.ambitions.has(a.id)) ?? null;
 }
 
-function payReward(s: GameState, c: ChapterDef): void {
-  const r = c.reward;
+export function openAmbitions(s: GameState): AmbitionDef[] {
+  return PATHS.map((p) => openRung(s, p.id)).filter((a): a is AmbitionDef => !!a);
+}
+
+/** 0..1 — the mean fraction of each goal. */
+export function progress(s: GameState, a: AmbitionDef): number {
+  return a.goals.reduce((t, g) => t + Math.min(1, goalValue(s, g) / g.n), 0) / a.goals.length;
+}
+
+/** The ambition shown on the quest card: the pinned one, else the open one closest to done. */
+export function focus(s: GameState): AmbitionDef | null {
+  const open = openAmbitions(s);
+  const pin = open.find((a) => a.id === s.pinned);
+  if (pin) return pin;
+  let best: AmbitionDef | null = null, bp = -1;
+  for (const a of open) { const p = progress(s, a); if (p > bp) { bp = p; best = a; } }
+  return best;
+}
+
+function payReward(s: GameState, a: AmbitionDef): void {
+  const r = a.reward;
   if (r.items) for (const k in r.items) stashAdd(s, k as ItemId, r.items[k as ItemId] ?? 0);
   if (r.marks) { s.trade.marks += r.marks; s.trade.earned += r.marks; }
   if (r.points) s.renown.points += r.points;
-  s.flags.add('chapter_' + c.id);
-  addXp(s, 60);
+  s.flags.add('amb_' + a.id);
+  addXp(s, AMBITION_XP);
 }
 
-/** Complete every finished chapter in order; award charm milestones. */
-export function checkChapters(s: GameState): void {
-  let c = activeChapter(s);
-  let guard = 0;
-  while (c && c.goals.every((g) => goalDone(s, g)) && guard++ < CHAPTERS.length) {
-    payReward(s, c);
-    s.chapters++;
-    s.events.push({ type: 'chapter', id: c.id });
-    c = activeChapter(s);
+/** Achieve every open ambition whose goals are met (rungs climb in order); award charm milestones. */
+export function checkAmbitions(s: GameState): void {
+  let any = false;
+  for (let guard = 0; guard < AMBITIONS.length; guard++) {
+    const a = openAmbitions(s).find((x) => x.goals.every((g) => goalDone(s, g)));
+    if (!a) break;
+    s.ambitions.add(a.id);
+    payReward(s, a);
+    if (s.pinned === a.id) s.pinned = null;
+    s.events.push({ type: 'ambition', id: a.id });
+    any = true;
   }
-  if (guard) checkDiscoveries(s);
+  if (any) checkDiscoveries(s);
   const ch = charm(s);
   for (const m of CHARM_MILESTONES) {
     if (ch < m || s.flags.has('charm_' + m)) continue;

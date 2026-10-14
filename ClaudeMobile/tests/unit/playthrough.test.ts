@@ -57,6 +57,18 @@ describe('full playthrough', () => {
     bot.buy('fruit');
     bot.buy('hive');
     bot.buy('lanterns');
+    // fields, flocks and kitchens; settlers; an expedition
+    until('farming', () => bot.ensure('dew', 15));
+    bot.automate('grow_wheat', 2);
+    until('ranching', () => bot.ensure('wheat', 20));
+    until('baking', () => bot.ensure('wheat', 30));
+    until('weaving', () => bot.ensure('wool', 6));
+    until('settlers', () => bot.ensure('bread', 4));
+    bot.achieve('settlement_1');
+    bot.settle(1);
+    until('expeditions', () => bot.ensure('cloth', 8));
+    bot.voyage('orchard', 1);
+    bot.achieve('land_1');
     until('assembler', () => bot.ensure('iron', 6));
     bot.build('assembler');
     bot.buildGrove();
@@ -94,8 +106,9 @@ describe('full playthrough', () => {
     bot.automate('distill', 1);
     bot.automate('sunmetal', 1);
     bot.buildForge();
-    // the chapter line through the Great Work (chapter 9)
-    bot.doChapters(9);
+    // ambitions that unlock the rest of the decor patterns
+    bot.achieve('industry_2');
+    bot.achieve('aether_3');
     } finally { dump(); }
 
     const missing = DISCOVERY_LIST.filter((d) => !bot.s.known.has(d.id)).map((d) => d.id);

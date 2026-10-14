@@ -299,7 +299,8 @@ describe('progression', () => {
     const { BUILDING_LIST } = await import('../../src/core/content/buildings');
     const { RECIPE_LIST } = await import('../../src/core/content/recipes');
     for (const b of BUILDING_LIST) if (b.unlock && b.unlock !== '_never') expect(DISCOVERIES[b.unlock], b.id).toBeDefined();
-    for (const r of RECIPE_LIST) expect(DISCOVERIES[r.unlock], r.id).toBeDefined();
+    const { BLUEPRINTS } = await import('../../src/core/content/people');
+    for (const r of RECIPE_LIST) expect(DISCOVERIES[r.unlock] ?? (BLUEPRINTS.includes(r.unlock) || undefined), r.id).toBeDefined();
   });
 });
 

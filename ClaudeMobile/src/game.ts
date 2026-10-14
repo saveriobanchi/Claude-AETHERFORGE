@@ -250,10 +250,25 @@ export class Game {
           this.ui.renownUp(e.level);
           this.markDirty();
           break;
-        case 'chapter':
+        case 'ambition':
           audio.play('forge', 1.1);
           haptic([20, 50, 20, 50, 30], this.settings.haptics);
-          this.ui.chapterDone(e.id);
+          this.ui.ambitionDone(e.id);
+          this.markDirty();
+          break;
+        case 'settler':
+          audio.play('discover', 1.1);
+          this.ui.settlerArrived(e.n);
+          this.markDirty();
+          break;
+        case 'settler_left':
+          this.ui.settlerLeft();
+          this.markDirty();
+          break;
+        case 'voyage':
+          audio.play('discover', 0.9);
+          haptic([20, 40, 20], this.settings.haptics);
+          this.ui.voyageHome(e.dest, e.got, e.blueprint);
           this.markDirty();
           break;
         case 'charm':
