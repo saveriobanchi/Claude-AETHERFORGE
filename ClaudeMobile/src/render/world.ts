@@ -1,5 +1,6 @@
 import { Application, Container, Graphics, Rectangle, RenderTexture, Sprite, Texture, TextureSource } from 'pixi.js';
 import { BUILDINGS, TREE } from '../core/content/buildings';
+import { BIOMES } from '../core/content/biomes';
 import { ITEM_IDS, type ItemId } from '../core/content/items';
 import { RECIPES } from '../core/content/recipes';
 import { ISLETS, SUMMON_TIME } from '../core/content/world';
@@ -100,6 +101,7 @@ export class WorldView {
   private breezeTex!: Texture;
   private isletArrival: Sprite | null = null;
   private ship: Sprite | null = null;
+  private state: GameState | null = null;
   private shipFrames: ArtImage[] = [];
   private time = 0;
   private shakeT = 0;
@@ -237,7 +239,8 @@ export class WorldView {
       const v = Math.floor(hashTile(t.y * 3 + 1, t.x * 7) * art.colVariants);
       const mask = (has(t.x + 1, t.y) ? 0 : 1) | (has(t.x, t.y + 1) ? 0 : 2) | (has(t.x - 1, t.y) ? 0 : 4) | (has(t.x, t.y - 1) ? 0 : 8);
       const tv = Math.floor(hashTile(t.x * 5 + 2, t.y * 11) * art.topVariants);
-      for (const k of [`col:${depth}:${v}`, `top:${t.floor}:${mask}:${tv}`]) {
+      const kind = t.floor === 'grass' && t.biome ? t.biome : t.floor;
+      for (const k of [`col:${depth}:${v}`, `top:${kind}:${mask}:${tv}`]) {
         const sp = new Sprite();
         setArt(sp, art.img(k));
         sp.scale.set(1 / art.R);
@@ -272,7 +275,8 @@ export class WorldView {
       // at most one piece per tile, sparse, and grouped in small patches of one kind
       if (hashTile(t.x * 5 + 31, t.y * 3 - 17) > 0.22) continue;
       const patch = hashTile(Math.floor(t.x / 3) * 7 + 3, Math.floor(t.y / 3) * 11 + 5);
-      const kind = patch < 0.5 ? 'tuft' : patch < 0.78 ? 'flowers' : patch < 0.92 ? 'bush' : 'stone';
+      const set = art.decorSets[t.biome ?? 'grass'] ?? art.decorSets.grass ?? kinds;
+      const kind = set[patch < 0.5 ? 0 : patch < 0.78 ? 1 : patch < 0.92 ? 2 : 3] ?? set[0];
       if (!kinds.includes(kind)) continue;
       const v = Math.floor(hashTile(Math.floor(t.x / 3), Math.floor(t.y / 3) + 9) * art.decorVariants);
       const ox = hashTile(t.x * 13, t.y * 7) - 0.5, oy = hashTile(t.x * 3, t.y * 17) - 0.5;
@@ -299,7 +303,7 @@ export class WorldView {
     const sites: [number, number, number][] = [];
     const centres = [...s.tiles.values()].map((t) => tileCenter(t.x, t.y));
     for (const t of s.tiles.values()) {
-      if (t.floor !== 'grass') continue;
+      if (t.floor !== 'grass' || t.biome === 'dunes' || t.biome === 'frost') continue;
       const [cx, cy] = tileCenter(t.x, t.y);
       for (const side of [0, 1]) {
         const open = side === 0 ? !s.tiles.has(key(t.x, t.y + 1)) : !s.tiles.has(key(t.x + 1, t.y));
@@ -362,7 +366,7 @@ export class WorldView {
     const def = BUILDINGS[b.type];
     const root = new Container();
     const isBelt = def.kind === 'belt';
-    const st = isBelt ? null : this.spr.get(b.type)!;
+    const st = isBelt ? null : this.spr.get(this.artKey(b))!;
     const sprite = new Sprite();
     setArt(sprite, isBelt ? this.belt[b.dir][0] : st!.def.frames[0]);
     sprite.scale.set(1 / art.R);
@@ -504,6 +508,7 @@ export class WorldView {
   // ───────────────────────── frame ─────────────────────────
 
   render(s: GameState, alpha: number, dt: number, o: ViewOptions): void {
+    this.state = s;
     const t0 = performance.now();
     this.time += dt;
     this.vw = this.app.screen.width;
@@ -607,6 +612,16 @@ export class WorldView {
     this.updateMs = this.updateMs * 0.9 + (t1 - t0) * 0.1;
   }
 
+  /** Sprite set for a building: island trees and tall grass take their biome's look. */
+  private artKey(b: Building): string {
+    if (b.type !== 'tree' && b.type !== 'tuft') return b.type;
+    const t = this.state?.tiles.get(key(b.x, b.y));
+    const bio = t && t.floor === 'grass' ? t.biome : undefined;
+    if (!bio) return b.type;
+    const k = b.type === 'tree' ? `tree_${BIOMES[bio].treeLook}` : `tuft_${bio}`;
+    return this.spr.has(k) ? k : b.type;
+  }
+
   private updateView(s: GameState, b: Building, v: BView, kind: string, t: number, dt: number, o: ViewOptions): void {
     const def = BUILDINGS[b.type];
     // squash & stretch
@@ -623,7 +638,7 @@ export class WorldView {
       this.renderBeltItems(b, v, s);
       return;
     }
-    const st = this.spr.get(b.type)!;
+    const st = this.spr.get(this.artKey(b)) ?? this.spr.get(b.type)!;
     const vars = st.def.variants;
     let frames = st.def.frames;
     if (kind === 'tree') {

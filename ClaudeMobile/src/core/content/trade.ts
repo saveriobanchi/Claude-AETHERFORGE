@@ -12,6 +12,7 @@ export const TRADE_VALUE: Partial<Record<ItemId, number>> = {
   copper: 2, gear: 2.4, wire: 1.4, glass: 3, iron: 3, plate: 5, lens: 8, mechanism: 14,
   skystone: 6, crystal: 20, sunmetal: 30,
   apple: 0.8, honey: 2, wax: 1.6, cider: 5, candle: 2.2, preserves: 7,
+  cherry: 1, orange: 1.2, date: 1.4, pear: 1, plum: 1.4, juice: 5, fruit_basket: 40,
 };
 
 /** Base contract size per item (scaled by trade level). */
@@ -20,9 +21,10 @@ const BASE_AMOUNT: Partial<Record<ItemId, number>> = {
   copper: 15, gear: 15, wire: 25, glass: 12, iron: 12, plate: 8, lens: 4, mechanism: 3,
   skystone: 8, crystal: 2, sunmetal: 2,
   apple: 30, honey: 12, wax: 12, cider: 6, candle: 12, preserves: 5,
+  cherry: 30, orange: 25, date: 25, pear: 25, plum: 25, juice: 6, fruit_basket: 2,
 };
 /** Goods traders favour (picked more often). */
-const FAVOURED = new Set<ItemId>(['apple', 'honey', 'wax', 'cider', 'candle', 'preserves']);
+const FAVOURED = new Set<ItemId>(['apple', 'honey', 'wax', 'cider', 'candle', 'preserves', 'cherry', 'orange', 'date', 'pear', 'plum', 'juice', 'fruit_basket']);
 
 export interface Contract { item: ItemId; n: number; got: number; marks: number }
 
@@ -73,7 +75,12 @@ export interface MarketDef {
 }
 
 export const MARKET: MarketDef[] = [
-  { id: 'fruit', name: 'Fruit Sapling', desc: 'Grows into an apple tree.', price: 8, grow: 1.1, gives: { fruit_sapling: 1 } },
+  { id: 'fruit', name: 'Apple Sapling', desc: 'Thrives in meadow.', price: 8, grow: 1.1, gives: { fruit_sapling: 1 } },
+  { id: 'cherry', name: 'Cherry Sapling', desc: 'Thrives in meadow. Two cherries a pick.', price: 10, grow: 1.1, gives: { cherry_sapling: 1 }, needs: 'orchard' },
+  { id: 'orange', name: 'Orange Sapling', desc: 'Thrives in dunes.', price: 14, grow: 1.1, gives: { orange_sapling: 1 }, needs: 'dunes' },
+  { id: 'date', name: 'Date Palm Sapling', desc: 'Thrives in dunes. Two dates a pick.', price: 16, grow: 1.1, gives: { date_sapling: 1 }, needs: 'dunes' },
+  { id: 'pear', name: 'Pear Sapling', desc: 'Thrives in marsh.', price: 12, grow: 1.1, gives: { pear_sapling: 1 }, needs: 'marsh' },
+  { id: 'plum', name: 'Plum Sapling', desc: 'Thrives in frost. Two plums a pick.', price: 18, grow: 1.1, gives: { plum_sapling: 1 }, needs: 'frost' },
   { id: 'hive', name: 'Hive Kit', desc: 'Learn to keep bees.', price: 25, once: true, flag: 'bought_hive', needs: 'orchard' },
   { id: 'lanterns', name: 'Lantern Pattern', desc: 'Make trade lanterns from candles.', price: 12, once: true, flag: 'bought_lanterns', needs: 'apiary' },
   { id: 'master', name: 'Master Tools', desc: 'Upgrade machines to levels IV and V.', price: 60, once: true, flag: 'bought_master', needs: 'tinker' },

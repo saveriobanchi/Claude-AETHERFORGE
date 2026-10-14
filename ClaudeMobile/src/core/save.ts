@@ -2,10 +2,11 @@ import { BUILDINGS } from './content/buildings';
 import { isItemId, type ItemId, type Stack } from './content/items';
 import type { Floor } from './content/buildings';
 import {
-  type Building, type Dir, type GameState, SAVE_VERSION, createState, emptyStash, newBuilding, key, hashSeed, emptyCache, emptyTrade,
+  type Building, type Dir, type GameState, type Tile, SAVE_VERSION, createState, emptyStash, newBuilding, key, hashSeed, emptyCache, emptyTrade,
 } from './state';
 import { rebuildCache } from './sim';
 import type { Contract } from './content/trade';
+import { BIOMES, type BiomeId } from './content/biomes';
 
 /** On-disk shape (current version). Plain JSON; Maps flattened to arrays. */
 export interface SaveData {
@@ -13,7 +14,7 @@ export interface SaveData {
   seed: number;
   rng: number;
   time: number;
-  tiles: [number, number, Floor, string?][];
+  tiles: [number, number, Floor, string?, string?][];
   buildings: SavedBuilding[];
   stash: Stack;
   stats: GameState['stats'];
@@ -72,7 +73,7 @@ export function serialize(s: GameState, view?: SaveData['view']): SaveData {
     seed: s.seed,
     rng: s.rng,
     time: s.time,
-    tiles: [...s.tiles.values()].map((t) => (t.islet ? [t.x, t.y, t.floor, t.islet] : [t.x, t.y, t.floor])),
+    tiles: [...s.tiles.values()].map((t) => (t.biome ? [t.x, t.y, t.floor, t.islet ?? '', t.biome] : t.islet ? [t.x, t.y, t.floor, t.islet] : [t.x, t.y, t.floor])),
     buildings,
     stash,
     stats: s.stats,
@@ -109,6 +110,8 @@ export const MIGRATIONS: Record<number, (d: AnySave) => AnySave> = {
   },
   // v2 → v3: world seed (weather), trade state, machine levels (default 1).
   2: (d) => ({ ...d, v: 3, seed: (d.seed ?? d.rng ?? 1) >>> 0, trade: d.trade ?? emptyTrade() }),
+  // v3 → v4: tiles may carry a biome (5th field); older tiles are meadow.
+  3: (d) => ({ ...d, v: 4 }),
 };
 
 export function migrate(d: AnySave): SaveData {
@@ -133,9 +136,11 @@ export function deserialize(raw: unknown): { state: GameState; view?: SaveData['
   s.rng = d.rng >>> 0;
   s.seed = (d.seed ?? d.rng) >>> 0;
   s.time = +d.time || 0;
-  for (const [x, y, floor, islet] of d.tiles ?? []) {
+  for (const [x, y, floor, islet, biome] of d.tiles ?? []) {
     if (!Number.isInteger(x) || !Number.isInteger(y)) continue;
-    s.tiles.set(key(x, y), { x, y, floor: floor === 'stone' || floor === 'sky' ? floor : 'grass', seed: hashSeed(x, y), islet });
+    const t: Tile = { x, y, floor: floor === 'stone' || floor === 'sky' ? floor : 'grass', seed: hashSeed(x, y), islet: islet || undefined };
+    if (biome && biome in BIOMES && biome !== 'meadow') t.biome = biome as BiomeId;
+    s.tiles.set(key(x, y), t);
   }
   if (!s.tiles.size) throw new Error('Save has no ground');
   let maxId = 0;

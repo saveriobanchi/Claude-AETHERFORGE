@@ -765,3 +765,4 @@ body.sheet-open .hud-bottom .main-btn.on:not(.big) { border-image: var(--tex-pan
 .pips i.lock { opacity: 0.35; }
 .offer .btn.primary img, .upgrade .btn.primary img, .side .actions .btn.primary img.ui { filter: none; }
 .sect-h .r { font-family: 'Atkinson', system-ui, sans-serif; }
+.biome-note { font-size: 0.72rem; color: #cfe8b8; padding: 2px 6px; background: rgba(90, 140, 70, 0.18); box-shadow: inset 2px 0 0 #8ad06a; }

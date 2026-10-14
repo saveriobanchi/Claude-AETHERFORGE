@@ -246,7 +246,7 @@ describe('saves', () => {
     const v2 = { ...serialize(s), v: 2 } as Record<string, unknown>;
     delete v2.trade; delete v2.seed;
     const m = migrate(v2);
-    expect(m.v).toBe(3);
+    expect(m.v).toBe(4);
     expect(m.trade.marks).toBe(0);
     const d = deserialize(v2).state;
     expect(d.tiles.size).toBe(10);

@@ -1,5 +1,6 @@
 import * as A from '../core/actions';
-import { BUILDINGS, BUILDING_LIST, HIVE, NODE_YIELD, ORCHARD, TREE, type BuildCategory } from '../core/content/buildings';
+import { BUILDINGS, BUILDING_LIST, HIVE, NODE_YIELD, TREE, type BuildCategory } from '../core/content/buildings';
+import { BIOMES, FRUIT_BY_TREE, OFF_HOME } from '../core/content/biomes';
 import { MARKET, CONTRACT_REFRESH, levelSpeed, marketPrice, repForLevel, upgradable, upgradeCost } from '../core/content/trade';
 import { dayIndex, weatherFor } from '../core/content/weather';
 import { DISCOVERIES, DISCOVERY_LIST } from '../core/content/discoveries';
@@ -355,7 +356,7 @@ export class UI {
         const isNew = !s.flags.has('seen:b:' + l.id);
         cards.append(h('button', { class: 'card' + (afford ? '' : ' poor'), onclick: () => this.pickLand(l.id) },
           isNew ? h('span', { class: 'new', text: 'NEW' }) : null,
-          h('div', { class: 'pic' }, img(landThumb(l.floor))), h('div', { class: 'nm', text: l.name }), this.costEl(cost)));
+          h('div', { class: 'pic' }, img(landThumb(l.biome && l.biome !== 'meadow' ? l.biome : l.floor))), h('div', { class: 'nm', text: l.name }), this.costEl(cost)));
       }
     } else {
       for (const b of BUILDING_LIST) {
@@ -409,7 +410,7 @@ export class UI {
       if (rot) hint += ' · ⟳ sets its output';
     } else if (m.kind === 'land') {
       const l = LANDS.find((x) => x.id === m.land)!;
-      pic = landThumb(l.floor); name = l.name; cost = landCost(m.land, s.tiles.size);
+      pic = landThumb(l.biome && l.biome !== 'meadow' ? l.biome : l.floor); name = l.name; cost = landCost(m.land, s.tiles.size);
       hint = l.mode === 'new' ? 'Tap beside the edge · drag to lay several' : 'Tap grass to pave it · drag for more';
     } else if (m.kind === 'remove') {
       pic = glyph('trash'); name = 'Remove'; hint = 'Tap a building to take it back (full refund) · drag for many';
@@ -508,7 +509,7 @@ export class UI {
     if (def.kind === 'generator') return b.progress / (def.produces?.every ?? 1);
     if (def.kind === 'drill') { const n = this.nodeOf(b); return n ? b.progress / NODE_YIELD[n.type].every : 0; }
     if (def.kind === 'harvester') return b.timer / 1.5;
-    if (def.kind === 'tree') return b.stock / (b.type === 'elder_tree' ? TREE.elderMaxStock : b.type === 'fruit_tree' ? ORCHARD.maxStock : TREE.maxStock);
+    if (def.kind === 'tree') return b.stock / (b.type === 'elder_tree' ? TREE.elderMaxStock : FRUIT_BY_TREE[b.type] ? FRUIT_BY_TREE[b.type].maxStock : TREE.maxStock);
     if (def.kind === 'hive') return b.progress / (def.produces?.every ?? 15);
     if (def.kind === 'sapling') return b.progress / TREE.saplingGrowTime;
     if (def.kind === 'beacon' && this.g.s.islets.summon) return 1 - this.g.s.islets.summon.t / 45;
@@ -539,7 +540,7 @@ export class UI {
       def.kind === 'dispatcher' || def.kind === 'sorter' ? Object.keys(s.stats.obtained).length : '',
       Math.floor(this.progressOf(b) * (def.kind === 'sapling' ? 20 : 0)),
       b.level, upgradable(def) ? s.trade.marks + ':' + s.known.has('tinker') + s.known.has('master') : '',
-      def.kind === 'post' ? JSON.stringify(s.trade) : '',
+      def.kind === 'post' ? JSON.stringify(s.trade) : '', s.tileRev,
     ].join('|');
     if (sig === this.panelSig) return;
     this.panelSig = sig;
@@ -597,13 +598,15 @@ export class UI {
         actions.append(h('button', { class: 'btn', onclick: () => { const x = b.x, y = b.y; g.select(null, false); g.tryRemove(x, y); } }, img(glyph('trash')), 'Remove'));
       }
     };
+    const note = this.biomeNote(b);
+    if (note) body.append(h('div', { class: 'biome-note', text: note }));
     switch (def.kind) {
       case 'tree': {
-        const max = b.type === 'elder_tree' ? TREE.elderMaxStock : b.type === 'fruit_tree' ? ORCHARD.maxStock : TREE.maxStock;
+        const max = b.type === 'elder_tree' ? TREE.elderMaxStock : FRUIT_BY_TREE[b.type] ? FRUIT_BY_TREE[b.type].maxStock : TREE.maxStock;
         body.append(h('div', { class: 'caps', text: 'Ready to gather' }), h('div', { class: 'num', style: 'font-size:1.1rem', text: `${Math.floor(b.stock)} / ${max}` }), this.bar());
         body.append(h('div', { class: 'muted', style: 'font-size:0.82rem', text: 'Tap the tree in the world to gather. Treewrights beside it can do this for you.' }));
         actions.append(h('button', { class: 'btn primary', onclick: () => { const r = A.harvestAt(s, b.x, b.y); if (r.ok) { audio.play('harvest'); g.markDirty(); this.floaterCenter(r.got ?? {}); } else g.fail(r.reason || 'Regrowing'); } }, img(glyph('hand')), 'Gather'));
-        if (b.type === 'tree' || b.type === 'fruit_tree') actions.append(h('button', { class: 'btn', onclick: () => g.tryRemove(b.x, b.y) }, img(glyph('trash')), 'Fell'));
+        if (b.type === 'tree' || FRUIT_BY_TREE[b.type]) actions.append(h('button', { class: 'btn', onclick: () => g.tryRemove(b.x, b.y) }, img(glyph('trash')), 'Fell'));
         break;
       }
       case 'sapling':
@@ -758,6 +761,25 @@ export class UI {
     }
     if (actions.childElementCount) body.append(actions);
     if (upgradable(def) && s.known.has('tinker')) body.append(this.upgradeSection(b));
+  }
+
+  /** How the ground under a building changes it (biomes). */
+  private biomeNote(b: Building): string {
+    const s = this.g.s;
+    const t = s.tiles.get(((b.x + 2048) * 4096 + (b.y + 2048)));
+    if (!t || t.floor !== 'grass') return '';
+    const bio = BIOMES[t.biome ?? 'meadow'];
+    const def = BUILDINGS[b.type];
+    const pct = (k: number) => (k >= 1 ? '+' : '−') + Math.round(Math.abs(k - 1) * 100) + '%';
+    const fruit = FRUIT_BY_TREE[b.type] ?? FRUIT_BY_TREE[def.growsInto ?? ''];
+    if (fruit) return fruit.home === bio.id ? `${bio.name}: its home — full harvest.` : `${bio.name}: away from home (${BIOMES[fruit.home].name}), regrows ×${OFF_HOME}.`;
+    if (b.type === 'tree') return `${bio.name}: ${bio.treeLook} — ${Object.entries(bio.tree).map(([k, n]) => `${n} ${ITEMS[k as ItemId].name.toLowerCase()}`).join(' + ')} a pick${bio.regrow !== 1 ? `, regrows ${pct(bio.regrow)}` : ''}.`;
+    if (b.type === 'tuft') return `${bio.name}: ${bio.tuftFiber} fiber a pull.`;
+    if (def.produces?.item === 'dew' && bio.dew !== 1) return `${bio.name}: dew ${pct(bio.dew)}.`;
+    if (def.kind === 'windmill' && bio.wind !== 1) return `${bio.name}: breeze ${pct(bio.wind)}.`;
+    if (b.type === 'composter' && bio.compost !== 1) return `${bio.name}: compost ${pct(bio.compost)}.`;
+    if (def.kind === 'hive' && bio.hive !== 1) return `${bio.name}: honey ${pct(bio.hive)}.`;
+    return '';
   }
 
   private upgradeSection(b: Building): HTMLElement {

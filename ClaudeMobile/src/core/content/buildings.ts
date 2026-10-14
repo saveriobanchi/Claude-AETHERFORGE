@@ -28,6 +28,7 @@ export type BuildingKind =
   | 'decor';      // purely decorative
 
 export type Floor = 'grass' | 'stone' | 'sky';
+import { FRUITS } from './biomes';
 export type BuildCategory = 'nature' | 'craft' | 'logistics' | 'power' | 'storage' | 'aether' | 'wonder';
 
 export interface BuildingDef {
@@ -61,8 +62,7 @@ const B: BuildingDef[] = [
   { id: 'tree', name: 'Islet Tree', desc: 'Tap to gather timber and leaves. It regrows.', kind: 'tree', category: 'nature', size: 1, cost: {}, floors: ['grass'], unlock: '_never' },
   { id: 'sapling', name: 'Sapling', desc: 'Plant on grass. Grows into a tree.', kind: 'sapling', category: 'nature', size: 1, cost: { sapling: 1 }, floors: ['grass'], unlock: 'sapling' },
   { id: 'tuft', name: 'Tall Grass', desc: 'Tap to pull fiber.', kind: 'tuft', category: 'nature', size: 1, cost: {}, floors: ['grass'], unlock: '_never' },
-  { id: 'fruit_sapling', name: 'Fruit Sapling', desc: 'Grows into a fruit tree.', kind: 'sapling', category: 'nature', size: 1, cost: { fruit_sapling: 1 }, floors: ['grass'], unlock: 'orchard', growsInto: 'fruit_tree' },
-  { id: 'fruit_tree', name: 'Fruit Tree', desc: 'Tap to pick apples. Bees nearby make it bear more.', kind: 'tree', category: 'nature', size: 1, cost: {}, floors: ['grass'], unlock: '_never' },
+  // fruit trees and their saplings come from the FRUITS table (biomes.ts)
   { id: 'hive', name: 'Beehive', desc: 'Bees make honey and wax. Needs trees within reach.', kind: 'hive', category: 'nature', size: 1, cost: { plank: 8, twine: 4 }, floors: ['grass'], unlock: 'apiary', rotatable: true, produces: { item: 'honey', every: 15 }, bufferCap: 12 },
   { id: 'elder_tree', name: 'Elder Tree', desc: 'Ancient and generous.', kind: 'tree', category: 'nature', size: 1, cost: {}, unlock: '_never', removable: false },
 
@@ -118,6 +118,16 @@ const B: BuildingDef[] = [
   { id: 'node_spring', name: 'Cloud Spring', desc: 'Water and mist well up endlessly.', kind: 'node', category: 'nature', size: 1, cost: {}, unlock: '_never', removable: false },
   { id: 'node_shard', name: 'Fallen Star', desc: 'It still sheds dust.', kind: 'node', category: 'nature', size: 1, cost: {}, unlock: '_never', removable: false },
 ];
+
+const FRUIT_NAMES: Record<string, [string, string]> = { apple: ['Apple', 'apples'], cherry: ['Cherry', 'cherries'], orange: ['Orange', 'oranges'], date: ['Date Palm', 'dates'], pear: ['Pear', 'pears'], plum: ['Plum', 'plums'] };
+for (const f of FRUITS) {
+  const [nm, fruit] = FRUIT_NAMES[f.id];
+  const tree = f.id === 'date' ? nm : `${nm} Tree`;
+  B.push(
+    { id: f.sapling, name: `${nm} Sapling`, desc: `Grows into ${f.id === 'apple' ? 'an apple tree' : f.id === 'date' ? 'a date palm' : `a ${f.id} tree`}.`, kind: 'sapling', category: 'nature', size: 1, cost: { [f.seed]: 1 }, floors: ['grass'], unlock: 'orchard', growsInto: f.tree },
+    { id: f.tree, name: tree, desc: `Tap to pick ${fruit}. Bees nearby make it bear more.`, kind: 'tree', category: 'nature', size: 1, cost: {}, floors: ['grass'], unlock: '_never' },
+  );
+}
 
 export const BUILDINGS: Record<string, BuildingDef> = Object.fromEntries(B.map((b) => [b.id, b]));
 export const BUILDING_LIST = B;

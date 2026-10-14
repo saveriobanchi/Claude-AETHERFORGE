@@ -1,9 +1,9 @@
-import { BUILDINGS, TUFT } from './content/buildings';
+import { BUILDINGS } from './content/buildings';
 import { ITEMS, type ItemId, type Stack } from './content/items';
 import { FUEL_VALUE, RECIPES } from './content/recipes';
 import { ATTUNE, ISLETS, LAND, SUMMON_TIME, landCost, summonCost } from './content/world';
 import { buildingUnlocked, checkDiscoveries, landUnlocked, recipeUnlocked } from './progression';
-import { bufCap, completeContract, currentRecipe, defaultRecipe, fillBoard, forgeAccept, forgeNeeds, harvestTree, rebuildCache, salvage } from './sim';
+import { bufCap, completeContract, tuftYield, currentRecipe, defaultRecipe, fillBoard, forgeAccept, forgeNeeds, harvestTree, rebuildCache, salvage } from './sim';
 import { BASIC_MAX_LEVEL, MARKET_BY_ID, MAX_LEVEL, SKIP_COOLDOWN, marketPrice, upgradable, upgradeCost } from './content/trade';
 import {
   type Building, type Dir, type GameState, DX, DY, addBuilding, addTile, addTo, buildingAt, canAfford, key,
@@ -68,7 +68,7 @@ function clearTufts(s: GameState, type: string, x: number, y: number): void {
   for (let dy = 0; dy < size; dy++) for (let dx = 0; dx < size; dx++) {
     const o = buildingAt(s, x + dx, y + dy);
     if (o && o.type === 'tuft') {
-      stashAdd(s, 'fiber', TUFT.yield);
+      stashAdd(s, 'fiber', tuftYield(s, o.x, o.y));
       removeBuildingRaw(s, o);
     }
   }
@@ -168,6 +168,10 @@ export function canExpand(s: GameState, land: string, x: number, y: number, chec
     let adj = false;
     for (let d = 0; d < 4; d++) if (s.tiles.has(key(x + DX[d], y + DY[d]))) adj = true;
     if (!adj) return fail('Must join the island');
+  } else if (def.biome) {
+    if (!t) return fail('Needs ground');
+    if (t.floor !== 'grass') return fail('Needs grass');
+    if ((t.biome ?? 'meadow') === def.biome) return fail(`Already ${def.name.toLowerCase()}`);
   } else {
     if (!t) return fail('Needs ground');
     if (t.floor !== 'grass') return fail('Already paved');
@@ -185,9 +189,14 @@ export function expand(s: GameState, land: string, x: number, y: number): Result
   const def = LAND[land];
   pay(s, landCost(land, s.tiles.size));
   if (def.mode === 'new') addTile(s, x, y, def.floor);
-  else {
+  else if (def.biome) {
+    const t = tileAt(s, x, y)!;
+    if (def.biome === 'meadow') delete t.biome; else t.biome = def.biome;
+    s.topoDirty = true;
+    s.tileRev++;
+  } else {
     const o = buildingAt(s, x, y);
-    if (o && o.type === 'tuft') { stashAdd(s, 'fiber', TUFT.yield); removeBuildingRaw(s, o); }
+    if (o && o.type === 'tuft') { stashAdd(s, 'fiber', tuftYield(s, o.x, o.y)); removeBuildingRaw(s, o); }
     tileAt(s, x, y)!.floor = def.floor;
     s.topoDirty = true;
     s.tileRev++;
@@ -204,7 +213,7 @@ export function harvestAt(s: GameState, x: number, y: number): Result {
   const b = buildingAt(s, x, y);
   if (!b) return fail('');
   if (b.type === 'tuft') {
-    const n = stashAdd(s, 'fiber', TUFT.yield);
+    const n = stashAdd(s, 'fiber', tuftYield(s, b.x, b.y));
     removeBuildingRaw(s, b);
     sync(s);
     checkDiscoveries(s);

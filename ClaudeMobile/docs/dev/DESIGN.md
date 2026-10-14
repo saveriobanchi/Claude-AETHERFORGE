@@ -133,3 +133,36 @@ another reason to scale a production line, not a new minigame.
   preserves; Workbench / Assembler 2 wax + 1 twine → 2 candles.
 - Apples, honey, wax, cider, candles and preserves are mostly trade goods:
   they make the trade loop varied and give grass tiles a late-game use.
+
+## Biomes
+
+Grass tiles carry a **biome**. New plots are Meadow; the player reshapes grass
+into other biomes with *Land* conversions (like Flagstone, but the ground stays
+alive, so trees and grass buildings keep working on it). Biomes are variables
+on mechanics that already exist, not new minigames — the island's *layout*
+becomes a set of microclimates to plan around.
+
+| Biome | Unlock (discovery) | Convert cost | Island tree | Tufts | Effects on machines standing on it |
+| --- | --- | --- | --- | --- | --- |
+| Meadow | start | 2 loam (restore) | oak: 1 timber + 2 leaves | grass: 2 fiber | hives ×1.2 |
+| Marsh | *Wetland* (12 dew) | 3 dew + 2 loam | willow: 1 timber + 3 leaves, more fiber | reeds: 4 fiber | dew ×1.5, compost ×1.5, wind ×0.9, trees regrow ×1.2 |
+| Dunes | *Dunes* (6 sand) | 4 sand | palm: 1 timber + 1 leaf, 50 % fiber | dry grass: 1 fiber | dew ×0.5, wind ×1.1, compost ×0.75, hives ×0.9, regrow ×0.9 |
+| Frost | *Frost* (6 mist) | 2 mist + 4 pebbles | pine: 2 timber + 1 leaf | frost grass: 1 fiber | wind ×1.25, compost ×0.6, hives ×0.6, regrow ×0.75 |
+
+### Fruit trees (one species per sapling, each with a home biome)
+
+| Fruit | Home | Stock / regrow | Harvest | Uses |
+| --- | --- | --- | --- | --- |
+| Apple | Meadow | 4 / 8 s | 1 apple + leaf | cider, preserves, basket |
+| Cherry | Meadow | 3 / 10 s | 2 cherries | basket, trade |
+| Orange | Dunes | 4 / 9 s | 1 orange + leaf | juice (press), basket |
+| Date | Dunes | 3 / 12 s | 2 dates | basket, trade |
+| Pear | Marsh | 4 / 9 s | 1 pear + leaf | basket, trade |
+| Plum | Frost | 3 / 11 s | 2 plums | basket, trade |
+
+- Outside its home biome a fruit tree still grows but regrows at half speed.
+  Hives next to fruit trees still add one fruit per harvest (pollination).
+- Saplings: the market sells each species once its biome is discovered;
+  fruit trees occasionally drop their own sapling.
+- **Fruit Basket** (Workbench / Assembler): 2 of each fruit + 1 twine — the
+  most valuable trade good; it needs all four biomes on one island.

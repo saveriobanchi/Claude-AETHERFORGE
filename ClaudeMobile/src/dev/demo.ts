@@ -1,6 +1,7 @@
 import * as A from '../core/actions';
 import { DISCOVERY_LIST } from '../core/content/discoveries';
-import { ITEM_IDS } from '../core/content/items';
+import { ITEM_IDS, type ItemId } from '../core/content/items';
+import { BUILDINGS } from '../core/content/buildings';
 import { run, stampIslet } from '../core/sim';
 import { type GameState, addTile, createState } from '../core/state';
 
@@ -52,10 +53,23 @@ export function demoWorld(): GameState {
   A.place(s, 'hive', -5, -2);
   A.place(s, 'lantern', -1, 3);
   A.place(s, 'lantern', 4, 5);
+  // biome patches with their fruit trees
+  for (const t of s.tiles.values()) {
+    if (t.floor !== 'grass') continue;
+    if (t.x <= -3 && t.y >= 2) t.biome = 'marsh';
+    else if (t.y <= -4 && t.x >= -1) t.biome = 'dunes';
+    else if (t.x <= -4 && t.y <= -3) t.biome = 'frost';
+  }
+  s.tileRev++;
+  for (const [type, x, y] of [['pear_sapling', -4, 3], ['date_sapling', 1, -5], ['orange_sapling', 0, -6], ['plum_sapling', -5, -4], ['cherry_sapling', -2, -3]] as [string, number, number][]) {
+    s.stash[BUILDINGS[type].cost && (Object.keys(BUILDINGS[type].cost)[0] as ItemId)] = 9;
+    A.place(s, type, x, y);
+  }
+  for (const [x, y] of [[-6, -3], [1, -4]]) { s.stash.sapling = 9; A.place(s, 'sapling', x, y); }
   s.trade.marks = 140;
   s.trade.level = 2;
   run(s, 40);
-  for (const b of s.buildings.values()) if (b.type === 'fruit_sapling') { b.progress = 1e9; }
+  for (const b of s.buildings.values()) if (b.type.endsWith('sapling')) { b.progress = 1e9; }
   stampIslet(s, 0, -10, -3);
   run(s, 1);
   return s;

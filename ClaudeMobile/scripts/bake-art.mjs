@@ -113,6 +113,6 @@ for (const [type, sp] of Object.entries(cat.SPRITES)) {
     smoke: metas[type]?.smoke,
   };
 }
-const manifest = { version, R: cat.ART_R, sheets: sheets.length, depths: cat.DEPTHS, colVariants: cat.COL_VARIANTS, topVariants: cat.TOP_VARIANTS, decorKinds: cat.DECOR_KINDS, decorVariants: cat.DECOR_VARIANTS, sprites, rects };
+const manifest = { version, R: cat.ART_R, sheets: sheets.length, depths: cat.DEPTHS, colVariants: cat.COL_VARIANTS, topVariants: cat.TOP_VARIANTS, decorKinds: cat.DECOR_KINDS, decorSets: cat.DECOR_SETS, decorVariants: cat.DECOR_VARIANTS, sprites, rects };
 writeFileSync(manifestPath, JSON.stringify(manifest));
 console.log(`baked ${images.size} images into ${sheets.length} sheet(s), ${(bytes / 1024).toFixed(0)} KB, ${((Date.now() - t0) / 1000).toFixed(1)} s`);

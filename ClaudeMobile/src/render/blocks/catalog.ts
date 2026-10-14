@@ -1,4 +1,5 @@
-import { CONTEXT_ID, columnPiece, decor, type Floor, fallTex, topPiece } from './models/terrain';
+import { CONTEXT_ID, DECOR_SETS, columnPiece, decor, fallTex, topPiece, type TopKind } from './models/terrain';
+import { FRUITS } from '../../core/content/biomes';
 import * as B from './models/buildings';
 import * as N from './models/nature';
 import { Canvas, type Tex } from './iso';
@@ -35,6 +36,12 @@ export const SPRITES: Record<string, SpriteSpec> = {
   elder_tree: { frames: 2, fps: 1.2, make: (c, L, f) => N.elderTree(c, L, sway(f)) },
   sapling: { frames: 2, fps: 1.2, main: 'g0', variants: { g0: 2, g1: 2, g2: 2 }, make: (c, L, f, v) => N.sapling(c, L, Number(v.slice(1)), sway(f)) },
   tuft: { frames: 2, fps: 1.5, make: (c, L, f) => N.tuft(c, L, sway(f)) },
+  tuft_marsh: { frames: 2, fps: 1.5, make: (c, L, f) => N.tuft(c, L, sway(f), 'marsh') },
+  tuft_dunes: { frames: 2, fps: 1.5, make: (c, L, f) => N.tuft(c, L, sway(f), 'dunes') },
+  tuft_frost: { frames: 2, fps: 1.5, make: (c, L, f) => N.tuft(c, L, sway(f), 'frost') },
+  tree_willow: { frames: 2, fps: 1.2, make: (c, L, f) => N.islandTree(c, L, 'willow', sway(f), 0) },
+  tree_palm: { frames: 2, fps: 1.2, make: (c, L, f) => N.islandTree(c, L, 'palm', sway(f), 0) },
+  tree_pine: { frames: 2, fps: 1.2, make: (c, L, f) => N.islandTree(c, L, 'pine', sway(f), 0) },
   node_vein: { frames: 1, fps: 1, make: (c, L) => N.node(c, L, 'node_vein') },
   node_spring: { frames: 4, fps: 5, make: (c, L, f) => N.node(c, L, 'node_spring', f) },
   node_shard: { frames: 2, fps: 2, make: (c, L, f) => N.node(c, L, 'node_shard', f) },
@@ -72,10 +79,14 @@ export const SPRITES: Record<string, SpriteSpec> = {
   trading_post: { frames: 4, fps: 3, make: (c, L, f) => B.tradingPost(c, L, f) },
   hive: { frames: 4, fps: 6, make: (c, L, f) => B.hive(c, L, f) },
   lantern: { frames: 2, fps: 2, make: (c, L, f) => B.lanternPost(c, L, f) },
-  fruit_tree: { frames: 2, fps: 1.2, make: (c, L, f) => N.fruitTree(c, L, sway(f)) },
-  fruit_sapling: { frames: 2, fps: 1.2, main: 'g0', variants: { g0: 2, g1: 2, g2: 2 }, make: (c, L, f, v) => N.fruitSapling(c, L, Number(v.slice(1)), sway(f)) },
+
   forge: { frames: 1, fps: 8, main: 'st0', variants: { st0: 1, st1: 1, st2: 1, st3: 8 }, make: (c, L, f, v) => B.forge(c, L, Number(v.slice(2)), f) },
 };
+
+for (const fr of FRUITS) {
+  SPRITES[fr.tree] = { frames: 2, fps: 1.2, make: (c, L, f) => N.fruitSpecies(c, L, fr.id, sway(f)) };
+  SPRITES[fr.sapling] = { frames: 2, fps: 1.2, main: 'g0', variants: { g0: 2, g1: 2, g2: 2 }, make: (c, L, f, v) => N.fruitSaplingOf(c, L, fr.id, Number(v.slice(1)), sway(f)) };
+}
 
 const SIZE: Record<string, number> = { forge: 3 };
 
@@ -198,7 +209,7 @@ for (const d of DEPTHS) JOBS[`col:${d}`] = () => {
   }
   return out;
 };
-const FLOORS: Floor[] = ['grass', 'stone', 'sky'];
+const FLOORS: TopKind[] = ['grass', 'stone', 'sky', 'marsh', 'dunes', 'frost'];
 for (const fl of FLOORS) JOBS[`top:${fl}`] = () => {
   const out: JobOut = [];
   for (let mask = 0; mask < 16; mask++) for (let v = 0; v < TOP_VARIANTS; v++) {
@@ -210,7 +221,8 @@ for (const fl of FLOORS) JOBS[`top:${fl}`] = () => {
   return out;
 };
 
-export const DECOR_KINDS = ['tuft', 'flowers', 'bush', 'stone'] as const;
+export const DECOR_KINDS = [...new Set(Object.values(DECOR_SETS).flat())];
+export { DECOR_SETS };
 export const DECOR_VARIANTS = 4;
 JOBS['decor'] = () => {
   const out: JobOut = [];
@@ -348,6 +360,28 @@ function painted(): Record<string, () => Tex> {
       '....ceeeec......',
       '....cccccc......',
     ], { a: 0x8a5a2a, b: 0xc89a64, c: 0x3a5a3a, d: 0x6a9a6a, e: 0xe89a3a, f: 0xffe0a0 }, 3, 2),
+    orange: () => { const p = disc(new Paint(), 8, 9, 5.5, 0xf08a20, 0xffc060, 0xb85a10); p.rect(7, 2, 2, 2, 0x4a7a2a).rect(9, 2, 2, 1, 0x6aa63c); p.set(6, 7, 0xfff0c0); return p; },
+    pear: () => { const p = disc(new Paint(), 8, 10, 4.8, 0xc8d040, 0xe8f080, 0x8a9a20); disc(p, 8, 6, 3, 0xc8d040, 0xe8f080, 0x8a9a20); p.rect(8, 1, 1, 3, 0x5a4428).rect(9, 2, 2, 1, 0x6aa63c); return p; },
+    plum: () => { const p = disc(new Paint(), 6, 9, 3.6, 0x6a2a8a, 0x9a5ab8, 0x3a1a4a); disc(p, 10.5, 10, 3.6, 0x7a3a9a, 0xaa6ac8, 0x3a1a4a); return p.rect(8, 3, 1, 4, 0x5a4428).rect(9, 3, 2, 1, 0x6aa63c); },
+    date: () => { const p = new Paint(); for (const [x, y] of [[5, 6], [9, 5], [7, 9], [11, 9], [4, 11]]) { p.rect(x, y, 3, 4, 0x8a4a1a); p.set(x, y, 0xc07a3a); p.set(x + 2, y + 3, 0x4a2008); } return p.rect(7, 2, 1, 4, 0x6a8a3a); },
+    juice: () => new Paint().draw([
+      '................',
+      '...aaaaaaaaaa...',
+      '...a........a...',
+      '...abbbbbbbba...',
+      '...abccccccba...',
+      '...abccdcccba...',
+      '...abcccccdba...',
+      '...abccccccba...',
+      '...abccccccba...',
+      '...abccccccba...',
+      '...abccccccba...',
+      '....abbbbbba....',
+      '....aaaaaaaa....',
+    ], { a: 0x5a6a78, b: 0xb8e0f0, c: 0xf8a028, d: 0xffe0a0 }, 0, 1),
+    basket: () => { const p = new Paint(); disc(p, 5, 6, 2.6, 0xc81828); disc(p, 9, 5, 2.8, 0xf08a20); disc(p, 12, 7, 2.4, 0x6a2a8a); disc(p, 7, 8, 2.4, 0xc8d040);
+      for (let y = 8; y < 15; y++) for (let x = 2 + (y - 8) / 3; x < 14 - (y - 8) / 3; x++) p.set(Math.round(x), y, (Math.round(x) + y) % 3 ? 0xb8864a : 0x7a5228);
+      return p.rect(2, 8, 12, 1, 0x5a3a1a); },
     coin: () => { const p = disc(new Paint(), 8, 8, 6.5, 0xe8b440, 0xfff0a0, 0x9a6a1a); disc(p, 8, 8, 4.2, 0xd8a03a); p.rect(7, 5, 2, 6, 0xfff0a0).rect(6, 6, 4, 1, 0xfff0a0).rect(6, 9, 4, 1, 0xfff0a0); return p; },
     up: () => new Paint().draw([
       '.......aa.......',
@@ -486,6 +520,18 @@ function itemDefs(): Record<ItemId, IconDef> {
     cider: { flat: P.cider() },
     candle: { flat: P.candle() },
     preserves: { flat: P.preserves() },
+    cherry_sapling: { flat: 'a/plants/sapling_maple', tint: [1.2, 0.8, 0.9] },
+    orange_sapling: { flat: 'a/plants/sapling_oak' },
+    date_sapling: { flat: 'a/plants/sapling_eucalyptus' },
+    pear_sapling: { flat: 'a/plants/sapling_beech', tint: [1, 1.05, 0.85] },
+    plum_sapling: { flat: 'a/plants/sapling_maple', tint: [0.85, 0.85, 1.1] },
+    cherry: { flat: 'as/cherry' },
+    orange: { flat: P.orange() },
+    date: { flat: P.date() },
+    pear: { flat: P.pear() },
+    plum: { flat: P.plum() },
+    juice: { flat: P.juice() },
+    fruit_basket: { flat: P.basket() },
   };
 }
 

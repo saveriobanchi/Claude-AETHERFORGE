@@ -124,10 +124,44 @@ export function waterfall(c: Canvas, L: TexLib, x: number, y: number, len: numbe
   c.quad([x + 0.16, y + 1.08, -0.16], [0.68, 0, 0], [0, 0, -0.18], { tex: foam }, [1, 1, 1], 8, 0.08);
 }
 
-const TOPS: Record<Floor, [string, string]> = {
-  grass: ['a/grass_top', 'a/grass_side'],
-  stone: ['a/limestone_bricks', 'a/limestone_bricks'],
-  sky: ['a/marble_bricks', 'a/marble_bricks2'],
+/** Terrain top kinds: the three floors plus the grass biomes. */
+export type TopKind = Floor | 'marsh' | 'dunes' | 'frost';
+
+/** Top and side textures of a terrain kind. */
+function tops(L: TexLib, kind: TopKind): [Tex, Tex] {
+  const t = (n: string) => L.get(n);
+  switch (kind) {
+    case 'grass': return [t('a/grass_top'), t('a/grass_side')];
+    case 'stone': return [t('a/limestone_bricks'), t('a/limestone_bricks')];
+    case 'sky': return [t('a/marble_bricks'), t('a/marble_bricks2')];
+    case 'frost': return [t('a/snow'), t('a/grass_snowy_side')];
+    case 'dunes': {
+      // sand over sandstone, with a ragged sand lip on the side
+      const side = new Paint(16, 16, t('a/sandstone'));
+      side.blit(t('b/sand'), 0, 0, 0, 0, 16, 4);
+      for (let x = 0; x < 16; x++) if (h(x, 3, 9) > 0.45) side.blit(t('b/sand'), x, 4, x, 4, 1, 1 + Math.floor(h(x, 5, 9) * 2));
+      return [t('b/sand'), side];
+    }
+    case 'marsh': {
+      // dark wet grass with puddles over mud
+      const top = new Paint(16, 16, t('b/old_grass_top')).tint([0.82, 0.96, 0.84]);
+      for (let i = 0; i < 3; i++) {
+        const cx = 2 + Math.floor(h(i, 1, 21) * 11), cy = 2 + Math.floor(h(i, 2, 21) * 11);
+        top.rect(cx, cy, 3, 2, 0x3a6a8a).set(cx, cy, 0x6aa2c0);
+      }
+      const side = new Paint(16, 16, t('a/mud'));
+      side.blit(t('a/grass_side'), 0, 0, 0, 0, 16, 4);
+      return [top, side];
+    }
+  }
+}
+
+/** Rim plants growing over open edges, per kind. */
+const RIM: Partial<Record<TopKind, string[]>> = {
+  grass: ['grass', 'grass2'],
+  marsh: ['cattail', 'horsetail', 'sedge'],
+  dunes: ['sagebrush', 'creosote'],
+  frost: [],
 };
 
 /** Neighbour context id: drawn so lighting sees the surroundings, then cut away. */
@@ -139,9 +173,9 @@ export const CONTEXT_ID = 99;
  * neighbours (1:+x 2:+y 4:−x 8:−y); present back neighbours are drawn as
  * context so edge highlights only appear on real island edges.
  */
-export function topPiece(c: Canvas, L: TexLib, floor: Floor, mask: number, v: number): void {
-  const [tt, ts] = TOPS[floor];
-  const f = (n: string): Face => ({ tex: L.get(n) });
+export function topPiece(c: Canvas, L: TexLib, floor: TopKind, mask: number, v: number): void {
+  const [tt, ts] = tops(L, floor);
+  const f = (t: Tex): Face => ({ tex: t });
   const ctx = (x: number, y: number) => c.box([x, y, -1], [x + 1, y + 1, 0], f(tt), f(ts), f(ts), CONTEXT_ID);
   if (!(mask & 4)) ctx(-1, 0);
   if (!(mask & 8)) ctx(0, -1);
@@ -149,9 +183,9 @@ export function topPiece(c: Canvas, L: TexLib, floor: Floor, mask: number, v: nu
   // seed by variant so neighbouring tiles differ
   const sx = v * 3 + 1, sy = v * 5 + mask;
   c.box([0, 0, -1], [1, 1, 0], f(tt), f(ts), f(ts), 1, v);
-  if (floor === 'grass') {
-    // a few short tufts on open edges (kept sparse so edges read clean)
-    const tuftN = ['grass', 'grass2'];
+  const tuftN = RIM[floor] ?? [];
+  if (tuftN.length) {
+    // a few short plants on open edges (kept sparse so edges read clean)
     for (let i = 0; i < 4; i++) {
       const side = i % 2;
       if (!(mask & (side === 0 ? 2 : 1))) continue;
@@ -160,6 +194,8 @@ export function topPiece(c: Canvas, L: TexLib, floor: Floor, mask: number, v: nu
       const p: [number, number, number] = side === 0 ? [t, 0.97, 0] : [0.97, t, 0];
       c.sprite(p, { tex: L.get('a/plants/' + tuftN[Math.floor(h(sx, sy, i + 50) * tuftN.length)]) }, 1, 2, 0.2);
     }
+  }
+  if (floor === 'grass' || floor === 'marsh') {
     for (let side = 0; side < 2; side++) {
       if (!(mask & (side === 0 ? 2 : 1)) || h(sx + side, sy, 7) < 0.6) continue;
       const vt = vineTex(L, Math.floor(h(sx, sy, side) * 6));
@@ -183,13 +219,40 @@ export function columnPiece(c: Canvas, L: TexLib, depth: number, v: number): voi
   }
 }
 
+/** Decoration kinds that suit each terrain top. */
+export const DECOR_SETS: Record<string, string[]> = {
+  grass: ['tuft', 'flowers', 'bush', 'stone'],
+  marsh: ['reeds', 'mushroom', 'reeds', 'bush'],
+  dunes: ['cactus', 'dry', 'rock', 'dry'],
+  frost: ['snowtuft', 'icerock', 'snowpine', 'snowtuft'],
+};
+
 /** Decorations scattered on free grass. */
 export function decor(c: Canvas, L: TexLib, kind: string, v: number): void {
   const p = (n: string, x: number, y: number, s = 2) => c.sprite([x, y, 0], { tex: L.get('a/plants/' + n) }, 2, s);
   if (kind === 'tuft') { p(['grass', 'grass2', 'grass', 'fern'][v], 0.5, 0.5); return; }
   if (kind === 'flowers') { p(['dandelion', 'forget_me_not', 'oxeye_daisy', 'aster'][v], 0.5, 0.5); return; }
+  if (kind === 'reeds') { const n = ['cattail', 'horsetail', 'sedge', 'cattail']; p(n[v], 0.45, 0.5); p(n[(v + 1) % 4], 0.6, 0.62); return; }
+  if (kind === 'mushroom') { p(v % 2 ? 'mushroom_brown' : 'mushroom_red', 0.45, 0.5); if (v > 1) p('mushroom_brown', 0.62, 0.6); return; }
+  if (kind === 'cactus') { p(['cactus_cholla', 'cactus_pricklypear', 'aloe', 'cactus_cholla'][v], 0.5, 0.5); return; }
+  if (kind === 'dry') { p(['sagebrush', 'creosote', 'manzanita', 'sagebrush'][v], 0.5, 0.5); return; }
+  if (kind === 'snowtuft') { c.sprite([0.5, 0.5, 0], { tex: L.get('a/plants/' + ['grass', 'grass2', 'grass3', 'fern'][v]), tint: [0.85, 0.95, 1.1] }, 2, 2); return; }
   c.castOn = true;
-  if (kind === 'bush') {
+  if (kind === 'rock') {
+    const fs: Face = { tex: L.get(v % 2 ? 'a/sandstone' : 'a/sandstone_tiles') };
+    c.box([0.3, 0.35, 0], [0.66, 0.68, 0.22 + v * 0.04], fs, fs, fs, 4);
+    if (v > 1) c.box([0.58, 0.5, 0], [0.78, 0.72, 0.12], fs, fs, fs, 4);
+  } else if (kind === 'icerock') {
+    const fs: Face = { tex: L.get(v % 2 ? 'a/ice_glacier' : 'b/stone'), tint: v % 2 ? [1, 1, 1.05] : [0.9, 0.95, 1.05] };
+    const snow: Face = { tex: L.get('a/snow') };
+    c.box([0.3, 0.35, 0], [0.64, 0.66, 0.22], snow, fs, fs, 4);
+  } else if (kind === 'snowpine') {
+    const lv: Face = { tex: L.get('a/pine_leaves') };
+    const snow: Face = { tex: L.get('a/snow') };
+    c.box([0.42, 0.42, 0], [0.58, 0.58, 0.2], { tex: L.get('a/pine_log_top') }, { tex: L.get('a/pine_log_side') }, { tex: L.get('a/pine_log_side') }, 2);
+    c.box([0.25, 0.25, 0.2], [0.75, 0.75, 0.5], snow, lv, lv, 3);
+    c.box([0.35, 0.35, 0.5], [0.65, 0.65, 0.75], snow, lv, lv, 3);
+  } else if (kind === 'bush') {
     const w = (['oak', 'beech', 'maple', 'pine'] as const)[v];
     const lv: Face = { tex: L.get(`a/${w}_leaves`) };
     c.box([0.25, 0.25, 0], [0.75, 0.75, 0.5], lv, lv, lv, 3);

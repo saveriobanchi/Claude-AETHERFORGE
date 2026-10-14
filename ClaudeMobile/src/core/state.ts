@@ -2,6 +2,7 @@ import { BUILDINGS, type Floor } from './content/buildings';
 import { ITEM_IDS, type ItemId, type Stack } from './content/items';
 import { ATTUNE, BASE_CAPACITY } from './content/world';
 import type { Contract } from './content/trade';
+import type { BiomeId } from './content/biomes';
 
 export type Dir = 0 | 1 | 2 | 3; // 0:+x 1:+y 2:-x 3:-y
 export const DX = [1, 0, -1, 0] as const;
@@ -16,6 +17,8 @@ export interface Tile {
   /** Deterministic per-tile seed for decoration variety. */
   seed: number;
   islet?: string;
+  /** Grass biome (undefined = meadow). */
+  biome?: BiomeId;
 }
 
 export interface BeltItem {
@@ -217,14 +220,15 @@ export function createState(seed = 1234567): GameState {
   return s;
 }
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export function emptyTrade(): TradeState {
   return { marks: 0, earned: 0, rep: 0, level: 0, board: [null, null, null], refresh: [0, 0, 0], skipCd: 0, bought: {}, done: 0 };
 }
 
-export function addTile(s: GameState, x: number, y: number, floor: Floor, islet?: string): Tile {
+export function addTile(s: GameState, x: number, y: number, floor: Floor, islet?: string, biome?: BiomeId): Tile {
   const t: Tile = { x, y, floor, seed: hashSeed(x, y), islet };
+  if (biome && biome !== 'meadow') t.biome = biome;
   s.tiles.set(key(x, y), t);
   s.topoDirty = true;
   s.tileRev++;

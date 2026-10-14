@@ -1,4 +1,5 @@
-import { BUILDINGS, HARVESTER_INTERVAL, DISPATCH_INTERVAL, HIVE, NODE_YIELD, ORCHARD, TREE, TUFT, type BuildingDef } from './content/buildings';
+import { BUILDINGS, HARVESTER_INTERVAL, DISPATCH_INTERVAL, HIVE, NODE_YIELD, TREE, TUFT, type BuildingDef } from './content/buildings';
+import { BIOMES, type BiomeDef, FRUIT_BY_TREE, OFF_HOME } from './content/biomes';
 import { BOARD_SIZE, CONTRACT_REFRESH, contractPool, levelBuffer, levelSpeed, makeContract, repForLevel } from './content/trade';
 import { type WeatherDef, dayIndex, weatherFor } from './content/weather';
 import type { ItemId, Stack } from './content/items';
@@ -22,6 +23,17 @@ const FLOW_HISTORY = 10;
 /** Today's weather. */
 export function weatherNow(s: GameState): WeatherDef {
   return weatherFor(dayIndex(s.time), s.seed);
+}
+
+/** Biome under a tile (only grass has one; paved ground counts as neutral). */
+export function biomeAt(s: GameState, x: number, y: number): BiomeDef | null {
+  const t = tileAt(s, x, y);
+  if (!t || t.floor !== 'grass') return null;
+  return BIOMES[t.biome ?? 'meadow'];
+}
+/** Fiber from a tuft standing at (x, y). */
+export function tuftYield(s: GameState, x: number, y: number): number {
+  return (biomeAt(s, x, y) ?? BIOMES.meadow).tuftFiber;
 }
 
 /** Buffer capacity of a machine, grown by its upgrade level. */
@@ -290,6 +302,7 @@ function tickCrafter(s: GameState, b: Building, dt: number): void {
     rate *= s.power.ratio;
     if (s.power.ratio <= 0) { b.status = 'nopower'; return; }
   }
+  if (r.id === 'compost') rate *= biomeAt(s, b.x, b.y)?.compost ?? 1;
   b.status = 'working';
   b.progress += dt * rate;
   if (b.progress >= r.time) {
@@ -306,7 +319,7 @@ function tickGenerator(s: GameState, b: Building, dt: number): void {
   if ((b.outBuf[p.item] ?? 0) >= bufCap(def, b, 10)) { b.status = 'blocked'; return; }
   let rate = machineSpeed(s, b);
   const w = weatherNow(s);
-  if (p.item === 'dew') rate *= w.dew;
+  if (p.item === 'dew') rate *= w.dew * (biomeAt(s, b.x, b.y)?.dew ?? 1);
   else if (p.item === 'mist') rate *= w.mist;
   else if (p.item === 'stardust') rate *= w.stardust;
   if (def.power) {
@@ -334,19 +347,21 @@ export function harvestTree(s: GameState, t: Building, sink: (item: ItemId, n: n
   const got: Stack = {};
   if (t.stock < 1) return got;
   t.stock -= 1;
-  if (t.type === 'fruit_tree') {
-    const y: Stack = { ...ORCHARD.yield };
-    // bees nearby pollinate: an extra apple
-    if (hivesNear(s, t) > 0) y.apple = (y.apple ?? 0) + 1;
+  const fruit = FRUIT_BY_TREE[t.type];
+  if (fruit) {
+    const y: Stack = { ...fruit.yield };
+    // bees nearby pollinate: one more fruit
+    if (hivesNear(s, t) > 0) y[fruit.fruit] = (y[fruit.fruit] ?? 0) + 1;
     for (const k in y) {
       const n = sink(k as ItemId, y[k as ItemId] ?? 0);
       if (n) got[k as ItemId] = n;
     }
     s.stats.harvests++;
-    if (rand(s) < ORCHARD.saplingChance && sink('fruit_sapling', 1)) got.fruit_sapling = 1;
+    if (rand(s) < fruit.saplingChance && sink(fruit.seed, 1)) got[fruit.seed] = 1;
     return got;
   }
-  const y = elder ? TREE.elderYield : TREE.yield;
+  const bio = biomeAt(s, t.x, t.y) ?? BIOMES.meadow;
+  const y = elder ? TREE.elderYield : bio.tree;
   for (const k in y) {
     const item = k as ItemId;
     const n = sink(item, y[item] ?? 0);
@@ -355,7 +370,7 @@ export function harvestTree(s: GameState, t: Building, sink: (item: ItemId, n: n
   s.stats.harvests++;
   s.stats.sincePity++;
   if (!elder) {
-    if (rand(s) < TREE.fiberChance && sink('fiber', 1)) got.fiber = 1;
+    if (rand(s) < bio.treeFiber && sink('fiber', 1)) got.fiber = 1;
     if (rand(s) < TREE.saplingChance || s.stats.sincePity >= TREE.saplingPity) {
       s.stats.sincePity = 0;
       if (sink('sapling', 1)) got.sapling = 1;
@@ -387,7 +402,7 @@ function tickHarvester(s: GameState, b: Building, dt: number): void {
   b.timer = 0;
   const t = ready[b.rr++ % ready.length];
   if (t.type === 'tuft') {
-    addTo(b.outBuf, 'fiber', TUFT.yield);
+    addTo(b.outBuf, 'fiber', tuftYield(s, t.x, t.y));
     removeBuildingRaw(s, t);
   } else harvestTree(s, t, (item, n) => { addTo(b.outBuf, item, n); return n; });
   b.cycles++;
@@ -639,11 +654,13 @@ function findWispJob(s: GameState, w: (typeof s.wisps)[number], roost: Building)
 function tickNature(s: GameState, b: Building, dt: number): void {
   const def = BUILDINGS[b.type];
   if (def.kind === 'tree') {
-    const elder = b.type === 'elder_tree', fruit = b.type === 'fruit_tree';
-    const max = elder ? TREE.elderMaxStock : fruit ? ORCHARD.maxStock : TREE.maxStock;
+    const elder = b.type === 'elder_tree', fruit = FRUIT_BY_TREE[b.type];
+    const max = elder ? TREE.elderMaxStock : fruit ? fruit.maxStock : TREE.maxStock;
     if (b.stock < max) {
-      b.timer += dt * weatherNow(s).regrow;
-      const per = elder ? TREE.elderRegrow : fruit ? ORCHARD.regrow : TREE.regrow;
+      const bio = biomeAt(s, b.x, b.y) ?? BIOMES.meadow;
+      const home = !fruit || fruit.home === bio.id ? 1 : OFF_HOME;
+      b.timer += dt * weatherNow(s).regrow * bio.regrow * home;
+      const per = elder ? TREE.elderRegrow : fruit ? fruit.regrow : TREE.regrow;
       if (b.timer >= per) { b.timer -= per; b.stock++; }
       b.status = 'working';
     } else { b.timer = 0; b.status = 'ready'; }
@@ -683,7 +700,7 @@ function tickHive(s: GameState, b: Building, dt: number): void {
   if (!trees) { b.status = 'noinput'; return; }
   if (stackTotal(b.outBuf) >= bufCap(def, b)) { b.status = 'blocked'; return; }
   b.status = 'working';
-  b.progress += dt * machineSpeed(s, b) * (1 + HIVE.perTree * trees);
+  b.progress += dt * machineSpeed(s, b) * (1 + HIVE.perTree * trees) * (biomeAt(s, b.x, b.y)?.hive ?? 1);
   const every = def.produces?.every ?? 15;
   if (b.progress >= every) {
     b.progress -= every;
@@ -851,7 +868,7 @@ export function tick(s: GameState, dt = TICK): void {
     const def = BUILDINGS[b.type];
     if (def.kind === 'windmill') {
       const edge = s.cache.edge.has(key(b.x, b.y)) ? 1.25 : 1;
-      windGen += (def.powerGen ?? 6) * wind * edge * (1 + 0.15 * attuneRank(s, 'tailwind')) * levelSpeed(b.level);
+      windGen += (def.powerGen ?? 6) * wind * edge * (1 + 0.15 * attuneRank(s, 'tailwind')) * levelSpeed(b.level) * (biomeAt(s, b.x, b.y)?.wind ?? 1);
       b.status = 'working';
     } else if (def.kind === 'engine') engines.push(b);
   }

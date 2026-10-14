@@ -33,6 +33,7 @@ const R: RecipeDef[] = [
   { id: 'coil', name: 'Lumen Coil', inputs: { crystal: 1, mechanism: 1, glass: 2 }, outputs: { coil: 1 }, time: 12, stations: ['assembler'], unlock: 'wisps' },
   { id: 'core', name: 'Heart Core', inputs: { sunmetal: 4, cell: 2, coil: 1, amber: 2 }, outputs: { core: 1 }, time: 30, stations: ['assembler'], unlock: 'forge' },
 
+  { id: 'basket', name: 'Fruit Basket', inputs: { apple: 2, cherry: 2, orange: 2, date: 2, pear: 2, plum: 2, twine: 1 }, outputs: { fruit_basket: 1 }, time: 8, stations: ['hand', 'assembler'], unlock: 'orchard' },
   { id: 'candle', name: 'Candles', inputs: { wax: 2, twine: 1 }, outputs: { candle: 2 }, time: 4, stations: ['hand', 'assembler'], unlock: 'apiary' },
 
   // ── Nature-driven processes ──────────────────────────────────────────────
@@ -55,6 +56,7 @@ const R: RecipeDef[] = [
   { id: 'saw', name: 'Planks', inputs: { wood: 3 }, outputs: { plank: 2 }, time: 3, stations: ['sawmill'], unlock: 'wind' },
   { id: 'press', name: 'Stone', inputs: { pebble: 4 }, outputs: { stone: 1 }, time: 3, stations: ['press'], unlock: 'wind' },
   { id: 'twist', name: 'Twine', inputs: { fiber: 3 }, outputs: { twine: 1 }, time: 3, stations: ['press'], unlock: 'wind' },
+  { id: 'juice', name: 'Orange Juice', inputs: { orange: 3 }, outputs: { juice: 1 }, time: 5, stations: ['press'], unlock: 'dunes' },
   { id: 'cider', name: 'Cider', inputs: { apple: 4 }, outputs: { cider: 1 }, time: 5, stations: ['press'], unlock: 'orchard' },
   { id: 'crush', name: 'Gravel', inputs: { stone: 1 }, outputs: { gravel: 3 }, time: 4, stations: ['millstone'], unlock: 'mill' },
 
