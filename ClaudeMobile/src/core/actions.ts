@@ -1,7 +1,7 @@
 import { openRung } from './ambitions';
 import { AMBITION } from './content/ambitions';
 import type { Role } from './content/people';
-import { assign, launch } from './people';
+import { assign, draft } from './people';
 import { BUILDINGS } from './content/buildings';
 import { ITEMS, type ItemId, type Stack } from './content/items';
 import { FUEL_VALUE, RECIPES } from './content/recipes';
@@ -568,7 +568,7 @@ export function upgrade(s: GameState, id: number): Result {
 
 export { canAfford } from './state';
 
-// ───────────────────────── settlers, expeditions, ambitions ─────────────────────────
+// ───────────────────────── settlers, designs, ambitions ─────────────────────────
 
 /** Move one settler into (delta 1) or out of (delta -1) a role. */
 export function assignRole(s: GameState, role: Role, delta: 1 | -1): Result {
@@ -576,8 +576,9 @@ export function assignRole(s: GameState, role: Role, delta: 1 | -1): Result {
   return { ok: true };
 }
 
-export function launchVoyage(s: GameState, dock: number, dest: string, crew: number): Result {
-  const why = launch(s, dock, dest, crew);
+/** Draft a design at the Drafting Table. */
+export function draftDesign(s: GameState, id: string): Result {
+  const why = draft(s, id);
   return why ? fail(why) : { ok: true };
 }
 

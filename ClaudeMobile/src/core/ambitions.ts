@@ -46,7 +46,6 @@ export function goalValue(s: GameState, g: Goal): number {
     case 'renown': return s.renown.level + 1;
     case 'codex': return s.renown.codex.length;
     case 'settlers': return s.people.count;
-    case 'voyages': return s.stats.voyages ?? 0;
     case 'blueprints': return BLUEPRINTS.filter((b) => s.known.has(b)).length;
   }
 }
@@ -71,8 +70,7 @@ export function goalText(g: Goal): string {
     case 'renown': return `Reach renown ${g.n}`;
     case 'codex': return `Complete ${g.n} codex sets`;
     case 'settlers': return `Be home to ${g.n} settlers`;
-    case 'voyages': return g.n > 1 ? `Return from ${g.n} expeditions` : 'Return from an expedition';
-    case 'blueprints': return `Find ${g.n} blueprints`;
+    case 'blueprints': return g.n > 1 ? `Draft ${g.n} designs` : 'Draft a design';
   }
 }
 

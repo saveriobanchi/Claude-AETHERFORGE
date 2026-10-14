@@ -57,7 +57,7 @@ describe('full playthrough', () => {
     bot.buy('fruit');
     bot.buy('hive');
     bot.buy('lanterns');
-    // fields, flocks and kitchens; settlers; an expedition
+    // fields, flocks and kitchens; settlers
     until('farming', () => bot.ensure('dew', 15));
     bot.automate('grow_wheat', 2);
     until('ranching', () => bot.ensure('wheat', 20));
@@ -66,8 +66,6 @@ describe('full playthrough', () => {
     until('settlers', () => bot.ensure('bread', 4));
     bot.achieve('settlement_1');
     bot.settle(1);
-    until('expeditions', () => bot.ensure('cloth', 8));
-    bot.voyage('orchard', 1);
     bot.achieve('land_1');
     until('assembler', () => bot.ensure('iron', 6));
     bot.build('assembler');
@@ -77,6 +75,9 @@ describe('full playthrough', () => {
     bot.automate('gear', 1);
     until('tinker', () => bot.ensure('gear', 20));
     bot.buy('master');
+    // a design drafted at the table: compact gears
+    until('drafting', () => bot.ensure('mechanism', 2));
+    bot.draft('bp_gears');
     until('aether', () => { bot.ensure('mechanism', 4); bot.ensure('lens', 2); });
     tAether = bot.t;
     until('distill', () => bot.ensure('mist', 4));

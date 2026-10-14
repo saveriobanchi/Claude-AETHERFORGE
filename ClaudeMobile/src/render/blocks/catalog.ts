@@ -82,7 +82,7 @@ export const SPRITES: Record<string, SpriteSpec> = {
   loom: { frames: 8, fps: 8, make: (c, L, f) => B.loom(c, L, f), lamp: true },
   oven: { frames: 4, fps: 6, make: (c, L, f) => B.oven(c, L, f), lamp: true, smoke: [0.755, 0.355, 1.6] },
   cottage: { frames: 1, fps: 1, make: (c, L) => B.cottage(c, L), smoke: [0.775, 0.775, 1.85] },
-  airdock: { frames: 4, fps: 3, main: 'h1', variants: { h0: 4, h1: 4 }, make: (c, L, f, v) => B.airdock(c, L, v === 'h1', f) },
+  drafting_table: { frames: 1, fps: 1, make: (c, L) => B.draftingTable(c, L) },
   trading_post: { frames: 4, fps: 3, make: (c, L, f) => B.tradingPost(c, L, f) },
   hive: { frames: 4, fps: 6, make: (c, L, f) => B.hive(c, L, f) },
   lantern: { frames: 2, fps: 2, make: (c, L, f) => B.lanternPost(c, L, f) },

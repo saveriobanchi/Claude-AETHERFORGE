@@ -27,7 +27,7 @@ export type BuildingKind =
   | 'hive'        // beehive: honey and wax near trees
   | 'decor'       // purely decorative
   | 'home'        // houses settlers
-  | 'dock';       // air dock: expeditions
+  | 'drafting';   // drafting table: designs
 
 export type Floor = 'grass' | 'stone' | 'sky';
 import { FRUITS } from './biomes';
@@ -80,6 +80,7 @@ const B: BuildingDef[] = [
   { id: 'dew_catcher', name: 'Dew Catcher', desc: 'A mesh that drinks the air.', kind: 'generator', category: 'craft', size: 1, cost: { wood: 6, twine: 2, plank: 2 }, floors: ['grass'], unlock: 'clay', rotatable: true, produces: { item: 'dew', every: 10 }, bufferCap: 10 },
   { id: 'clay_tub', name: 'Clay Tub', desc: 'Loam and dew, stirred into clay.', kind: 'crafter', category: 'craft', size: 1, cost: { plank: 4, stone: 2 }, unlock: 'clay', rotatable: true, bufferCap: 12 },
   { id: 'loom', name: 'Loom', desc: 'Weaves wool into cloth.', kind: 'crafter', category: 'craft', size: 1, cost: { plank: 12, gear: 4 }, unlock: 'weaving', rotatable: true, bufferCap: 12 },
+  { id: 'drafting_table', name: 'Drafting Table', desc: 'Draft designs: alternative recipes, paid for in materials.', kind: 'drafting', category: 'craft', size: 1, cost: { plank: 30, glass: 6, gear: 8 }, unlock: 'drafting' },
   { id: 'oven', name: 'Bakery Oven', desc: 'Bread, stew and pie. Needs fuel.', kind: 'crafter', category: 'craft', size: 1, cost: { brick: 16, stone: 8, plank: 4 }, unlock: 'baking', rotatable: true, bufferCap: 12 },
   { id: 'kiln', name: 'Kiln', desc: 'Fire for charcoal, brick and metal. Needs fuel.', kind: 'crafter', category: 'craft', size: 1, cost: { stone: 8, clay: 3 }, unlock: 'kiln', rotatable: true, bufferCap: 12 },
   { id: 'harvester', name: 'Treewright', desc: 'Harvests the trees around it.', kind: 'harvester', category: 'craft', size: 1, cost: { plank: 6, gear: 3, twine: 2 }, unlock: 'automation', rotatable: true, radius: 1, bufferCap: 24 },
@@ -105,7 +106,6 @@ const B: BuildingDef[] = [
   { id: 'sorter', name: 'Sorter', desc: 'One chosen item goes straight on; the rest turn aside.', kind: 'sorter', category: 'logistics', size: 1, cost: { plank: 2, gear: 2, wire: 4 }, unlock: 'routing', rotatable: true },
   { id: 'roost', name: 'Wisp Roost', desc: 'Wisps ferry items between your stash and nearby machines.', kind: 'roost', category: 'logistics', size: 1, cost: { coil: 2, skystone: 8, plate: 6 }, unlock: 'wisps', power: 4, radius: 5 },
 
-  { id: 'airdock', name: 'Air Dock', desc: 'Sends crews to distant skies. Must touch the edge.', kind: 'dock', category: 'logistics', size: 1, cost: { plank: 40, cloth: 12, gear: 10, iron: 10 }, edge: true, unlock: 'expeditions' },
   { id: 'trading_post', name: 'Trading Post', desc: 'Sky traders dock here. Must touch the edge.', kind: 'post', category: 'logistics', size: 1, cost: { plank: 12, stone: 6, twine: 4 }, edge: true, unlock: 'trade', bufferCap: 999 },
   { id: 'lantern', name: 'Trade Lantern', desc: 'A gift from the traders. Glows at night.', kind: 'decor', category: 'decor', size: 1, cost: { plank: 2, candle: 2 }, unlock: 'tradelights', charm: 4 },
 

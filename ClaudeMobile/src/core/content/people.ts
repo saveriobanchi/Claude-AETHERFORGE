@@ -1,8 +1,7 @@
 import type { ItemId, Stack } from './items';
 
 /**
- * Settlers and expeditions: tuning and content. Logic lives in
- * core/people.ts.
+ * Settlers and designs: tuning and content. Logic lives in core/people.ts.
  */
 
 export const HOME_CAPACITY = 2;
@@ -27,35 +26,24 @@ export const ROLE: Record<Role, RoleDef> = Object.fromEntries(ROLES.map((r) => [
 export const SPECIALIST_BONUS = 0.06;
 export const IDLE_BONUS = 0.01;
 
-// ───────────────────────── expeditions ─────────────────────────
+// ───────────────────────── designs (blueprints) ─────────────────────────
 
-export interface Loot { item: ItemId; min: number; max: number; chance: number }
-export interface Destination {
-  id: string;
-  name: string;
-  desc: string;
-  time: number;           // seconds
-  provisions: Stack;
-  needs: string;          // discovery required
-  loot: Loot[];
-  /** Chance per crew member of a blueprint. */
-  blueprint: number;
-}
-
-export const DESTINATIONS: Destination[] = [
-  { id: 'orchard', name: 'Old Orchard', desc: 'An overgrown garden islet. Fruit and saplings.', time: 120, provisions: { bread: 4 }, needs: 'expeditions', blueprint: 0.05,
-    loot: [{ item: 'apple', min: 6, max: 14, chance: 1 }, { item: 'cherry_sapling', min: 1, max: 2, chance: 0.5 }, { item: 'pear_sapling', min: 1, max: 1, chance: 0.4 }, { item: 'fruit_sapling', min: 1, max: 2, chance: 0.6 }, { item: 'honey', min: 2, max: 6, chance: 0.5 }] },
-  { id: 'quarry', name: 'Sunken Quarry', desc: 'Old diggings in the haze. Stone, ore and the odd gem.', time: 240, provisions: { bread: 6, stew: 2 }, needs: 'expeditions', blueprint: 0.1,
-    loot: [{ item: 'stone', min: 20, max: 50, chance: 1 }, { item: 'iron_grit', min: 10, max: 30, chance: 0.8 }, { item: 'copper_grit', min: 10, max: 30, chance: 0.8 }, { item: 'topaz', min: 1, max: 1, chance: 0.15 }, { item: 'ruby', min: 1, max: 1, chance: 0.1 }] },
-  { id: 'reef', name: 'Crystal Reef', desc: 'A shoal of floating crystal. Bring warm food.', time: 360, provisions: { stew: 4, bread: 6 }, needs: 'aether', blueprint: 0.15,
-    loot: [{ item: 'mist', min: 20, max: 40, chance: 1 }, { item: 'aether', min: 4, max: 10, chance: 0.8 }, { item: 'crystal', min: 1, max: 3, chance: 0.5 }, { item: 'opal', min: 1, max: 1, chance: 0.15 }, { item: 'orange_sapling', min: 1, max: 1, chance: 0.3 }] },
-  { id: 'storm', name: 'Storm Front', desc: 'Lightning and stardust. Dangerous and rich.', time: 480, provisions: { pie: 3, stew: 4 }, needs: 'pylon', blueprint: 0.2,
-    loot: [{ item: 'stardust', min: 6, max: 16, chance: 1 }, { item: 'aether', min: 8, max: 20, chance: 0.9 }, { item: 'emerald', min: 1, max: 1, chance: 0.15 }, { item: 'plum_sapling', min: 1, max: 1, chance: 0.3 }, { item: 'date_sapling', min: 1, max: 1, chance: 0.3 }] },
-  { id: 'ruins', name: 'Ancient Ruins', desc: 'The island that built the first forge.', time: 600, provisions: { pie: 6, stew: 6, cloth: 6 }, needs: 'alloy', blueprint: 0.3,
-    loot: [{ item: 'sunmetal', min: 2, max: 6, chance: 0.8 }, { item: 'skystone', min: 10, max: 30, chance: 1 }, { item: 'amber', min: 1, max: 3, chance: 0.6 }, { item: 'mechanism', min: 2, max: 6, chance: 0.6 }] },
+/**
+ * Designs: alternative recipes the player drafts at a Drafting Table by
+ * paying a fixed cost — nothing is found or rolled. Each needs the
+ * discoveries that make its machine and ingredients known. Ids match the
+ * recipes' `unlock`.
+ */
+export interface DesignDef { id: string; needs: string[]; cost: Stack; desc: string }
+export const DESIGNS: DesignDef[] = [
+  { id: 'bp_twin_saw', needs: ['wind', 'assembler'], cost: { plank: 80, gear: 10, iron: 10 }, desc: 'A second blade: the sawmill wastes no wood.' },
+  { id: 'bp_clamp', needs: ['kiln'], cost: { brick: 40, charcoal: 30, clay: 20 }, desc: 'Bank the kiln with loam: more charcoal from less wood.' },
+  { id: 'bp_ore_wash', needs: ['wind', 'iron'], cost: { gear: 20, glass: 10, iron: 20 }, desc: 'Wash gravel with dew in the wind sifter for iron grit.' },
+  { id: 'bp_gears', needs: ['assembler'], cost: { copper: 60, mechanism: 4 }, desc: 'Stamp three gears from two copper.' },
+  { id: 'bp_sky_loom', needs: ['weaving'], cost: { cloth: 20, plank: 60, gear: 10 }, desc: 'Card fiber into the wool: cloth from less fleece.' },
+  { id: 'bp_quick_bread', needs: ['baking'], cost: { bread: 30, brick: 20, flour: 20 }, desc: 'Flat bread straight from wheat — no millstone.' },
+  { id: 'bp_still', needs: ['distill'], cost: { glass: 30, aether: 10, copper: 20 }, desc: 'A charcoal-fired still: more aether from less mist.' },
+  { id: 'bp_lattice', needs: ['resonance', 'skystone'], cost: { crystal: 6, glass: 20, skystone: 20 }, desc: 'Grow crystal on a glass lattice — no stardust.' },
 ];
-export const DESTINATION: Record<string, Destination> = Object.fromEntries(DESTINATIONS.map((d) => [d.id, d]));
-
-/** Blueprints: alternative recipes (ids match RECIPES and their `unlock`). */
-export const BLUEPRINTS = ['bp_twin_saw', 'bp_clamp', 'bp_ore_wash', 'bp_still', 'bp_gears', 'bp_sky_loom', 'bp_quick_bread', 'bp_lattice'];
-export const MAX_CREW = 3;
+export const DESIGN: Record<string, DesignDef> = Object.fromEntries(DESIGNS.map((d) => [d.id, d]));
+export const BLUEPRINTS = DESIGNS.map((d) => d.id);

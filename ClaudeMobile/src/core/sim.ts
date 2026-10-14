@@ -11,7 +11,7 @@ import {
 } from './state';
 import { checkDiscoveries } from './progression';
 import { charm, checkAmbitions } from './ambitions';
-import { merchantBonus, present, settlerBonus, tickPeople, tickVoyages } from './people';
+import { merchantBonus, present, settlerBonus, tickPeople } from './people';
 import { charmTradeBonus } from './content/ambitions';
 import { CODEX, FRUIT_ITEMS, GEMS, LUCK, MASTERY_SPEED, XP, masteryStar } from './content/renown';
 
@@ -951,7 +951,7 @@ export function tick(s: GameState, dt = TICK): void {
       case 'tree': case 'sapling': tickNature(s, b, dt); break;
       case 'hive': tickHive(s, b, dt); pushOutput(s, b, dt); break;
       case 'home': b.status = present(s) > 0 && s.people.hungry === 0 ? 'working' : 'idle'; break;
-      case 'dock': b.status = 'idle'; break;
+      case 'drafting': b.status = 'idle'; break;
       case 'post': hasPost = true; b.status = s.trade.board.some((c) => c) ? 'working' : 'idle'; break;
       case 'roost':
         s.power.nextDemand += def.power ?? 0;
@@ -970,7 +970,6 @@ export function tick(s: GameState, dt = TICK): void {
   tickSummon(s, dt);
   tickTrade(s, dt, hasPost);
   tickPeople(s, dt);
-  tickVoyages(s, dt);
 
   const f = s.flow.cur;
   f.dt += dt;

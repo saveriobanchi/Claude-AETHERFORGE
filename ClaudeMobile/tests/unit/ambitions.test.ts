@@ -142,11 +142,10 @@ describe('ambition saves', () => {
     expect(d.ambitions.has('land_1')).toBe(true);
     expect(d.pinned).toBe('trade_1');
     const v6 = { ...serialize(s), v: 6, chapters: 4 } as Record<string, unknown>;
-    delete v6.ambitions; delete v6.people; delete v6.voyages;
+    delete v6.ambitions; delete v6.people;
     expect(migrate(v6).v).toBe(SAVE_VERSION);
     const m = deserialize(v6).state;
     expect(m.ambitions.size).toBe(0);
     expect(m.people.count).toBe(0);
-    expect(m.voyages).toEqual([]);
   });
 });

@@ -12,8 +12,7 @@ import { FORGE_STAGES, ISLETS, summonCost } from '../src/core/content/world';
 import { MARKET_BY_ID, marketPrice, upgradable, upgradeCost } from '../src/core/content/trade';
 import { charm, goalDone, goalValue, openRung } from '../src/core/ambitions';
 import { AMBITION, type Goal } from '../src/core/content/ambitions';
-import { present } from '../src/core/people';
-import { BLUEPRINTS, DESTINATION as DESTINATIONS_BY_ID, MAX_CREW } from '../src/core/content/people';
+import { DESIGN } from '../src/core/content/people';
 import { buildingUnlocked, recipeUnlocked } from '../src/core/progression';
 import { TICK, forgeNeeds, tick } from '../src/core/sim';
 import { type Building, type Dir, type GameState, DX, DY, buildingAt, capacity, createState, key, tileAt, isEdgeTile, stackTotal } from '../src/core/state';
@@ -565,7 +564,7 @@ export class Bot {
     }
   }
 
-  // ───────────────────────── settlers & expeditions ─────────────────────────
+  // ───────────────────────── settlers & designs ─────────────────────────
 
   /** Keep food in the stash until `n` settlers live here (building cottages as needed). */
   settle(n: number): void {
@@ -578,22 +577,14 @@ export class Bot {
     }
   }
 
-  /** Send a crew to `dest` from an air dock and wait for them to come home. */
-  voyage(dest: string, crew = 1): void {
-    if (!this.countOf('airdock')) this.build('airdock');
-    const dock = this.firstOf('airdock')!;
-    crew = Math.min(crew, MAX_CREW);
-    this.settle(crew);
-    while (present(this.s) < crew) this.wait(10);
-    const before = this.s.stats.voyages ?? 0;
-    for (let i = 0; i < 30; i++) {
-      const r = A.launchVoyage(this.s, dock.id, dest, crew);
-      if (r.ok) break;
-      if (r.reason === 'Not enough provisions') { const d = DESTINATIONS_BY_ID[dest]; this.ensureAll(d.provisions); continue; }
-      throw new Error(`voyage ${dest}: ${r.reason}`);
-    }
-    while ((this.s.stats.voyages ?? 0) === before) { this.ensure('bread', 2); this.wait(10); }
-    this.log(`voyage to ${dest} back (${BLUEPRINTS.filter((b) => this.s.known.has(b)).length} blueprints)`);
+  /** Draft a design at the Drafting Table, making its materials first. */
+  draft(id: string): void {
+    if (!this.countOf('drafting_table')) this.build('drafting_table');
+    this.ensureAll(DESIGN[id].cost);
+    const r = A.draftDesign(this.s, id);
+    if (!r.ok) throw new Error(`draft ${id}: ${r.reason}`);
+    this.flushEvents();
+    this.log(`drafted ${id}`);
   }
 
   satisfy(g: Goal): void {
@@ -654,7 +645,6 @@ export class Bot {
       case 'islets': this.summonAll(); break;
       case 'forge': this.buildForge(); break;
       case 'settlers': this.settle(g.n); break;
-      case 'voyages': while ((s.stats.voyages ?? 0) < g.n) this.voyage('orchard', 1); break;
       default: throw new Error('bot cannot do goal ' + g.t);
     }
   }

@@ -19,10 +19,9 @@ export type Goal =
   | { t: 'renown'; n: number }                               // renown level (as shown, 1-based)
   | { t: 'codex'; n: number }
   | { t: 'settlers'; n: number }
-  | { t: 'voyages'; n: number }
   | { t: 'blueprints'; n: number };
 
-export type PathId = 'land' | 'industry' | 'trade' | 'nature' | 'settlement' | 'aether' | 'exploration';
+export type PathId = 'land' | 'industry' | 'trade' | 'nature' | 'settlement' | 'aether' | 'invention';
 
 export interface PathDef { id: PathId; name: string; icon: string; desc: string }
 
@@ -33,7 +32,7 @@ export const PATHS: PathDef[] = [
   { id: 'nature', name: 'Nature', icon: 'leaf', desc: 'Orchards, bees and the wind.' },
   { id: 'settlement', name: 'Settlement', icon: 'home', desc: 'Fields, kitchens and people who call this island home.' },
   { id: 'aether', name: 'Aether', icon: 'star', desc: 'Clouds, stars and the Aetherforge.' },
-  { id: 'exploration', name: 'Exploration', icon: 'compass', desc: 'Send ships into the haze and bring back secrets.' },
+  { id: 'invention', name: 'Invention', icon: 'research', desc: 'Draft new designs: better ways to make what you already make.' },
 ];
 
 export interface Reward { items?: Stack; marks?: number; points?: number; unlock?: string }
@@ -117,14 +116,14 @@ const LADDERS: Record<PathId, Rung[]> = {
     { title: 'Beyond the Haze', intro: 'The Aetherforge asks for more.',
       goals: [{ t: 'resonance', n: 3 }, { t: 'codex', n: 3 }], reward: { points: 2, marks: 500 } },
   ],
-  exploration: [
-    { title: 'Cast Off', intro: 'An air dock, a crew and provisions. The haze is waiting.',
-      goals: [{ t: 'built', type: 'airdock', n: 1 }, { t: 'voyages', n: 1 }], reward: { marks: 30 } },
-    { title: 'Charted Skies', intro: 'Every trip maps a little more.',
-      goals: [{ t: 'voyages', n: 8 }, { t: 'blueprints', n: 2 }], reward: { points: 1 } },
-    { title: 'Far Horizons', intro: 'Reefs, storms and ruins.',
-      goals: [{ t: 'voyages', n: 25 }, { t: 'blueprints', n: 5 }], reward: { marks: 200 } },
-    { title: 'Every Secret', intro: 'Find every lost blueprint.',
+  invention: [
+    { title: 'The Drawing Board', intro: 'A drafting table, paper and a steady hand. Draw a better machine.',
+      goals: [{ t: 'built', type: 'drafting_table', n: 1 }, { t: 'blueprints', n: 1 }], reward: { marks: 30 } },
+    { title: 'Tinkerer', intro: 'Every design pays for itself, eventually.',
+      goals: [{ t: 'blueprints', n: 3 }, { t: 'level', n: 3 }], reward: { points: 1 } },
+    { title: 'Inventor', intro: 'Your workshops run on your own ideas.',
+      goals: [{ t: 'blueprints', n: 6 }], reward: { marks: 200 } },
+    { title: 'Master Designer', intro: 'Every design drafted.',
       goals: [{ t: 'blueprints', n: 8 }], reward: { points: 2 } },
   ],
 };

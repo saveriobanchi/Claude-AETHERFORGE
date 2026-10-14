@@ -862,7 +862,7 @@ body.sheet-open .hud-bottom .main-btn.on:not(.big) { border-image: var(--tex-pan
 .ambitions .amb .h { color: #fff2c8; font-size: 0.86rem; margin-top: 2px; }
 .ambitions .amb p { color: #f0e2c4; font-size: 0.74rem; margin: 1px 0 3px; }
 
-/* settlers and expeditions */
+/* settlers and designs */
 .roles { display: flex; flex-direction: column; gap: 3px; }
 .role { display: flex; align-items: center; gap: 4px; }
 .role .rt { flex: 1; min-width: 0; }
@@ -877,3 +877,6 @@ body.sheet-open .hud-bottom .main-btn.on:not(.big) { border-image: var(--tex-pan
 .dest.locked { opacity: 0.55; }
 .dest .flow .slot { transform: scale(0.85); transform-origin: left center; }
 .stats .num.bad { color: #ff8a6a; }
+.flow.cost { align-items: center; gap: 2px; }
+.flow.cost .caps { margin-right: 4px; color: #ffd35a; }
+.flow.cost .slot { transform: scale(0.85); transform-origin: left center; margin-right: -8px; }

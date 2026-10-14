@@ -110,13 +110,13 @@ test('every building places and opens its panel; every recipe and land works', a
     const w = window as unknown as { actions: typeof import('../../src/core/actions'); content: { RECIPES: Record<string, { stations: string[]; unlock: string }> } };
     const A = w.actions;
     const problems: string[] = [];
-    for (const id of ['patterns1', 'patterns2', 'patterns3', 'patterns4', 'patterns5', 'farming', 'ranching', 'weaving', 'baking', 'settlers', 'expeditions']) s.known.add(id);
+    for (const id of ['patterns1', 'patterns2', 'patterns3', 'patterns4', 'patterns5', 'farming', 'ranching', 'weaving', 'baking', 'settlers', 'drafting']) s.known.add(id);
     for (const r of Object.values(w.content.RECIPES) as { unlock: string }[]) if (r.unlock.startsWith('bp_')) s.known.add(r.unlock);
     // try every building type the player can build: find a valid spot by scanning
     const types = [...new Set([...s.buildings.values()].map((b) => b.type))];
     const candidates = ['workbench', 'composter', 'sieve', 'dew_catcher', 'clay_tub', 'kiln', 'harvester', 'wind_sifter', 'sawmill', 'press', 'millstone', 'furnace', 'assembler',
       'condenser', 'distiller', 'star_net', 'resonator', 'crucible', 'belt', 'express', 'depot', 'dispatcher', 'splitter', 'sorter', 'roost', 'crate', 'silo', 'warehouse',
-      'windmill', 'engine', 'pylon', 'beacon', 'trading_post', 'hive', 'lantern', 'field', 'sheep_pen', 'chicken_coop', 'loom', 'oven', 'cottage', 'airdock',
+      'windmill', 'engine', 'pylon', 'beacon', 'trading_post', 'hive', 'lantern', 'field', 'sheep_pen', 'chicken_coop', 'loom', 'oven', 'cottage', 'drafting_table',
       'plank_path', 'fence', 'hedge', 'flower_bed', 'bench', 'stone_path', 'stone_wall', 'planter', 'banner', 'well', 'lamp_post', 'brick_arch', 'fountain', 'gazebo', 'sky_path', 'crystal_lamp', 'statue', 'star_arch', 'monument', 'sapling', 'fruit_sapling', 'cherry_sapling', 'orange_sapling', 'date_sapling', 'pear_sapling', 'plum_sapling'];
     let placed = 0;
     for (const type of candidates) {

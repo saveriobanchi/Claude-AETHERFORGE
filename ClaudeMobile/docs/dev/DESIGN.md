@@ -209,14 +209,14 @@ hundred planks, the hundred-thousandth. Four layers reward volume and choices.
   (forge completed, all islets home). Each completed set: +1 perk point and
   100 renown.
 
-## Ambitions, farming, settlers and expeditions (choice over sequence)
+## Ambitions, farming, settlers and designs (choice over sequence)
 
 The player chooses what to develop. Nothing below is a gate on the core
 chain; every system feeds the others.
 
 ### Ambitions (replaces the linear chapters)
 - Seven paths — Land, Industry, Trade, Nature, Settlement, Aether,
-  Exploration — each a short ladder of ambitions. Every path's next
+  Invention — each a short ladder of ambitions. Every path's next
   ambition is open at the same time; finish them in any order.
 - Rewards: materials, Marks, perk points, decor patterns (Land I → garden,
   Industry II → mason, Settlement I → town, Aether II → sky, Aether III →
@@ -247,21 +247,20 @@ chain; every system feeds the others.
   (contract Marks). Each specialist: +6 % × contentment to their group;
   idle settlers +1 % to everything.
 
-### Expeditions (risk-free variance, choice of where)
-- **Air Dock** (edge). Choose a destination, a crew (1–3 settlers, away for
-  the trip) and pay provisions; loot scales with crew. Destinations unlock
-  with progress: Old Orchard, Sunken Quarry, Crystal Reef, Storm Front,
-  Ancient Ruins.
-- Loot: bulk materials, rare saplings, gems and **blueprints** — eight
-  alternative recipes (e.g. Twin Saw, Charcoal Clamp, Ore Wash, Aether
-  Still, Compact Gears, Sky Loom, Quick Bread, Crystal Lattice). Owning a
-  blueprint adds the recipe as an option; the player chooses per machine.
+### Designs (everything is crafted, built and earned)
+- No expeditions, no random loot. A **Drafting Table** (unlock: Designs,
+  after the assembler and 2 mechanisms) lets the player draft eight designs
+  — alternative recipes (Twin Saw, Charcoal Clamp, Ore Wash, Compact
+  Gears, Sky Loom, Quick Bread, Aether Still, Crystal Lattice) — each for a
+  fixed material cost, once its machine and ingredients are understood.
+- A drafted design becomes a recipe choice on its machine; it is never the
+  default, so the player decides where it is worth using.
 
 ## Ambition details, decor and charm
 
 - **Ambitions** (`content/ambitions.ts`, `core/ambitions.ts`): 7 paths × 4
   rungs = 28. Goals: build, make, grow, trade, charm, upgrade, biomes,
-  islets, forge, resonance, renown, codex, settlers, voyages, blueprints.
+  islets, forge, resonance, renown, codex, settlers, designs drafted.
   Rungs climb in order within a path; paths are independent. The quest card
   shows early tips, then the pinned ambition (or the open one closest to
   done); the board opens from the quest card or the journal. v6 saves drop
@@ -276,7 +275,7 @@ chain; every system feeds the others.
 - **Charm** = sum of decor charm (first ten of a kind full, then a quarter).
   Contracts pay +1 % per 5 charm (max +30 %); milestones 20/60/150/300/600/
   1000 give 40 renown each.
-- Bot: reaches every discovery (farming → expeditions included), runs an
-  expedition, unlocks all five decor pattern sets via ambitions and
+- Bot: reaches every discovery (farming → designs included), drafts a
+  design, unlocks all five decor pattern sets via ambitions and
   completes the forge in ≈15.3 h (it now widens a
   starving production chain like a player noticing a bottleneck).

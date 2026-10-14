@@ -78,7 +78,7 @@ const R: RecipeDef[] = [
   { id: 'stew', name: 'Stew', inputs: { carrot: 3, egg: 1 }, outputs: { stew: 2 }, time: 10, fuel: 1, stations: ['oven'], unlock: 'baking' },
   { id: 'pie', name: 'Apple Pie', inputs: { flour: 1, apple: 2, egg: 1 }, outputs: { pie: 1 }, time: 12, fuel: 1, stations: ['oven'], unlock: 'baking' },
 
-  // ── Blueprints (found on expeditions; alternatives the player opts into) ──
+  // ── Designs (drafted at the Drafting Table; alternatives the player opts into) ──
   { id: 'bp_twin_saw', name: 'Twin Saw', inputs: { wood: 2 }, outputs: { plank: 2 }, time: 3, stations: ['sawmill'], unlock: 'bp_twin_saw' },
   { id: 'bp_clamp', name: 'Charcoal Clamp', inputs: { wood: 2, loam: 1 }, outputs: { charcoal: 1 }, time: 6, stations: ['kiln'], unlock: 'bp_clamp' },
   { id: 'bp_ore_wash', name: 'Ore Wash', inputs: { gravel: 1, dew: 1 }, outputs: { iron_grit: 1 }, chance: { copper_grit: 0.3 }, time: 3, stations: ['wind_sifter'], unlock: 'bp_ore_wash' },

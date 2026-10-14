@@ -48,11 +48,12 @@ camera drifts so you can simply watch the island live.
   perk build to plan, lucky output and bountiful harvests, gathering combos,
   rare gems and a codex of collections.
 - No fixed storyline: seven paths of ambitions (land, industry, trade,
-  nature, settlement, aether, exploration), all open at once — grow the
+  nature, settlement, aether, invention), all open at once — grow the
   island in the order you choose, and pin the one you are chasing.
 - Fields, flocks and kitchens; settlers who need varied meals and take the
-  roles you give them; air-dock expeditions that bring back loot and
-  blueprints for alternative recipes.
+  roles you give them; designs drafted at your own drafting table for
+  better ways of making things. Nothing is random loot: everything is
+  crafted, built and earned.
 - Twenty decor pieces to make the island your own (charm makes traders pay
   more).
 - An endgame that keeps going.

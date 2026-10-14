@@ -960,30 +960,23 @@ export function cottage(c: Canvas, L: TexLib): void {
   blk(ctx, [0.2, 0.92, 0.0], [0.5, 1.0, 0.1], 'a/cobblestone');
 }
 
-/** Plank landing stage on the edge; the dock's airship rides at the end when home. */
-export function airdock(c: Canvas, L: TexLib, home: boolean, f = 0): void {
+/** A slanted drafting desk with a pinned design, rulers, a stool and a lamp. */
+export function draftingTable(c: Canvas, L: TexLib): void {
   const ctx = { c, L };
-  blk(ctx, [0.05, 0.05, 0], [0.95, 0.95, 0.12], 'a/cobblestone_bricks');
-  blk(ctx, [0.15, 0.0, 0.12], [0.85, 1.0, 0.22], 'a/oak_planks', 'a/oak_log_side');
-  for (const [x, y] of [[0.12, 0.05], [0.8, 0.05], [0.12, 0.88], [0.8, 0.88]]) blk(ctx, [x, y, 0.0], [x + 0.1, y + 0.1, 0.6], 'a/oak_log_top', 'a/oak_log_side');
-  blk(ctx, [0.15, 0.06, 0.48], [0.25, 0.98, 0.53], new Paint().rect(0, 0, 16, 16, 0xc8a86a).rect(0, 7, 16, 2, 0x8a6a3a));
-  blk(ctx, [0.75, 0.06, 0.48], [0.85, 0.98, 0.53], new Paint().rect(0, 0, 16, 16, 0xc8a86a).rect(0, 7, 16, 2, 0x8a6a3a));
-  // signal mast with a pennant
-  blk(ctx, [0.06, 0.6, 0.12], [0.14, 0.68, 1.6], 'a/oak_log_top', 'a/oak_log_side');
-  const flag = new Paint(16, 8);
-  for (let x = 0; x < 16; x++) { const h = Math.round(3 - x / 6 + Math.sin(f * TAU + x * 0.6) * 1.2); for (let y = 4 - h; y <= 3 + h; y++) flag.set(x, y, x % 6 < 3 ? 0x5a8ad0 : 0xf0e2c4); }
-  c.quad([0.1, 0.68, 1.58], [0, 0.5, 0], [0, 0, -0.26], F(flag), [1, 1, 1], 6, 0.2);
-  lantern(ctx, [0.8, 0.12, 0.6]);
-  if (!home) return;
-  // a small skiff moored off the end
-  const z0 = 1.05 + Math.sin(f * TAU) * 0.05;
-  blk(ctx, [0.3, 0.3, z0], [0.7, 0.85, z0 + 0.2], 'a/maple_planks', 'a/maple_log_side');
-  blk(ctx, [0.26, 0.26, z0 + 0.2], [0.74, 0.9, z0 + 0.27], 'a/oak_log_side');
-  const cloth = new Paint();
-  for (let x = 0; x < 16; x++) for (let y = 0; y < 16; y++) cloth.set(x, y, (x >> 2) % 2 ? 0x5a8ad0 : 0xf0e2c4);
-  for (let k = 0; k < 4; k++) {
-    const r = [0.16, 0.22, 0.22, 0.14][k];
-    c.box([0.5 - r, 0.58 - r * 1.4, z0 + 0.7 + k * 0.13], [0.5 + r, 0.58 + r * 1.4, z0 + 0.83 + k * 0.13], F(cloth), F(cloth), F(cloth), 6);
-  }
-  for (const [x, y] of [[0.32, 0.4], [0.68, 0.4], [0.32, 0.78], [0.68, 0.78]]) c.quad([x, y, z0 + 0.27], [0, 0, 0.43], [0.002, 0, 0], F(new Paint().rect(0, 0, 16, 16, 0x8a6a3a)), [1, 1, 1], 6, 0.1);
+  base(ctx, 'a/oak_planks');
+  for (const [x, y] of [[0.14, 0.18], [0.76, 0.18], [0.14, 0.7], [0.76, 0.7]]) blk(ctx, [x, y, 0.06], [x + 0.08, y + 0.08, 0.7], 'a/oak_log_top', 'a/oak_log_side');
+  blk(ctx, [0.12, 0.62, 0.3], [0.86, 0.8, 0.36], 'a/oak_planks');
+  // the slanted board: stepped slabs rising toward the back
+  const paper = new Paint(16, 16).rect(0, 0, 16, 16, 0xe8e0c8);
+  for (let y = 2; y < 15; y += 3) paper.rect(1, y, 14, 1, 0x8ab0d8);
+  paper.rect(3, 4, 6, 6, 0x3a5a9a).rect(4, 5, 4, 4, 0xe8e0c8).rect(10, 9, 4, 1, 0x3a5a9a).rect(11, 3, 1, 8, 0x3a5a9a);
+  for (let k = 0; k < 4; k++) c.box([0.1, 0.12 + k * 0.17, 0.7 + k * 0.07], [0.9, 0.29 + k * 0.17, 0.76 + k * 0.07], { tex: paper, uv: [0, k * 4, 16, k * 4 + 4] }, { tex: L.get('a/maple_planks') }, { tex: L.get('a/maple_planks') }, 5);
+  blk(ctx, [0.1, 0.06, 0.7], [0.9, 0.12, 0.8], 'a/maple_planks');
+  // a brass ruler and a lamp on an arm
+  blk(ctx, [0.2, 0.2, 0.8], [0.7, 0.25, 0.83], 'as/default_gold_block');
+  blk(ctx, [0.84, 0.84, 0.7], [0.9, 0.9, 1.3], 'as/default_steel_block');
+  blk(ctx, [0.6, 0.84, 1.26], [0.9, 0.9, 1.3], 'as/default_steel_block');
+  lantern(ctx, [0.6, 0.87, 1.04]);
+  // stool
+  blk(ctx, [0.36, 0.0, 0.06], [0.56, 0.12, 0.34], 'a/oak_log_side');
 }

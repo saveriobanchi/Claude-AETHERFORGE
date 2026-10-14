@@ -89,7 +89,7 @@ export type SimEvent =
   | { type: 'ambition'; id: string }
   | { type: 'settler'; n: number }
   | { type: 'settler_left'; n: number }
-  | { type: 'voyage'; dest: string; got: Stack; blueprint: string | null }
+  | { type: 'design'; id: string }
   | { type: 'charm'; milestone: number };
 
 export interface FlowBucket {
@@ -100,8 +100,6 @@ export interface FlowBucket {
 
 export interface PeopleState {
   count: number;
-  /** Settlers away on expeditions. */
-  away: number;
   roles: Partial<Record<'forester' | 'mason' | 'smith' | 'mystic' | 'merchant', number>>;
   meals: ItemId[];
   mealT: number;
@@ -110,7 +108,7 @@ export interface PeopleState {
 }
 
 export function emptyPeople(): PeopleState {
-  return { count: 0, away: 0, roles: {}, meals: [], mealT: 0, arriveT: 0, hungry: 0 };
+  return { count: 0, roles: {}, meals: [], mealT: 0, arriveT: 0, hungry: 0 };
 }
 
 export interface RenownState {
@@ -158,7 +156,6 @@ export interface GameState {
     built: number;
     playSeconds: number;
     spilled: number;
-    voyages?: number;
   };
   known: Set<string>;
   flags: Set<string>;
@@ -173,8 +170,6 @@ export interface GameState {
   /** Ambition pinned to the quest card. */
   pinned: string | null;
   people: PeopleState;
-  voyages: { dock: number; dest: string; crew: number; t: number; total: number }[];
-  lastVoyage: { dest: string; got: Stack; blueprint: string | null } | null;
   /** Hand-gathering combo: chain length and when the last tap happened (sim time). */
   combo: { n: number; t: number };
   wisps: Wisp[];
@@ -256,8 +251,6 @@ export function createState(seed = 1234567): GameState {
     ambitions: new Set(),
     pinned: null,
     people: emptyPeople(),
-    voyages: [],
-    lastVoyage: null,
     combo: { n: 0, t: -99 },
     wisps: [],
     flow: { cur: { dt: 0, inn: {}, out: {} }, hist: [] },

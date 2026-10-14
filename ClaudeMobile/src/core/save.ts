@@ -27,8 +27,6 @@ export interface SaveData {
   renown?: GameState['renown'];
   chapters?: number;
   people?: GameState['people'];
-  voyages?: GameState['voyages'];
-  lastVoyage?: GameState['lastVoyage'];
   ambitions?: string[];
   pinned?: string | null;
   charmHigh?: number;
@@ -95,8 +93,6 @@ export function serialize(s: GameState, view?: SaveData['view']): SaveData {
     ambitions: [...s.ambitions],
     pinned: s.pinned,
     people: s.people,
-    voyages: s.voyages,
-    lastVoyage: s.lastVoyage,
     flow: s.flow,
     tuftTimer: s.tuftTimer,
     savedAt: s.savedAt,
@@ -129,8 +125,8 @@ export const MIGRATIONS: Record<number, (d: AnySave) => AnySave> = {
   // v4 → v5: renown and perks; mastery counts start from what was gathered.
   // v5 → v6: chapters (older worlds catch up — finished chapters pay out on load).
   5: (d) => ({ ...d, v: 6, chapters: d.chapters ?? 0 }),
-  // v6 → v7: settlers, voyages, ambitions (chapters are converted on load).
-  6: (d) => ({ ...d, v: 7, people: d.people ?? emptyPeople(), voyages: d.voyages ?? [] }),
+  // v6 → v7: settlers and ambitions (chapters are converted on load).
+  6: (d) => ({ ...d, v: 7, people: d.people ?? emptyPeople() }),
   4: (d) => ({ ...d, v: 5, renown: d.renown ?? emptyRenown(), stats: { ...(d.stats ?? {}), made: d.stats?.made ?? d.stats?.obtained ?? {} } }),
 };
 
@@ -198,9 +194,7 @@ export function deserialize(raw: unknown): { state: GameState; view?: SaveData['
   s.ambitions = new Set((d.ambitions ?? []).filter((a) => typeof a === 'string'));
   s.pinned = typeof d.pinned === 'string' ? d.pinned : null;
   const pp = d.people ?? emptyPeople();
-  s.people = { ...emptyPeople(), ...pp, roles: { ...(pp.roles ?? {}) }, meals: (pp.meals ?? []).filter((m) => isItemId(m)) as ItemId[] };
-  s.voyages = (d.voyages ?? []).filter((v) => v && typeof v.dest === 'string').map((v) => ({ ...v }));
-  s.lastVoyage = d.lastVoyage ?? null;
+  s.people = { ...emptyPeople(), count: Math.max(0, Math.floor(pp.count ?? 0)), mealT: pp.mealT ?? 0, arriveT: pp.arriveT ?? 0, hungry: pp.hungry ?? 0, roles: { ...(pp.roles ?? {}) }, meals: (pp.meals ?? []).filter((m) => isItemId(m)) as ItemId[] };
   s.renown = { ...emptyRenown(), ...rn, perks: { ...(rn.perks ?? {}) }, codex: [...(rn.codex ?? [])] };
   s.known = new Set(d.known ?? ['start']);
   s.known.add('start');

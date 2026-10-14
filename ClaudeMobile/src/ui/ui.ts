@@ -5,8 +5,8 @@ import { MARKET, CONTRACT_REFRESH, levelSpeed, marketPrice, repForLevel, upgrada
 import { dayIndex, weatherFor } from '../core/content/weather';
 import { AMBITION, AMBITIONS, PATHS, type Reward, charmTradeBonus } from '../core/content/ambitions';
 import { focus, goalDone, goalText, goalValue, openRung } from '../core/ambitions';
-import { BLUEPRINTS, DESTINATIONS, FOODS, MAX_CREW, ROLES, SPECIALIST_BONUS } from '../core/content/people';
-import { assigned, canLaunch, contentment, destinationOpen, housing, idle, present } from '../core/people';
+import { BLUEPRINTS, DESIGNS, FOODS, ROLES, SPECIALIST_BONUS } from '../core/content/people';
+import { assigned, canDraft, contentment, housing, idle } from '../core/people';
 import { CODEX, PERKS, type PerkBranch, masteryStar, masteryThresholds, xpForLevel } from '../core/content/renown';
 import { DISCOVERIES, DISCOVERY_LIST } from '../core/content/discoveries';
 import { ITEMS, ITEM_IDS, type ItemId, type Stack } from '../core/content/items';
@@ -69,7 +69,6 @@ export class UI {
   private weatherId = '';
   private questIcon!: HTMLImageElement;
   private questTip = false;
-  private crew = 1;
   private btnBuild!: HTMLButtonElement;
   private btnCraft!: HTMLButtonElement;
   private btnStash!: HTMLButtonElement;
@@ -573,7 +572,8 @@ export class UI {
       Math.floor(this.progressOf(b) * (def.kind === 'sapling' ? 20 : 0)),
       b.level, upgradable(def) ? s.trade.marks + ':' + s.known.has('tinker') + s.known.has('master') : '',
       def.kind === 'post' ? JSON.stringify(s.trade) : '', s.tileRev,
-      def.kind === 'home' || def.kind === 'dock' ? JSON.stringify(s.people) + s.voyages.map((v) => v.dock + ':' + Math.ceil(v.t)).join() + FOODS.map((f) => s.stash[f]).join() + s.trade.marks : '',
+      def.kind === 'home' ? JSON.stringify(s.people) + FOODS.map((f) => s.stash[f]).join() : '',
+      def.kind === 'drafting' ? DESIGNS.map((d) => canDraft(s, d.id)).join() : '',
     ].join('|');
     if (sig === this.panelSig) return;
     this.panelSig = sig;
@@ -588,7 +588,7 @@ export class UI {
     if (def.kind === 'harvester' && b.status === 'noinput') statusText = 'No trees ready nearby';
     if (def.kind === 'hive' && b.status === 'noinput') statusText = 'Needs trees within reach';
     if (def.kind === 'post') statusText = '';
-    if (['tree', 'sapling', 'node', 'storage', 'workbench', 'depot', 'forge', 'beacon', 'pylon', 'splitter', 'sorter', 'manual', 'home', 'dock', 'decor'].includes(def.kind)) statusText = '';
+    if (['tree', 'sapling', 'node', 'storage', 'workbench', 'depot', 'forge', 'beacon', 'pylon', 'splitter', 'sorter', 'manual', 'home', 'drafting', 'decor'].includes(def.kind)) statusText = '';
     const head = h('div', { class: 'panel-head' },
       h('div', { class: 'thumb' }, img(thumb(b.type))),
       h('div', { class: 't' }, h('div', { class: 'name', text: def.name + (b.level > 1 ? ' · ' + ROMAN[b.level] : '') }),
@@ -784,7 +784,7 @@ export class UI {
       }
       case 'post': this.fillPost(body, actions); addCommon(); break;
       case 'home': this.fillHome(body); addCommon(); break;
-      case 'dock': this.fillDock(body, b); addCommon(); break;
+      case 'drafting': this.fillDrafting(body); addCommon(); break;
       case 'hive': {
         const trees = [-1, 0, 1].flatMap((dy) => [-1, 0, 1].map((dx) => [dx, dy])).filter(([dx, dy]) => (dx || dy) && [...s.buildings.values()].some((t) => t.x === b.x + dx && t.y === b.y + dy && BUILDINGS[t.type].kind === 'tree')).length;
         body.append(h('div', { class: 'flow' }, this.slot('honey', fmt(b.outBuf.honey ?? 0)), this.slot('wax', fmt(b.outBuf.wax ?? 0))), this.bar());
@@ -879,7 +879,6 @@ export class UI {
     const room = housing(s);
     body.append(h('div', { class: 'stats' },
       h('span', { text: 'Settlers' }), h('span', { class: 'num', text: `${p.count} / ${room}` }),
-      p.away ? h('span', { text: 'Away exploring' }) : null, p.away ? h('span', { class: 'num', text: String(p.away) }) : null,
       h('span', { text: 'Contentment' }), h('span', { class: 'num' + (p.hungry ? ' bad' : ''), text: p.count ? (p.hungry ? 'Hungry!' : Math.round(c * 100) + '%') : '—' }),
       h('span', { text: 'Idle (+1% to all)' }), h('span', { class: 'num', text: String(Math.floor(idle(s))) })));
     if (p.meals.length) {
@@ -902,34 +901,30 @@ export class UI {
     body.append(h('div', { class: 'muted', style: 'font-size:0.72rem', text: `Each specialist speeds their machines by ${Math.round(SPECIALIST_BONUS * 100)}% × contentment (merchants: contract pay). Varied meals make settlers content.` }));
   }
 
-  private fillDock(body: HTMLElement, b: Building): void {
+  private fillDrafting(body: HTMLElement): void {
     const g = this.g, s = g.s;
-    const v = s.voyages.find((x) => x.dock === b.id);
-    if (v) {
-      const d = DESTINATIONS.find((x) => x.id === v.dest)!;
-      body.append(h('div', { class: 'caps', text: `Away: ${d.name} · crew ${v.crew}` }), h('div', { class: 'bar' }, h('i', { style: `width:${Math.round((1 - v.t / v.total) * 100)}%` })),
-        h('div', { class: 'muted', style: 'font-size:0.8rem', text: `Back in ${duration(Math.max(0, v.t))}.` }));
-    } else {
-      const crewBox = h('div', { class: 'chips' }, h('span', { class: 'caps', text: 'Crew' }));
-      for (let n = 1; n <= MAX_CREW; n++) crewBox.append(h('button', { class: 'rchip' + (this.crew === n ? ' on' : ''), onclick: () => { this.crew = n; this.panelSig = ''; } }, String(n)));
-      body.append(crewBox, h('div', { class: 'muted', style: 'font-size:0.72rem', text: `${Math.floor(present(s))} settlers at home. More crew bring back more and find blueprints more often.` }));
-      for (const d of DESTINATIONS) {
-        const open = destinationOpen(s, d.id);
-        const why = open ? canLaunch(s, b.id, d.id, this.crew) : '';
-        const prov = h('div', { class: 'flow' });
-        for (const k in d.provisions) prov.append(this.slot(k as ItemId, String(d.provisions[k as ItemId]), s.stash[k as ItemId] < (d.provisions[k as ItemId] ?? 0)));
-        const loot = h('div', { class: 'loot' });
-        for (const l of d.loot) loot.append(img(itemIcon(l.item), 'px'));
-        body.append(h('div', { class: 'contract dest' + (open ? '' : ' locked') },
-          h('div', { class: 'ct' }, h('div', { class: 'nm', text: open ? `${d.name} · ${duration(d.time)}` : '??? · uncharted' }), h('div', { class: 'sub', text: open ? d.desc : 'Further discoveries will chart it.' }), open ? prov : null, open ? loot : null),
-          open ? h('div', { class: 'cb' }, h('button', { class: 'btn small' + (why ? '' : ' primary'), title: why, onclick: () => { const r = g.act(() => A.launchVoyage(s, b.id, d.id, this.crew), 'collect'); if (r.ok) this.panelSig = ''; } }, 'Go')) : null));
-      }
+    const done = BLUEPRINTS.filter((x) => s.known.has(x)).length;
+    body.append(h('div', { class: 'stats' }, h('span', { text: 'Designs drafted' }), h('span', { class: 'num', text: `${done} / ${BLUEPRINTS.length}` })));
+    for (const d of DESIGNS) {
+      const r = RECIPE_LIST.find((x) => x.unlock === d.id)!;
+      const why = canDraft(s, d.id);
+      const have = s.known.has(d.id);
+      const hidden = why === 'Not yet understood';
+      const flow = h('div', { class: 'flow' });
+      for (const k in r.inputs) flow.append(this.slot(k as ItemId, String(r.inputs[k as ItemId])));
+      flow.append(h('span', { class: 'arrow', text: '→' }));
+      for (const k in r.outputs) flow.append(this.slot(k as ItemId, String(r.outputs[k as ItemId])));
+      const cost = h('div', { class: 'flow cost' }, h('span', { class: 'caps', text: 'Cost' }));
+      for (const k in d.cost) cost.append(this.slot(k as ItemId, fmt(d.cost[k as ItemId] ?? 0), s.stash[k as ItemId] < (d.cost[k as ItemId] ?? 0)));
+      body.append(h('div', { class: 'contract dest' + (hidden ? ' locked' : '') },
+        h('div', { class: 'ct' },
+          h('div', { class: 'nm', text: hidden ? '??? · not yet understood' : `${r.name} · ${r.stations.map((x) => BUILDINGS[x]?.name ?? x).join(' / ')}` }),
+          h('div', { class: 'sub', text: hidden ? 'More discoveries will make this design possible.' : d.desc }),
+          hidden ? null : flow, hidden || have ? null : cost),
+        hidden ? null : h('div', { class: 'cb' }, have ? h('span', { class: 'caps', text: '✓ Yours' })
+          : h('button', { class: 'btn small' + (why ? '' : ' primary'), title: why, onclick: () => { const res = g.act(() => A.draftDesign(s, d.id), 'collect'); if (res.ok) this.panelSig = ''; } }, 'Draft'))));
     }
-    const found = BLUEPRINTS.filter((x) => s.known.has(x)).length;
-    const lv = s.lastVoyage;
-    body.append(h('div', { class: 'stats' }, h('span', { text: 'Blueprints found' }), h('span', { class: 'num', text: `${found} / ${BLUEPRINTS.length}` }),
-      lv ? h('span', { text: 'Last trip' }) : null, lv ? h('span', { class: 'num', text: Object.values(lv.got).reduce((a, n) => a + (n ?? 0), 0) + ' goods' + (lv.blueprint ? ' + blueprint' : '') }) : null));
-    if (found) body.append(h('div', { class: 'muted', style: 'font-size:0.72rem', text: 'Blueprints add alternative recipes — pick them on the machine.' }));
+    body.append(h('div', { class: 'muted', style: 'font-size:0.72rem', text: 'A drafted design becomes a recipe choice on its machine. The old recipe stays — pick whichever suits the line.' }));
   }
 
   openAmbitions(): void {
@@ -1011,12 +1006,11 @@ export class UI {
     this.toast('A settler left', 'They went hungry. Keep food in the stash.', uiIcon('settler'));
   }
 
-  voyageHome(dest: string, got: Stack, blueprint: string | null): void {
-    const d = DESTINATIONS.find((x) => x.id === dest);
-    const parts = Object.keys(got).map((k) => `${got[k as ItemId]} ${ITEMS[k as ItemId].name}`);
-    const bp = blueprint ? RECIPE_LIST.find((r) => r.unlock === blueprint) : null;
-    this.toast(`Back from ${d?.name ?? 'the haze'}`, (bp ? `Blueprint: ${bp.name}! · ` : '') + (parts.join(' · ') || 'Nothing worth keeping'), uiIcon('compass'), bp ? 'big' : '');
+  designDrafted(id: string): void {
+    const r = RECIPE_LIST.find((x) => x.unlock === id);
+    this.toast(`Design drafted: ${r?.name ?? ''}`, 'Choose it on the machine to use it.', uiIcon('research'), 'big');
   }
+
 
   charmMilestone(m: number): void {
     this.toast(`Charm ${m}!`, 'Your island grows lovelier. Renown earned.', uiIcon('charm'));
@@ -1249,7 +1243,6 @@ export class UI {
       h('span', { text: 'Charm' }), h('span', { class: 'num', text: String(s.cache.charm) }),
       h('span', { text: 'Ambitions' }), h('span', { class: 'num', text: `${s.ambitions.size}/${AMBITIONS.length}` }),
       s.people.count ? h('span', { text: 'Settlers' }) : null, s.people.count ? h('span', { class: 'num', text: String(s.people.count) }) : null,
-      st.voyages ? h('span', { text: 'Expeditions' }) : null, st.voyages ? h('span', { class: 'num', text: String(st.voyages) }) : null,
       h('span', { text: 'Structures' }), h('span', { class: 'num', text: String(count((b) => !['tree', 'tuft', 'sapling', 'elder_tree'].includes(b.type) && BUILDINGS[b.type].kind !== 'node')) }),
       h('span', { text: 'Trees' }), h('span', { class: 'num', text: String(count((b) => b.type === 'tree')) }),
       h('span', { text: 'Gathered by hand' }), h('span', { class: 'num', text: fmt(st.harvests) }),

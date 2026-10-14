@@ -265,10 +265,10 @@ export class Game {
           this.ui.settlerLeft();
           this.markDirty();
           break;
-        case 'voyage':
-          audio.play('discover', 0.9);
+        case 'design':
+          audio.play('discover', 1.2);
           haptic([20, 40, 20], this.settings.haptics);
-          this.ui.voyageHome(e.dest, e.got, e.blueprint);
+          this.ui.designDrafted(e.id);
           this.markDirty();
           break;
         case 'charm':

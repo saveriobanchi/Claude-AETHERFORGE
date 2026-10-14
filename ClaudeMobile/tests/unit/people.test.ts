@@ -1,16 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import * as A from '../../src/core/actions';
-import { BLUEPRINTS, DESTINATIONS, FOODS, MEAL_EVERY } from '../../src/core/content/people';
+import { DESIGN, DESIGNS, FOODS, MEAL_EVERY } from '../../src/core/content/people';
+import { DISCOVERIES } from '../../src/core/content/discoveries';
 import { RECIPES } from '../../src/core/content/recipes';
 import { ITEMS } from '../../src/core/content/items';
 import { contentment, housing, merchantBonus, settlerBonus } from '../../src/core/people';
 import { deserialize, serialize } from '../../src/core/save';
-import { machineSpeed, run } from '../../src/core/sim';
+import { defaultRecipe, machineSpeed, run } from '../../src/core/sim';
 import { give, sandbox } from './helpers';
 
 function village(n: number) {
   const s = sandbox(8, 'grass');
-  for (const id of ['settlers', 'expeditions', 'farming', 'baking', 'trade']) s.known.add(id);
+  for (const id of ['settlers', 'farming', 'baking', 'trade']) s.known.add(id);
   give(s, { plank: 400, brick: 200, cloth: 100, gear: 50, iron: 50, bread: 60, stone: 50 });
   for (let i = 0; i < Math.ceil(n / 2); i++) A.place(s, 'cottage', i, 0);
   run(s, 46 * n + 1);
@@ -88,54 +89,40 @@ describe('settlers', () => {
   });
 });
 
-describe('expeditions', () => {
-  it('a crew sails, comes home with loot, and settlers return', () => {
-    const s = village(2);
-    s.known.delete('pylon');
-    const edge = [...s.tiles.values()].find((t) => A.canPlace(s, 'airdock', t.x, t.y).ok)!;
-    const dock = A.place(s, 'airdock', edge.x, edge.y).id!;
-    give(s, { bread: 20, stew: 10 });
-    expect(A.launchVoyage(s, dock, 'orchard', 4).ok).toBe(false);
-    expect(A.launchVoyage(s, dock, 'storm', 1).reason).toBe('Not charted yet');
-    expect(A.launchVoyage(s, dock, 'orchard', 2).ok).toBe(true);
-    expect(s.people.away).toBe(2);
-    expect(A.launchVoyage(s, dock, 'quarry', 1).ok).toBe(false); // ship away
-    const apples = s.stash.apple;
-    run(s, DESTINATIONS[0].time + 1);
-    expect(s.people.away).toBe(0);
-    expect(s.stats.voyages).toBe(1);
-    expect(s.stash.apple).toBeGreaterThan(apples);
-    expect(s.events.some((e) => e.type === 'voyage')).toBe(true);
+describe('designs', () => {
+  it('every design is an alternative recipe, never a default', () => {
+    for (const d of DESIGNS) {
+      const r = Object.values(RECIPES).find((x) => x.unlock === d.id);
+      expect(r, d.id).toBeDefined();
+      for (const st of r!.stations) expect(defaultRecipe(st)).not.toBe(r!.id);
+      for (const n of d.needs) expect(DISCOVERIES[n], n).toBeDefined();
+      expect(Object.keys(d.cost).length).toBeGreaterThan(0);
+    }
   });
 
-  it('blueprints are alternative recipes found abroad', () => {
-    for (const bp of BLUEPRINTS) {
-      const r = Object.values(RECIPES).find((x) => x.unlock === bp);
-      expect(r, bp).toBeDefined();
-    }
-    const s = village(2);
-    const edge = [...s.tiles.values()].find((t) => A.canPlace(s, 'airdock', t.x, t.y).ok)!;
-    const dock = A.place(s, 'airdock', edge.x, edge.y).id!;
-    give(s, { bread: 400 });
-    let found = 0;
-    for (let i = 0; i < 60 && !found; i++) {
-      A.launchVoyage(s, dock, 'orchard', 2);
-      run(s, 121);
-      found = BLUEPRINTS.filter((b) => s.known.has(b)).length;
-    }
-    expect(found).toBeGreaterThan(0);
+  it('are drafted at the table for a fixed cost, once', () => {
+    const s = sandbox(6);
+    give(s, { copper: 200, mechanism: 10, plank: 50, glass: 10, gear: 20 });
+    expect(A.draftDesign(s, 'bp_gears').reason).toBe('Needs a Drafting Table');
+    A.place(s, 'drafting_table', 0, 0);
+    const copper = s.stash.copper;
+    expect(A.draftDesign(s, 'bp_gears').ok).toBe(true);
+    expect(s.stash.copper).toBe(copper - DESIGN.bp_gears.cost.copper!);
+    expect(s.known.has('bp_gears')).toBe(true);
+    expect(s.events.some((e) => e.type === 'design')).toBe(true);
+    expect(A.draftDesign(s, 'bp_gears').ok).toBe(false);
+    expect(A.draftDesign(s, 'bp_lattice').reason).toBe('Not enough materials');
+    s.known.delete('resonance');
+    expect(A.draftDesign(s, 'bp_lattice').reason).toBe('Not yet understood');
   });
 
-  it('settlers and voyages survive a save', () => {
+  it('settlers and designs survive a save', () => {
     const s = village(2);
-    const edge = [...s.tiles.values()].find((t) => A.canPlace(s, 'airdock', t.x, t.y).ok)!;
-    const dock = A.place(s, 'airdock', edge.x, edge.y).id!;
     A.assignRole(s, 'forester', 1);
-    A.launchVoyage(s, dock, 'orchard', 1);
+    s.known.add('bp_clamp');
     const d = deserialize(JSON.parse(JSON.stringify(serialize(s)))).state;
     expect(d.people.count).toBe(2);
     expect(d.people.roles.forester).toBe(1);
-    expect(d.voyages.length).toBe(1);
-    expect(d.people.away).toBe(1);
+    expect(d.known.has('bp_clamp')).toBe(true);
   });
 });
