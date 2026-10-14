@@ -4,7 +4,8 @@ const PRECACHE = __PRECACHE_URLS__;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)).then(() => self.skipWaiting()),
+    // { cache: 'reload' }: never fill a new cache from stale HTTP-cached copies of the old deploy
+    caches.open(CACHE).then((cache) => cache.addAll(PRECACHE.map((u) => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()),
   );
 });
 
@@ -35,7 +36,23 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
-  // Hashed assets: cache first.
+  // The art pack and the web manifest keep the same file names across deploys:
+  // network first (always the current deploy), cached copy only when offline.
+  if (url.pathname.includes('/art/') || url.pathname.endsWith('.webmanifest')) {
+    event.respondWith(
+      fetch(req, { cache: 'no-cache' })
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(req, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(req).then((hit) => hit || caches.match(req, { ignoreSearch: true }))),
+    );
+    return;
+  }
+  // Hashed assets (their names change with their content): cache first.
   event.respondWith(
     caches.match(req, { ignoreSearch: true }).then(
       (hit) =>

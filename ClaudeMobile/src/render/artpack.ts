@@ -1,3 +1,5 @@
+import { BUILDINGS } from '../core/content/buildings';
+import { ITEM_IDS } from '../core/content/items';
 import { Rectangle, Texture } from 'pixi.js';
 
 /**
@@ -58,7 +60,13 @@ class Art {
     let a = this.cache.get(key);
     if (a) return a;
     const r = this.man?.rects[key];
-    if (!r) throw new Error('missing art: ' + key);
+    if (!r) {
+      // never crash over one picture: show nothing and say so once
+      console.warn('missing art: ' + key);
+      a = { tex: Texture.EMPTY, ax: 0, ay: 0, w: 1, h: 1 };
+      this.cache.set(key, a);
+      return a;
+    }
     const [s, x, y, w, h, ax, ay] = r;
     a = { tex: new Texture({ source: this.textures[s].source, frame: new Rectangle(x, y, w, h) }), ax, ay, w, h };
     this.cache.set(key, a);
@@ -84,6 +92,9 @@ class Art {
     const res = await fetch(base + 'manifest.json', { cache: 'no-cache' });
     if (!res.ok) throw new Error('art pack missing — run `npm run art`');
     const man = (await res.json()) as Manifest;
+    // an art pack from an older deploy (a stale cache) lacks newer pictures
+    const lacking = (ITEM_IDS as string[]).filter((id) => !man.rects[`icon:${id}`]).concat(Object.keys(BUILDINGS).filter((id) => BUILDINGS[id].kind !== 'belt' && !man.sprites[id] && !man.sprites[id + '_meadow']));
+    if (lacking.length) throw new StaleArtError(lacking);
     this.man = man;
     this.R = man.R;
     this.depths = man.depths;
@@ -113,3 +124,8 @@ class Art {
 }
 
 export const art = new Art();
+
+/** Thrown when the art pack on hand is older than the game code (a stale cache). */
+export class StaleArtError extends Error {
+  constructor(public lacking: string[]) { super(`missing art: ${lacking.slice(0, 4).join(', ')}${lacking.length > 4 ? '…' : ''}`); }
+}
