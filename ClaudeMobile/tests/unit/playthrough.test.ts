@@ -89,6 +89,10 @@ describe('full playthrough', () => {
     bot.automate('crush', 1);
     bot.automate('sift_gravel', 2);
     bot.automate('smelt_copper', 1);
+    // and the Heart stage's sunmetal: more iron, aether and a second crucible
+    bot.automate('smelt_iron', 1);
+    bot.automate('distill', 1);
+    bot.automate('sunmetal', 1);
     bot.buildForge();
     } finally { dump(); }
 

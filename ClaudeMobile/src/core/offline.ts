@@ -2,7 +2,7 @@ import { BUILDINGS, TREE } from './content/buildings';
 import { ITEM_IDS, type ItemId, type Stack } from './content/items';
 import { OFFLINE } from './content/world';
 import { run } from './sim';
-import { type GameState, attuneRank, capacity, stashAdd } from './state';
+import { type GameState, attuneRank, capacity, perkRank, stashAdd } from './state';
 
 export interface OfflineReport {
   seconds: number;
@@ -44,7 +44,7 @@ export function applyOffline(s: GameState, seconds: number): OfflineReport | nul
     return null;
   }
   const counted = Math.min(seconds, offlineCap(s));
-  const eff = OFFLINE.efficiency + 0.05 * attuneRank(s, 'dreams');
+  const eff = OFFLINE.efficiency + 0.05 * attuneRank(s, 'dreams') + 0.05 * perkRank(s, 'night_shift');
   let t = counted * eff;
   const { rate } = flowRates(s);
   for (const k of ITEM_IDS) {

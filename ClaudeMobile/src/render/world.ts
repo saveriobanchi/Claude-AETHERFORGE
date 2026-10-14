@@ -448,6 +448,15 @@ export class WorldView {
           else if (b.type === 'resonator' || b.type === 'distiller' || b.type === 'condenser') this.fx.emit('mote', wx, wy - 26, 3, { up: 16, spread: 10, life: 1 });
           break;
         }
+        case 'lucky': {
+          const b = s.buildings.get(e.id);
+          const v = this.views.get(e.id);
+          if (!b || !v || !v.root.visible) break;
+          v.bounce = Math.max(v.bounce, 0.7);
+          const [wx, wy] = this.centerOf(b);
+          this.fx.emit('gold', wx, wy - 30, reduced ? 4 : 12, { up: 40, spread: 22, life: 1.2 });
+          break;
+        }
         case 'harvest': {
           const [wx, wy] = tileCenter(e.x, e.y);
           this.fx.emit('leaf', wx, wy - 40, reduced ? 3 : 8, { up: 30, spread: 26, g: 50, life: 1.4, drag: 0.4 });

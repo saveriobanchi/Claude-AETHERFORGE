@@ -13,6 +13,7 @@ export const TRADE_VALUE: Partial<Record<ItemId, number>> = {
   skystone: 6, crystal: 20, sunmetal: 30,
   apple: 0.8, honey: 2, wax: 1.6, cider: 5, candle: 2.2, preserves: 7,
   cherry: 1, orange: 1.2, date: 1.4, pear: 1, plum: 1.4, juice: 5, fruit_basket: 40,
+  topaz: 30, ruby: 35, opal: 35, emerald: 45,
 };
 
 /** Base contract size per item (scaled by trade level). */

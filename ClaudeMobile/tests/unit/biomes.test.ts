@@ -1,3 +1,4 @@
+import { SAVE_VERSION } from '../../src/core/state';
 import { describe, expect, it } from 'vitest';
 import * as A from '../../src/core/actions';
 import { BIOMES, FRUITS } from '../../src/core/content/biomes';
@@ -161,6 +162,6 @@ describe('biome saves', () => {
     expect(tileAt(d, 1, 2)!.biome).toBe('frost');
     expect(tileAt(d, 0, 0)!.biome).toBeUndefined();
     const v3 = { ...serialize(s), v: 3 };
-    expect(migrate(v3).v).toBe(4);
+    expect(migrate(v3).v).toBe(SAVE_VERSION);
   });
 });

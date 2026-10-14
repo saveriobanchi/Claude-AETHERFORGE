@@ -44,6 +44,9 @@ camera drifts so you can simply watch the island live.
   synthesized music and sound.
 - Sky traders with contracts to fill, a market, machine upgrades, and a few
   gentler side industries — all earned in play (no shop, no timers to pay off).
+- Long-term goals for the grind: item mastery stars, renown levels with a
+  perk build to plan, lucky output and bountiful harvests, gathering combos,
+  rare gems and a codex of collections.
 - An endgame that keeps going.
 
 The rest is meant to be discovered. (Developers: see `docs/dev/DESIGN.md`,

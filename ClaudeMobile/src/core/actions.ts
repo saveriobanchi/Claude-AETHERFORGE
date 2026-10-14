@@ -3,17 +3,21 @@ import { ITEMS, type ItemId, type Stack } from './content/items';
 import { FUEL_VALUE, RECIPES } from './content/recipes';
 import { ATTUNE, ISLETS, LAND, SUMMON_TIME, landCost, summonCost } from './content/world';
 import { buildingUnlocked, checkDiscoveries, landUnlocked, recipeUnlocked } from './progression';
-import { bufCap, completeContract, tuftYield, currentRecipe, defaultRecipe, fillBoard, forgeAccept, forgeNeeds, harvestTree, rebuildCache, salvage } from './sim';
+import { bufCap, completeContract, rareChance, tuftYield, currentRecipe, defaultRecipe, fillBoard, forgeAccept, forgeNeeds, harvestTree, rebuildCache, salvage } from './sim';
+import { LUCK, PERK, RESPEC_PER_POINT } from './content/renown';
 import { BASIC_MAX_LEVEL, MARKET_BY_ID, MAX_LEVEL, SKIP_COOLDOWN, marketPrice, upgradable, upgradeCost } from './content/trade';
 import {
   type Building, type Dir, type GameState, DX, DY, addBuilding, addTile, addTo, buildingAt, canAfford, key,
-  pay, refund, room, stashAdd, tileAt, isEdgeTile, stackTotal, removeBuildingRaw, rand,
+  pay, refund, room, stashAdd, tileAt, isEdgeTile, stackTotal, removeBuildingRaw, rand, made, perkRank,
 } from './state';
 
 export interface Result {
   ok: boolean;
   reason?: string;
   got?: Stack;
+  /** Hand harvest: a triple (bountiful) harvest, and the current combo chain. */
+  crit?: boolean;
+  combo?: number;
 }
 const OK: Result = { ok: true };
 const fail = (reason: string): Result => ({ ok: false, reason });
@@ -214,6 +218,7 @@ export function harvestAt(s: GameState, x: number, y: number): Result {
   if (!b) return fail('');
   if (b.type === 'tuft') {
     const n = stashAdd(s, 'fiber', tuftYield(s, b.x, b.y));
+    made(s, 'fiber', n);
     removeBuildingRaw(s, b);
     sync(s);
     checkDiscoveries(s);
@@ -222,8 +227,28 @@ export function harvestAt(s: GameState, x: number, y: number): Result {
   if (BUILDINGS[b.type].kind !== 'tree') return fail('');
   if (b.stock < 1) return fail('Regrowing');
   const got = harvestTree(s, b, (item, n) => stashAdd(s, item, n));
+  // gathering combo: quick taps chain; every 5th gives one more of the main item
+  const c = s.combo;
+  c.n = s.time - c.t <= LUCK.comboWindow ? c.n + 1 : 1;
+  c.t = s.time;
+  const main = Object.keys(got).find((k) => k !== 'sapling' && k !== 'fiber' && !k.endsWith('_sapling')) as ItemId | undefined;
+  let crit = false;
+  if (main) {
+    // bountiful: a triple harvest of everything ordinary
+    if (rand(s) < LUCK.crit + LUCK.perCritPerk * perkRank(s, 'bountiful')) {
+      crit = true;
+      for (const k in got) {
+        const item = k as ItemId;
+        if (item === 'sapling' || item === 'fiber' || item.endsWith('_sapling')) continue;
+        const extra = stashAdd(s, item, (got[item] ?? 0) * (LUCK.critMult - 1));
+        made(s, item, extra);
+        got[item] = (got[item] ?? 0) + extra;
+      }
+    }
+    if (c.n % LUCK.comboEvery === 0) { const e = stashAdd(s, main, 1); made(s, main, e); got[main] = (got[main] ?? 0) + e; }
+  }
   checkDiscoveries(s);
-  return { ok: true, got };
+  return { ok: true, got, crit, combo: c.n };
 }
 
 export const SIEVE_TAPS = 3;
@@ -245,9 +270,9 @@ export function tapManual(s: GameState, id: number): Result {
     b.progress = 0;
     b.cycles++;
     const got: Stack = {};
-    for (const k in r.outputs) { const n = stashAdd(s, k as ItemId, r.outputs[k as ItemId] ?? 0); if (n) got[k as ItemId] = n; }
+    for (const k in r.outputs) { const n = stashAdd(s, k as ItemId, r.outputs[k as ItemId] ?? 0); made(s, k as ItemId, n); if (n) got[k as ItemId] = n; }
     if (r.chance) for (const k in r.chance) {
-      if (rand(s) < (r.chance[k as ItemId] ?? 0) && stashAdd(s, k as ItemId, 1)) got[k as ItemId] = 1;
+      if (rand(s) < rareChance(s, k as ItemId, r.chance[k as ItemId] ?? 0) && stashAdd(s, k as ItemId, 1)) { got[k as ItemId] = 1; made(s, k as ItemId, 1); }
     }
     b.status = 'idle';
     checkDiscoveries(s);
@@ -280,7 +305,7 @@ export function craft(s: GameState, recipe: string, times = 1): Result {
     return fail(m || 'Stash is full');
   }
   pay(s, scale(r.inputs, n));
-  for (const k in r.outputs) stashAdd(s, k as ItemId, (r.outputs[k as ItemId] ?? 0) * n);
+  for (const k in r.outputs) made(s, k as ItemId, stashAdd(s, k as ItemId, (r.outputs[k as ItemId] ?? 0) * n));
   s.stats.crafted += n;
   checkDiscoveries(s);
   return { ok: true, got: scale(r.outputs, n) };
@@ -441,6 +466,50 @@ export function skipContract(s: GameState, slot: number): Result {
   return OK;
 }
 
+/** Market price after the Bargains perk. */
+export function priceOf(s: GameState, id: string): number {
+  const m = MARKET_BY_ID[id];
+  return Math.max(1, Math.round(marketPrice(m, s.trade.bought[id] ?? 0) * (1 - 0.05 * perkRank(s, 'bargains'))));
+}
+
+// ───────────────────────── renown & perks ─────────────────────────
+
+export function canPerk(s: GameState, id: string): Result {
+  const p = PERK[id];
+  if (!p) return fail('');
+  if ((s.renown.perks[id] ?? 0) >= p.max) return fail('Mastered');
+  if (s.renown.points < 1) return fail('No perk points — earn renown');
+  return OK;
+}
+
+export function takePerk(s: GameState, id: string): Result {
+  const r = canPerk(s, id);
+  if (!r.ok) return r;
+  s.renown.points--;
+  s.renown.perks[id] = (s.renown.perks[id] ?? 0) + 1;
+  s.topoDirty = true; // capacity may change
+  sync(s);
+  return OK;
+}
+
+export function respecCost(s: GameState): number {
+  return RESPEC_PER_POINT * Object.values(s.renown.perks).reduce((a, b) => a + b, 0);
+}
+
+/** Take back every perk point (costs Marks). */
+export function respec(s: GameState): Result {
+  const spent = Object.values(s.renown.perks).reduce((a, b) => a + b, 0);
+  if (!spent) return fail('No perks taken');
+  const cost = respecCost(s);
+  if (s.trade.marks < cost) return fail(`Need ${cost} Marks`);
+  s.trade.marks -= cost;
+  s.renown.points += spent;
+  s.renown.perks = {};
+  s.topoDirty = true;
+  sync(s);
+  return OK;
+}
+
 export function marketVisible(s: GameState, id: string): boolean {
   const m = MARKET_BY_ID[id];
   if (!m) return false;
@@ -451,7 +520,7 @@ export function marketVisible(s: GameState, id: string): boolean {
 export function buy(s: GameState, id: string): Result {
   const m = MARKET_BY_ID[id];
   if (!m || !marketVisible(s, id)) return fail('Not offered');
-  const price = marketPrice(m, s.trade.bought[id] ?? 0);
+  const price = priceOf(s, id);
   if (s.trade.marks < price) return fail(`Need ${price - s.trade.marks} more Marks`);
   if (m.gives) for (const k in m.gives) if (room(s, k as ItemId) < (m.gives[k as ItemId] ?? 0)) return fail('Stash is full');
   s.trade.marks -= price;

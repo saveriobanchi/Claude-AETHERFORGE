@@ -134,7 +134,7 @@ export const BUILDING_LIST = B;
 
 /** Drill yields per node type: rolled per cycle. */
 export const NODE_YIELD: Record<string, { every: number; table: { item: ItemId; weight: number }[] }> = {
-  node_vein: { every: 1.5, table: [{ item: 'iron_grit', weight: 6 }, { item: 'copper_grit', weight: 4 }] },
+  node_vein: { every: 1.5, table: [{ item: 'iron_grit', weight: 6 }, { item: 'copper_grit', weight: 4 }, { item: 'emerald', weight: 0.05 }] },
   node_spring: { every: 1.5, table: [{ item: 'mist', weight: 5 }, { item: 'dew', weight: 5 }] },
   node_shard: { every: 5, table: [{ item: 'stardust', weight: 1 }] },
 };

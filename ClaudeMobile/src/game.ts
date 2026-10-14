@@ -1,4 +1,5 @@
 import * as A from './core/actions';
+import { RECIPES } from './core/content/recipes';
 import { art } from './render/artpack';
 import { BUILDINGS } from './core/content/buildings';
 import { DISCOVERIES } from './core/content/discoveries';
@@ -124,7 +125,9 @@ export class Game {
     if (offline && (Object.keys(offline.gained).length || offline.seconds > 600)) this.ui.showAway(offline);
     if (this.recovered) this.ui.hint('Your world was restored from a backup.', false, 4000);
     document.getElementById('boot')?.classList.add('gone');
-    (window as unknown as { gameReady: boolean; game: Game }).gameReady = true;
+    (window as unknown as { gameReady: boolean; game: Game; actions: typeof A }).gameReady = true;
+    (window as unknown as { actions: typeof A; content: unknown }).actions = A; // used by tests and the dev panel
+    (window as unknown as { content: unknown }).content = { RECIPES, BUILDINGS };
     (window as unknown as { game: Game }).game = this;
     this.last = performance.now();
     requestAnimationFrame((t) => this.frame(t));
@@ -227,6 +230,31 @@ export class Game {
           this.ui.hint(`Contract done: +${e.marks} Marks`, false, 2200);
           this.markDirty();
           break;
+        case 'lucky': {
+          const b = this.s.buildings.get(e.id);
+          if (b && this.nearness(b.x, b.y) > 0.3) {
+            const [sx, sy] = this.view.tileToScreen(b.x, b.y);
+            this.ui.tag(sx, sy - 40, 'Lucky ×2', 'lucky');
+            audio.play('collect', 1.5);
+          }
+          break;
+        }
+        case 'mastery':
+          audio.play('discover', 1.2);
+          this.ui.mastery(e.item, e.star);
+          this.markDirty();
+          break;
+        case 'renown_level':
+          audio.play('forge', 1.4);
+          haptic([20, 50, 20], this.settings.haptics);
+          this.ui.renownUp(e.level);
+          this.markDirty();
+          break;
+        case 'codex':
+          audio.play('discover');
+          this.ui.codexDone(e.set);
+          this.markDirty();
+          break;
         case 'trade_level':
           audio.play('discover');
           this.ui.hint(`Trade level ${e.level + 1}: bigger contracts, better pay.`, false, 3000);
@@ -313,6 +341,8 @@ export class Game {
         this.view.pulse(b.id, 0.7);
         this.s.events.push({ type: 'harvest', x: b.x, y: b.y, items: r.got ?? {} });
         if (r.got) this.ui.floater(sx, sy, r.got);
+        if (r.crit) { this.ui.tag(sx, sy - 70, 'Bountiful! ×3', 'crit'); audio.play('collect', 1.6); haptic([8, 30, 8], this.settings.haptics); this.view.burst('gold', b.x, b.y, 14, 40); }
+        if ((r.combo ?? 0) >= 3) this.ui.tag(sx + 34, sy - 18, `×${r.combo}`, (r.combo ?? 0) % 5 === 0 ? 'combo big' : 'combo');
         this.markDirty();
       } else {
         this.view.pulse(b.id, 0.25);

@@ -10,7 +10,7 @@ export function demoWorld(): GameState {
   const s = createState(7);
   for (const d of DISCOVERY_LIST) s.known.add(d.id);
   s.extraCapacity = 100000;
-  for (const id of ITEM_IDS) { s.stash[id] = 5000; s.stats.obtained[id] = 5000; }
+  for (const id of ITEM_IDS) { s.stash[id] = 5000; s.stats.obtained[id] = 5000; s.stats.made[id] = Math.round(30 * Math.pow(10, (id.length % 5) * 0.8)); }
   for (let r = 2; r <= 6; r++) for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) if (Math.abs(x) + Math.abs(y) <= r + 2) A.expand(s, 'plot', x, y);
   for (let y = -1; y <= 3; y++) for (let x = 2; x <= 6; x++) A.expand(s, 'flagstone', x, y);
   A.place(s, 'workbench', -1, -1);
@@ -67,6 +67,7 @@ export function demoWorld(): GameState {
   }
   for (const [x, y] of [[-6, -3], [1, -4]]) { s.stash.sapling = 9; A.place(s, 'sapling', x, y); }
   s.trade.marks = 140;
+  s.renown = { xp: 40, level: 11, points: 4, perks: { well_oiled: 2, bountiful: 1, haggler: 1, deep_cellars: 3 }, codex: ['biomes'] };
   s.trade.level = 2;
   run(s, 40);
   for (const b of s.buildings.values()) if (b.type.endsWith('sapling')) { b.progress = 1e9; }

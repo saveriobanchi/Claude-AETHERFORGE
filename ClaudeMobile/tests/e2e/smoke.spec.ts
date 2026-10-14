@@ -97,3 +97,61 @@ test('trading post: give goods for Marks, then shop in the market', async ({ pag
   await page.locator('.offer .btn').first().click();
   await expect.poll(() => page.evaluate(() => window.game.s.trade.marks)).toBeLessThan(marks);
 });
+
+test('every building places and opens its panel; every recipe and land works', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('./?demo');
+  await page.waitForFunction(() => window.gameReady === true);
+  const report = await page.evaluate(() => {
+    const g = window.game, s = g.s;
+    const w = window as unknown as { actions: typeof import('../../src/core/actions'); content: { RECIPES: Record<string, { stations: string[] }> } };
+    const A = w.actions;
+    const problems: string[] = [];
+    // try every building type the player can build: find a valid spot by scanning
+    const types = [...new Set([...s.buildings.values()].map((b) => b.type))];
+    const candidates = ['workbench', 'composter', 'sieve', 'dew_catcher', 'clay_tub', 'kiln', 'harvester', 'wind_sifter', 'sawmill', 'press', 'millstone', 'furnace', 'assembler',
+      'condenser', 'distiller', 'star_net', 'resonator', 'crucible', 'belt', 'express', 'depot', 'dispatcher', 'splitter', 'sorter', 'roost', 'crate', 'silo', 'warehouse',
+      'windmill', 'engine', 'pylon', 'beacon', 'trading_post', 'hive', 'lantern', 'sapling', 'fruit_sapling', 'cherry_sapling', 'orange_sapling', 'date_sapling', 'pear_sapling', 'plum_sapling'];
+    let placed = 0;
+    for (const type of candidates) {
+      let ok = false;
+      for (let r = 0; r < 14 && !ok; r++) for (let y = -r; y <= r && !ok; y++) for (let x = -r; x <= r && !ok; x++) {
+        if (A.canPlace(s, type, x, y).ok) { const res = A.place(s, type, x, y); if (res.ok) { ok = true; placed++; g.select(res.id!); } }
+      }
+      if (!ok && !types.includes(type)) problems.push('could not place ' + type);
+    }
+    // open every building's panel
+    for (const b of s.buildings.values()) { g.select(b.id); g.ui.refreshAll(); }
+    g.select(null);
+    // every recipe selectable in its station
+    for (const b of s.buildings.values()) {
+      for (const [id, r] of Object.entries(w.content.RECIPES)) {
+        if (!r.stations.includes(b.type)) continue;
+        const res = A.setRecipe(s, b.id, id);
+        if (!res.ok) problems.push(`recipe ${id} in ${b.type}: ${res.reason}`);
+        g.select(b.id); g.ui.refreshAll();
+      }
+    }
+    g.select(null);
+    // land: every land type somewhere
+    for (const land of ['plot', 'flagstone', 'skytile', 'marsh', 'dunes', 'frost', 'meadow']) {
+      let ok = false;
+      for (let r = 0; r < 16 && !ok; r++) for (let y = -r; y <= r && !ok; y++) for (let x = -r; x <= r && !ok; x++) if (A.canExpand(s, land, x, y).ok) ok = A.expand(s, land, x, y).ok;
+      if (!ok) problems.push('could not lay ' + land);
+    }
+    // market: buy one of each visible offer
+    s.trade.marks = 100000;
+    for (const id of ['fruit', 'cherry', 'orange', 'date', 'pear', 'plum', 'copper', 'iron', 'stardust']) if (!A.buy(s, id).ok) problems.push('could not buy ' + id);
+    // perks
+    s.renown.points = 40;
+    for (const id of ['green_thumb', 'well_oiled', 'haggler', 'swift_belts']) if (!A.takePerk(s, id).ok) problems.push('perk ' + id);
+    g.advance(120);
+    return { problems, placed };
+  });
+  expect(report.problems).toEqual([]);
+  expect(report.placed).toBeGreaterThan(30);
+  await page.click('.banner');
+  await expect(page.locator('.modal .perk').first()).toBeVisible();
+  expect(errors).toEqual([]);
+});

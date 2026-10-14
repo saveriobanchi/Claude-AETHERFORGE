@@ -38,8 +38,8 @@ const R: RecipeDef[] = [
 
   // ── Nature-driven processes ──────────────────────────────────────────────
   { id: 'compost', name: 'Compost', inputs: { leaf: 2 }, outputs: { loam: 1 }, time: 8, stations: ['composter'], unlock: 'compost' },
-  { id: 'sift_loam', name: 'Sift loam', inputs: { loam: 1 }, outputs: { pebble: 2 }, chance: { copper_grit: 0.35, sapling: 0.04 }, time: 2.5, stations: ['sieve', 'wind_sifter'], unlock: 'sieve' },
-  { id: 'sift_gravel', name: 'Sift gravel', inputs: { gravel: 1 }, outputs: { sand: 1 }, chance: { iron_grit: 0.5, copper_grit: 0.12 }, time: 3, stations: ['wind_sifter'], unlock: 'mill' },
+  { id: 'sift_loam', name: 'Sift loam', inputs: { loam: 1 }, outputs: { pebble: 2 }, chance: { copper_grit: 0.35, sapling: 0.04, topaz: 0.004 }, time: 2.5, stations: ['sieve', 'wind_sifter'], unlock: 'sieve' },
+  { id: 'sift_gravel', name: 'Sift gravel', inputs: { gravel: 1 }, outputs: { sand: 1 }, chance: { iron_grit: 0.5, copper_grit: 0.12, ruby: 0.003 }, time: 3, stations: ['wind_sifter'], unlock: 'mill' },
   { id: 'clay', name: 'Clay', inputs: { loam: 2, dew: 1 }, outputs: { clay: 1 }, time: 10, stations: ['clay_tub'], unlock: 'clay' },
 
   // ── Fire ─────────────────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ const R: RecipeDef[] = [
   { id: 'twist', name: 'Twine', inputs: { fiber: 3 }, outputs: { twine: 1 }, time: 3, stations: ['press'], unlock: 'wind' },
   { id: 'juice', name: 'Orange Juice', inputs: { orange: 3 }, outputs: { juice: 1 }, time: 5, stations: ['press'], unlock: 'dunes' },
   { id: 'cider', name: 'Cider', inputs: { apple: 4 }, outputs: { cider: 1 }, time: 5, stations: ['press'], unlock: 'orchard' },
-  { id: 'crush', name: 'Gravel', inputs: { stone: 1 }, outputs: { gravel: 3 }, time: 4, stations: ['millstone'], unlock: 'mill' },
+  { id: 'crush', name: 'Gravel', inputs: { stone: 1 }, outputs: { gravel: 3 }, chance: { opal: 0.0025 }, time: 4, stations: ['millstone'], unlock: 'mill' },
 
   // ── Aether ───────────────────────────────────────────────────────────────
   { id: 'distill', name: 'Aether', inputs: { mist: 3 }, outputs: { aether: 1, dew: 1 }, time: 6, stations: ['distiller'], unlock: 'distill' },

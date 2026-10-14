@@ -532,6 +532,10 @@ function itemDefs(): Record<ItemId, IconDef> {
     plum: { flat: P.plum() },
     juice: { flat: P.juice() },
     fruit_basket: { flat: P.basket() },
+    topaz: { flat: 'as/default_diamond', tint: [1.25, 0.95, 0.45] },
+    ruby: { flat: 'as/ruby' },
+    opal: { flat: 'as/crystal 2', tint: [1.15, 1.05, 1.15] },
+    emerald: { flat: 'as/emerald' },
   };
 }
 

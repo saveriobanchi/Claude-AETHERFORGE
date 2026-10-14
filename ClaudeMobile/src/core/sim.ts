@@ -7,9 +7,10 @@ import { FUEL_VALUE, RECIPES, recipesFor, type RecipeDef } from './content/recip
 import { ISLETS, FORGE_STAGES, resonanceRequest } from './content/world';
 import {
   type Building, type Dir, type GameState, DX, DY, key, buildingAt, addTo, stackTotal, stashAdd,
-  rand, isNight, isEdgeTile, computeCapacity, attuneRank, addBuilding, addTile, tileAt, removeBuildingRaw,
+  rand, isNight, isEdgeTile, computeCapacity, attuneRank, addBuilding, addTile, tileAt, removeBuildingRaw, addXp, made, perkRank,
 } from './state';
 import { checkDiscoveries } from './progression';
+import { CODEX, FRUIT_ITEMS, GEMS, LUCK, MASTERY_SPEED, XP, masteryStar } from './content/renown';
 
 export const TICK = 0.05; // 20 Hz fixed simulation step
 export const BELT_GAP = 0.34;
@@ -33,7 +34,7 @@ export function biomeAt(s: GameState, x: number, y: number): BiomeDef | null {
 }
 /** Fiber from a tuft standing at (x, y). */
 export function tuftYield(s: GameState, x: number, y: number): number {
-  return (biomeAt(s, x, y) ?? BIOMES.meadow).tuftFiber;
+  return (biomeAt(s, x, y) ?? BIOMES.meadow).tuftFiber + perkRank(s, 'forager');
 }
 
 /** Buffer capacity of a machine, grown by its upgrade level. */
@@ -247,6 +248,7 @@ function advanceForge(s: GameState): void {
   if (f.stage < FORGE_STAGES.length) {
     f.stage++;
     s.events.push({ type: 'forge_stage', stage: f.stage });
+    addXp(s, XP.forgeStage);
     if (f.stage === FORGE_STAGES.length) {
       s.flags.add('forge_complete');
       f.request = resonanceRequest(f.level);
@@ -256,13 +258,43 @@ function advanceForge(s: GameState): void {
     f.sparks++;
     f.request = resonanceRequest(f.level);
     s.events.push({ type: 'resonance', level: f.level });
+    addXp(s, XP.resonance);
   }
 }
 
 // ───────────────────────────────── machines ─────────────────────────────────
 
-function machineSpeed(s: GameState, b: Building): number {
-  return (s.cache.boost.get(b.id) ?? 1) * (1 + 0.1 * attuneRank(s, 'swift')) * levelSpeed(b.level);
+/** The item a machine is "about" (for mastery speed). */
+function primaryOut(b: Building): ItemId | null {
+  const def = BUILDINGS[b.type];
+  if (def.kind === 'crafter') { const r = currentRecipe(b); return r ? (Object.keys(r.outputs)[0] as ItemId) : null; }
+  if (def.kind === 'generator') return def.produces?.item ?? null;
+  if (def.kind === 'harvester') return 'wood';
+  if (def.kind === 'hive') return 'honey';
+  return null;
+}
+
+/** Mastery speed bonus for machines making an item. */
+export function masteryBonus(s: GameState, item: ItemId | null): number {
+  return item ? 1 + MASTERY_SPEED * masteryStar(item, s.stats.made[item] ?? 0) : 1;
+}
+
+export function machineSpeed(s: GameState, b: Building): number {
+  return (s.cache.boost.get(b.id) ?? 1) * (1 + 0.1 * attuneRank(s, 'swift')) * levelSpeed(b.level)
+    * masteryBonus(s, primaryOut(b)) * (1 + 0.05 * perkRank(s, 'well_oiled'));
+}
+
+/** Chance a machine cycle comes out double. */
+export function luckyChance(s: GameState): number {
+  return LUCK.machine + LUCK.perMachinePerk * perkRank(s, 'lucky_gears');
+}
+function lucky(s: GameState, b: Building): number {
+  if (rand(s) < luckyChance(s)) { s.events.push({ type: 'lucky', id: b.id }); return 2; }
+  return 1;
+}
+/** Rare finds (gems) get the Sure Sift bonus. */
+export function rareChance(s: GameState, item: ItemId, p: number): number {
+  return GEMS.includes(item) ? p * (1 + 0.15 * perkRank(s, 'sure_sift')) : p;
 }
 
 function outputsFit(def: BuildingDef, b: Building, r: RecipeDef): boolean {
@@ -277,8 +309,9 @@ function hasInputs(b: Building, r: RecipeDef): boolean {
 }
 
 function finishRecipe(s: GameState, b: Building, r: RecipeDef, sink: (item: ItemId, n: number) => void): void {
-  for (const k in r.outputs) sink(k as ItemId, r.outputs[k as ItemId] ?? 0);
-  if (r.chance) for (const k in r.chance) if (rand(s) < (r.chance[k as ItemId] ?? 0)) sink(k as ItemId, 1);
+  const m = lucky(s, b);
+  for (const k in r.outputs) { const n = (r.outputs[k as ItemId] ?? 0) * m; sink(k as ItemId, n); made(s, k as ItemId, n); }
+  if (r.chance) for (const k in r.chance) if (rand(s) < rareChance(s, k as ItemId, r.chance[k as ItemId] ?? 0)) { sink(k as ItemId, 1); made(s, k as ItemId, 1); }
   b.cycles++;
   s.events.push({ type: 'cycle', id: b.id });
 }
@@ -332,7 +365,9 @@ function tickGenerator(s: GameState, b: Building, dt: number): void {
   b.progress += dt * rate;
   if (b.progress >= p.every) {
     b.progress -= p.every;
-    addTo(b.outBuf, p.item, 1);
+    const n = lucky(s, b);
+    addTo(b.outBuf, p.item, n);
+    made(s, p.item, n);
     b.cycles++;
     s.events.push({ type: 'cycle', id: b.id });
   }
@@ -343,10 +378,16 @@ function isTree(t: Building | undefined): boolean {
 }
 
 export function harvestTree(s: GameState, t: Building, sink: (item: ItemId, n: number) => number): Stack {
+  if (t.stock < 1) return {};
+  t.stock -= 1;
+  const got0 = harvestTreeRaw(s, t, sink);
+  for (const k in got0) made(s, k as ItemId, got0[k as ItemId] ?? 0);
+  return got0;
+}
+
+function harvestTreeRaw(s: GameState, t: Building, sink: (item: ItemId, n: number) => number): Stack {
   const elder = t.type === 'elder_tree';
   const got: Stack = {};
-  if (t.stock < 1) return got;
-  t.stock -= 1;
   const fruit = FRUIT_BY_TREE[t.type];
   if (fruit) {
     const y: Stack = { ...fruit.yield };
@@ -402,7 +443,9 @@ function tickHarvester(s: GameState, b: Building, dt: number): void {
   b.timer = 0;
   const t = ready[b.rr++ % ready.length];
   if (t.type === 'tuft') {
-    addTo(b.outBuf, 'fiber', tuftYield(s, t.x, t.y));
+    const fy = tuftYield(s, t.x, t.y);
+    addTo(b.outBuf, 'fiber', fy);
+    made(s, 'fiber', fy);
     removeBuildingRaw(s, t);
   } else harvestTree(s, t, (item, n) => { addTo(b.outBuf, item, n); return n; });
   b.cycles++;
@@ -429,7 +472,7 @@ function tickDrill(s: GameState, b: Building, dt: number): void {
     let roll = rand(s) * total;
     for (const e of y.table) {
       roll -= e.weight;
-      if (roll <= 0) { addTo(b.outBuf, e.item, 1); break; }
+      if (roll <= 0) { const n = lucky(s, b); addTo(b.outBuf, e.item, n); made(s, e.item, n); break; }
     }
     b.cycles++;
     s.events.push({ type: 'cycle', id: b.id });
@@ -474,7 +517,7 @@ function tickRouter(s: GameState, b: Building): void {
 }
 
 function tickBelt(s: GameState, b: Building, dt: number): void {
-  const speed = BUILDINGS[b.type].speed ?? 1.25;
+  const speed = (BUILDINGS[b.type].speed ?? 1.25) * (1 + 0.1 * perkRank(s, 'swift_belts'));
   const items = b.items;
   if (!items.length) return;
   if (items.length > 1) items.sort((a, c) => c.pos - a.pos);
@@ -659,7 +702,7 @@ function tickNature(s: GameState, b: Building, dt: number): void {
     if (b.stock < max) {
       const bio = biomeAt(s, b.x, b.y) ?? BIOMES.meadow;
       const home = !fruit || fruit.home === bio.id ? 1 : OFF_HOME;
-      b.timer += dt * weatherNow(s).regrow * bio.regrow * home;
+      b.timer += dt * weatherNow(s).regrow * bio.regrow * home * (1 + 0.1 * perkRank(s, 'green_thumb'));
       const per = elder ? TREE.elderRegrow : fruit ? fruit.regrow : TREE.regrow;
       if (b.timer >= per) { b.timer -= per; b.stock++; }
       b.status = 'working';
@@ -704,8 +747,10 @@ function tickHive(s: GameState, b: Building, dt: number): void {
   const every = def.produces?.every ?? 15;
   if (b.progress >= every) {
     b.progress -= every;
-    addTo(b.outBuf, 'honey', 1);
-    if (rand(s) < HIVE.waxChance) addTo(b.outBuf, 'wax', 1);
+    const n = lucky(s, b);
+    addTo(b.outBuf, 'honey', n);
+    made(s, 'honey', n);
+    if (rand(s) < HIVE.waxChance) { addTo(b.outBuf, 'wax', 1); made(s, 'wax', 1); }
     b.cycles++;
     s.events.push({ type: 'cycle', id: b.id });
   }
@@ -732,9 +777,11 @@ export function completeContract(s: GameState, i: number): void {
   const tr = s.trade;
   const c = tr.board[i];
   if (!c) return;
-  tr.marks += c.marks;
-  tr.earned += c.marks;
-  tr.rep += c.marks;
+  const pay = Math.round(c.marks * (1 + 0.1 * perkRank(s, 'haggler')));
+  tr.marks += pay;
+  tr.earned += pay;
+  tr.rep += Math.round(c.marks * (1 + 0.15 * perkRank(s, 'good_name')));
+  addXp(s, Math.round(pay * XP.contractPerMark));
   tr.done++;
   s.events.push({ type: 'contract', item: c.item, marks: c.marks });
   while (tr.rep >= repForLevel(tr.level)) {
@@ -923,7 +970,28 @@ export function tick(s: GameState, dt = TICK): void {
   }
 
   // Discoveries once per simulated second (cheap, and deterministic).
-  if (Math.floor(s.time) !== Math.floor(s.time - dt)) checkDiscoveries(s);
+  if (Math.floor(s.time) !== Math.floor(s.time - dt)) { checkDiscoveries(s); checkCodex(s); }
+}
+
+/** Codex sets: each completed set grants a perk point and renown. */
+export function codexDone(s: GameState, id: string): boolean {
+  const has = (i: ItemId) => (s.stats.obtained[i] ?? 0) > 0 || (s.stats.made[i] ?? 0) > 0;
+  switch (id) {
+    case 'gems': return GEMS.every(has);
+    case 'fruits': return FRUIT_ITEMS.every(has);
+    case 'biomes': return ['marsh', 'dunes', 'frost'].every((k) => s.known.has(k));
+    case 'wonders': return s.forge.stage >= FORGE_STAGES.length && s.islets.docked >= ISLETS.length;
+    default: return false;
+  }
+}
+export function checkCodex(s: GameState): void {
+  for (const c of CODEX) {
+    if (s.renown.codex.includes(c.id) || !codexDone(s, c.id)) continue;
+    s.renown.codex.push(c.id);
+    s.renown.points++;
+    s.events.push({ type: 'codex', set: c.id });
+    addXp(s, XP.codex);
+  }
 }
 
 export function run(s: GameState, seconds: number): void {

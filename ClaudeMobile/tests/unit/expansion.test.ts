@@ -1,3 +1,4 @@
+import { SAVE_VERSION } from '../../src/core/state';
 import { describe, expect, it } from 'vitest';
 import * as A from '../../src/core/actions';
 import { BUILDINGS } from '../../src/core/content/buildings';
@@ -246,7 +247,7 @@ describe('saves', () => {
     const v2 = { ...serialize(s), v: 2 } as Record<string, unknown>;
     delete v2.trade; delete v2.seed;
     const m = migrate(v2);
-    expect(m.v).toBe(4);
+    expect(m.v).toBe(SAVE_VERSION);
     expect(m.trade.marks).toBe(0);
     const d = deserialize(v2).state;
     expect(d.tiles.size).toBe(10);

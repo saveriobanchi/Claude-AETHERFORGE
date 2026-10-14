@@ -2,7 +2,8 @@ import { BUILDINGS } from './content/buildings';
 import { DISCOVERY_LIST, DISCOVERIES, type Cond } from './content/discoveries';
 import { RECIPES } from './content/recipes';
 import { LAND } from './content/world';
-import type { GameState } from './state';
+import { type GameState, addXp } from './state';
+import { XP } from './content/renown';
 
 export function condMet(s: GameState, c: Cond): boolean {
   switch (c.t) {
@@ -44,6 +45,7 @@ export function checkDiscoveries(s: GameState): string[] {
       if (d.when.every((c) => condMet(s, c))) {
         s.known.add(d.id);
         found.push(d.id);
+        if (d.id !== 'start') addXp(s, XP.discovery);
         s.events.push({ type: 'discovery', id: d.id });
         changed = true;
       }

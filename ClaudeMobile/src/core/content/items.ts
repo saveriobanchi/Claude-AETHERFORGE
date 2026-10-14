@@ -9,7 +9,8 @@ export type ItemId =
   | 'cell' | 'coil' | 'core'
   | 'fruit_sapling' | 'apple' | 'honey' | 'wax' | 'cider' | 'candle' | 'preserves'
   | 'cherry_sapling' | 'orange_sapling' | 'date_sapling' | 'pear_sapling' | 'plum_sapling'
-  | 'cherry' | 'orange' | 'date' | 'pear' | 'plum' | 'juice' | 'fruit_basket';
+  | 'cherry' | 'orange' | 'date' | 'pear' | 'plum' | 'juice' | 'fruit_basket'
+  | 'topaz' | 'ruby' | 'opal' | 'emerald';
 
 export interface ItemDef {
   id: ItemId;
@@ -74,6 +75,10 @@ const list: ItemDef[] = [
   { id: 'plum', name: 'Plums', desc: 'Frost makes them sweeter.', tier: 3 },
   { id: 'juice', name: 'Orange Juice', desc: 'Pressed oranges. Traders pay well.', tier: 3 },
   { id: 'fruit_basket', name: 'Fruit Basket', desc: 'Every fruit of the sky, woven together.', tier: 4 },
+  { id: 'topaz', name: 'Topaz', desc: 'A honey-coloured stone, very rarely sifted from loam.', tier: 4 },
+  { id: 'ruby', name: 'Ruby', desc: 'A red spark, very rarely sifted from gravel.', tier: 4 },
+  { id: 'opal', name: 'Opal', desc: 'Milky fire, very rarely ground from stone.', tier: 4 },
+  { id: 'emerald', name: 'Emerald', desc: 'Deep green, very rarely drilled from an ore heart.', tier: 5 },
 ];
 
 export const ITEMS: Record<ItemId, ItemDef> = Object.fromEntries(list.map((i) => [i.id, i])) as Record<ItemId, ItemDef>;

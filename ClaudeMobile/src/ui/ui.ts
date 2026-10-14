@@ -3,6 +3,7 @@ import { BUILDINGS, BUILDING_LIST, HIVE, NODE_YIELD, TREE, type BuildCategory } 
 import { BIOMES, FRUIT_BY_TREE, OFF_HOME } from '../core/content/biomes';
 import { MARKET, CONTRACT_REFRESH, levelSpeed, marketPrice, repForLevel, upgradable, upgradeCost } from '../core/content/trade';
 import { dayIndex, weatherFor } from '../core/content/weather';
+import { CODEX, PERKS, type PerkBranch, masteryStar, masteryThresholds, xpForLevel } from '../core/content/renown';
 import { DISCOVERIES, DISCOVERY_LIST } from '../core/content/discoveries';
 import { ITEMS, ITEM_IDS, type ItemId, type Stack } from '../core/content/items';
 import { RECIPE_LIST, RECIPES, recipesFor } from '../core/content/recipes';
@@ -46,6 +47,8 @@ export class UI {
   private lvlBar!: HTMLElement;
   private clockEl!: HTMLElement;
   private weatherImg!: HTMLImageElement;
+  private bannerEl!: HTMLElement;
+  private renownTab: 'perks' | 'mastery' | 'codex' = 'perks';
   private weatherId = '';
   private questIcon!: HTMLImageElement;
   private btnBuild!: HTMLButtonElement;
@@ -96,9 +99,11 @@ export class UI {
     this.res = h('div', { class: 'res-strip panel' });
     this.lvlEl = h('span', { class: 'lvl' });
     this.lvlBar = h('i');
-    const banner = h('div', { class: 'banner panel', onclick: () => this.openJournal() },
+    void DISCOVERY_LIST;
+    const banner = h('button', { class: 'banner panel', 'aria-label': 'Renown', onclick: () => this.openRenown() },
       h('div', { class: 'portrait' }, img(uiIcon('island'))),
       h('div', { class: 't' }, h('div', { class: 'isle', text: 'Emberleaf Isle' }), h('div', { class: 'lvlrow' }, this.lvlEl, h('div', { class: 'bar xp' }, this.lvlBar))));
+    this.bannerEl = banner;
     this.weatherImg = img(uiIcon('w_clear'));
     this.clockEl = h('button', { class: 'clock', title: 'Time and weather', 'aria-label': 'Weather', onclick: () => this.showWeather() }, this.weatherImg, h('span', { class: 'time' }));
     const plus = h('button', { class: 'res-plus', 'aria-label': 'Open stash', onclick: () => { audio.unlock(); this.openStash(); } }, '+');
@@ -237,11 +242,12 @@ export class UI {
       else this.quest.classList.add('hide');
     }
     // level = discoveries made; the bar shows how much of the world is known
-    const lvl = s.known.size;
-    if (this.lvlEl.textContent !== `Lv. ${lvl}`) {
-      this.lvlEl.textContent = `Lv. ${lvl}`;
-      this.lvlBar.style.width = `${Math.round((lvl / DISCOVERY_LIST.length) * 100)}%`;
-    }
+    // the banner shows renown: level, progress, and a dot for unspent perk points
+    const rn = s.renown;
+    const lvlText = `Lv. ${rn.level + 1}`;
+    if (this.lvlEl.textContent !== lvlText) this.lvlEl.textContent = lvlText;
+    this.lvlBar.style.width = `${Math.round((rn.xp / xpForLevel(rn.level)) * 100)}%`;
+    this.setDot(this.bannerEl, rn.points > 0);
     // day clock: daylight (0–0.68 of a cycle) spans 05:00–20:00, night the rest
     const df = dayFraction(s);
     const hours = df < 0.68 ? 5 + (df / 0.68) * 15 : 20 + ((df - 0.68) / 0.32) * 9;
@@ -647,7 +653,9 @@ export class UI {
           for (const k in rr.outputs) prod.append(this.slot(k as ItemId, `${rr.outputs[k as ItemId]}`));
           const boost = (g.s.cache.boost.get(b.id) ?? 1);
           const speed = boost * levelSpeed(b.level);
-          body.append(this.section('Production', `⏱ ${(rr.time / speed).toFixed(1)}s`, prod, this.bar()));
+          const outItem = Object.keys(rr.outputs)[0] as ItemId;
+          const ms = masteryStar(outItem, s.stats.made[outItem] ?? 0);
+          body.append(this.section('Production', `${ms ? '★'.repeat(ms) + ' · ' : ''}⏱ ${(rr.time / speed).toFixed(1)}s`, prod, this.bar()));
           // Inventory: what is buffered inside the machine
           const inv = h('div', { class: 'flow inv' });
           const cap = bufCap(def, b);
@@ -845,6 +853,83 @@ export class UI {
     this.openModal(h('div', { style: 'display:flex;flex-direction:column;min-height:0;max-height:inherit' }, head, list));
   }
 
+  /** Small floating word over the world (Lucky, Bountiful, combo). */
+  tag(sx: number, sy: number, text: string, cls: string): void {
+    const el = h('div', { class: 'tag ' + cls, style: `left:${sx}px;top:${sy}px`, text });
+    this.root.append(el);
+    window.setTimeout(() => el.remove(), 1100);
+  }
+
+  mastery(item: ItemId, star: number): void {
+    this.toast(`${'★'.repeat(star)} ${ITEMS[item].name} mastery ${['', 'I', 'II', 'III', 'IV', 'V'][star]}`, `Machines making ${ITEMS[item].name.toLowerCase()} work ${star * 5}% faster.`, itemIcon(item));
+  }
+
+  renownUp(level: number): void {
+    this.toast(`Renown ${level + 1}!`, 'A perk point to spend — tap your island’s banner.', uiIcon('island'), 'big');
+  }
+
+  codexDone(set: string): void {
+    const c = CODEX.find((x) => x.id === set);
+    this.toast(`Codex: ${c?.name ?? set} complete`, 'A perk point and renown.', uiIcon('book'), 'big');
+  }
+
+  /** A richer toast with an icon (top centre). */
+  private toast(title: string, sub: string, icon: string, cls = ''): void {
+    const el = h('div', { class: 'toast panel ' + cls }, img(icon), h('div', { class: 't' }, h('div', { class: 'tt', text: title }), h('div', { class: 'ts', text: sub })));
+    this.toasts.append(el);
+    window.setTimeout(() => el.classList.add('out'), 3200);
+    window.setTimeout(() => el.remove(), 3700);
+  }
+
+  openRenown(tab?: 'perks' | 'mastery' | 'codex'): void {
+    const g = this.g, s = g.s;
+    if (tab) this.renownTab = tab;
+    const rn = s.renown;
+    const head = this.modalHead(`Renown ${rn.level + 1}`, `${fmt(rn.xp)} / ${fmt(xpForLevel(rn.level))} to the next level · ${rn.points} perk point${rn.points === 1 ? '' : 's'}`, uiIcon('island'));
+    const tabs = h('div', { class: 'tabs' });
+    for (const [id, name] of [['perks', 'Perks'], ['mastery', 'Mastery'], ['codex', 'Codex']] as const) {
+      tabs.append(h('button', { class: 'tab' + (this.renownTab === id ? ' on' : ''), onclick: () => this.openRenown(id) }, name));
+    }
+    const body = h('div', { class: 'renown scroll' });
+    if (this.renownTab === 'perks') {
+      const names: Record<PerkBranch, string> = { hands: 'Hands', industry: 'Industry', commerce: 'Commerce' };
+      for (const br of ['hands', 'industry', 'commerce'] as PerkBranch[]) {
+        const col = h('div', { class: 'branch' }, h('div', { class: 'caps', text: names[br] }));
+        for (const p of PERKS.filter((x) => x.branch === br)) {
+          const r = rn.perks[p.id] ?? 0;
+          const pips = h('span', { class: 'pips' });
+          for (let i = 1; i <= p.max; i++) pips.append(h('i', { class: i <= r ? 'on' : '' }));
+          const can = A.canPerk(s, p.id).ok;
+          col.append(h('button', { class: 'perk' + (can ? ' can' : '') + (r >= p.max ? ' max' : ''), onclick: () => { const res = g.act(() => A.takePerk(s, p.id), 'craft'); if (res.ok) this.openRenown(); } },
+            h('div', { class: 'nm' }, h('span', { text: p.name }), pips), h('div', { class: 'sub', text: r === 0 ? p.desc(1) : r < p.max ? `${p.desc(r)} Next: ${p.desc(r + 1).replace(/^[^0-9+−-]*/, '')}` : p.desc(r) })));
+        }
+        body.append(col);
+      }
+      const spent = Object.values(rn.perks).reduce((a, b) => a + b, 0);
+      if (spent) body.append(h('div', { class: 'respec' }, h('button', { class: 'btn small ghost', onclick: () => { const res = g.act(() => A.respec(s), 'tap'); if (res.ok) this.openRenown(); } }, `Respec (${A.respecCost(s)} Marks)`)));
+    } else if (this.renownTab === 'mastery') {
+      const items = ITEM_IDS.filter((i) => (s.stats.made[i] ?? 0) > 0);
+      if (!items.length) body.append(h('div', { class: 'muted', text: 'Make things to master them.' }));
+      for (const id of items.sort((a, b) => (s.stats.made[b] ?? 0) - (s.stats.made[a] ?? 0))) {
+        const m = s.stats.made[id] ?? 0, st = masteryStar(id, m), th = masteryThresholds(id);
+        const next = th[st];
+        const prev = st ? th[st - 1] : 0;
+        body.append(h('div', { class: 'mrow' }, img(itemIcon(id)),
+          h('div', { class: 't' }, h('div', { class: 'nm' }, h('span', { text: ITEMS[id].name }), h('span', { class: 'stars', text: '★'.repeat(st) + '☆'.repeat(5 - st) })),
+            h('div', { class: 'bar' }, h('i', { style: `width:${next ? Math.round(((m - prev) / (next - prev)) * 100) : 100}%` })),
+            h('div', { class: 'sub', text: next ? `${fmt(m)} / ${fmt(next)} made · +${st * 5}% speed` : `${fmt(m)} made · mastered (+25% speed)` }))));
+      }
+    } else {
+      for (const c of CODEX) {
+        const done = rn.codex.includes(c.id);
+        body.append(h('div', { class: 'mrow' + (done ? ' done' : '') }, img(uiIcon(done ? 'marks' : 'book')), h('div', { class: 't' }, h('div', { class: 'nm', text: c.name + (done ? ' ✓' : '') }), h('div', { class: 'sub', text: c.desc + ' Reward: a perk point.' }))));
+      }
+      const gems = (['topaz', 'ruby', 'opal', 'emerald'] as ItemId[]).map((i) => (s.stats.obtained[i] ?? 0) > 0 || (s.stats.made[i] ?? 0) > 0 ? img(itemIcon(i)) : h('span', { class: 'unknown', text: '?' }));
+      body.append(h('div', { class: 'gems' }, h('span', { class: 'caps', text: 'Gems found' }), ...gems));
+    }
+    this.openModal(h('div', { style: 'display:flex;flex-direction:column;min-height:0;max-height:inherit' }, head, tabs, body), true);
+  }
+
   private showWeather(): void {
     const s = this.g.s;
     const day = dayIndex(s.time);
@@ -964,7 +1049,8 @@ export class UI {
     const grid = h('div', { class: 'stash-grid scroll' });
     const items = ITEM_IDS.filter((i) => (s.stats.obtained[i] ?? 0) > 0 || s.stash[i] > 0);
     for (const id of items) {
-      grid.append(h('div', { class: 'stash-item' + (s.stash[id] >= cap ? ' full' : ''), title: ITEMS[id].desc }, img(itemIcon(id)), h('span', { class: 'num', text: fmt(s.stash[id]) }), h('span', { class: 'nm', text: ITEMS[id].name })));
+      const star = masteryStar(id, s.stats.made[id] ?? 0);
+      grid.append(h('div', { class: 'stash-item' + (s.stash[id] >= cap ? ' full' : ''), title: ITEMS[id].desc }, img(itemIcon(id)), h('span', { class: 'num', text: fmt(s.stash[id]) }), h('span', { class: 'nm', text: ITEMS[id].name }), star ? h('span', { class: 'stars', text: '★'.repeat(star) }) : null));
     }
     if (!items.length) grid.append(h('div', { class: 'muted', text: 'Nothing yet. The tree is a good start.' }));
     const { rate } = flowRates(s);

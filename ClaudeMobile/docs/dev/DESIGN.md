@@ -68,7 +68,7 @@ uses one-machine-per-cell layouts (no shared conveyors, no pylons, no wisps):
 
 - automation ≈ 10 min, conveyors ≈ 20 min, trade ≈ 20 min, wind ≈ 25 min,
   iron ≈ 2.6 h, hives & orchards ≈ 3.5 h, aether ≈ 5.7 h, the Great Work
-  discovered ≈ 7.7 h, completed ≈ 14 h (with daily weather on).
+  discovered ≈ 7.8 h, completed ≈ 15.7 h (weather on; the bot takes no perks).
 
 A human using dense layouts, pylons and wisps will be faster through the
 middle; the endless resonance levels then scale geometrically.
@@ -166,3 +166,45 @@ becomes a set of microclimates to plan around.
   fruit trees occasionally drop their own sapling.
 - **Fruit Basket** (Workbench / Assembler): 2 of each fruit + 1 twine — the
   most valuable trade good; it needs all four biomes on one island.
+
+## Depth & feel: mastery, renown, luck, the codex
+
+The grind should feel rewarding at every scale — the first tap, the first
+hundred planks, the hundred-thousandth. Four layers reward volume and choices.
+
+### Item mastery (every item is a long ladder)
+- Every item made (harvested, crafted, sifted, generated, drilled) counts
+  toward its mastery: ★I–★V at `B, 10B, 100B, 1000B, 10000B` where
+  `B = round(40 / (1 + tier/2))` (planks: 40 / 400 / 4k / 40k / 400k).
+- Each star: +5 % speed for every machine whose product is that item, and
+  renown (10 × star). Stars show beside items in the stash and on panels.
+
+### Renown & perks (a build to plan)
+- Renown XP from discoveries (25), mastery stars (10 × ★), contracts (½ of
+  the Marks), forge stages (100), resonance levels (50), codex sets (100).
+  Level L → L+1 needs `round(80 · 1.22^L)`. Each level = 1 perk point.
+  The island banner shows the renown level.
+- 12 perks in three branches, 3 ranks each (36 points to max):
+  - *Hands*: Green Thumb (trees regrow +10 %), Bountiful (harvest crit
+    chance +5 %), Sure Sift (sifting taps +1 roll), Forager (+1 fiber per tuft).
+  - *Industry*: Well Oiled (machines +5 %), Swift Belts (conveyors +10 %),
+    Deep Cellars (stash +10 %), Lucky Gears (lucky output +1 %).
+  - *Commerce*: Haggler (contract Marks +10 %), Good Name (reputation
+    +15 %), Bargains (market −5 %), Night Shift (offline +5 % efficiency).
+- Respec any time for 5 Marks per point spent.
+
+### Luck & combos (moment-to-moment joy)
+- **Lucky output:** every machine cycle has a 2 % (+perk) chance to double
+  its output, with a golden sparkle.
+- **Bountiful harvest:** hand-gathering a tree has an 8 % (+perk) chance to
+  give triple.
+- **Gathering combo:** taps within 2 s chain a combo (shown by the finger);
+  every 5th tap in a chain gives one extra of the main item.
+
+### Codex (collections)
+- Rare gems with tiny chances in existing chains: Topaz (sifting loam,
+  0.4 %), Ruby (sifting gravel, 0.3 %), Opal (millstone, 0.25 %), Emerald
+  (core drill on an ore heart, 0.5 %). Prized by traders.
+- Sets: Gems (4), Fruits (6), Biomes (4 grounds discovered), Wonders
+  (forge completed, all islets home). Each completed set: +1 perk point and
+  100 renown.

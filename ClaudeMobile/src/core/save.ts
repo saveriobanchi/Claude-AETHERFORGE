@@ -2,7 +2,7 @@ import { BUILDINGS } from './content/buildings';
 import { isItemId, type ItemId, type Stack } from './content/items';
 import type { Floor } from './content/buildings';
 import {
-  type Building, type Dir, type GameState, type Tile, SAVE_VERSION, createState, emptyStash, newBuilding, key, hashSeed, emptyCache, emptyTrade,
+  type Building, type Dir, type GameState, type Tile, SAVE_VERSION, createState, emptyStash, newBuilding, key, hashSeed, emptyCache, emptyTrade, emptyRenown,
 } from './state';
 import { rebuildCache } from './sim';
 import type { Contract } from './content/trade';
@@ -24,6 +24,7 @@ export interface SaveData {
   islets: GameState['islets'];
   forge: GameState['forge'];
   trade: GameState['trade'];
+  renown?: GameState['renown'];
   flow: GameState['flow'];
   tuftTimer: number;
   savedAt: number;
@@ -83,6 +84,7 @@ export function serialize(s: GameState, view?: SaveData['view']): SaveData {
     islets: s.islets,
     forge: s.forge,
     trade: s.trade,
+    renown: s.renown,
     flow: s.flow,
     tuftTimer: s.tuftTimer,
     savedAt: s.savedAt,
@@ -112,6 +114,8 @@ export const MIGRATIONS: Record<number, (d: AnySave) => AnySave> = {
   2: (d) => ({ ...d, v: 3, seed: (d.seed ?? d.rng ?? 1) >>> 0, trade: d.trade ?? emptyTrade() }),
   // v3 → v4: tiles may carry a biome (5th field); older tiles are meadow.
   3: (d) => ({ ...d, v: 4 }),
+  // v4 → v5: renown and perks; mastery counts start from what was gathered.
+  4: (d) => ({ ...d, v: 5, renown: d.renown ?? emptyRenown(), stats: { ...(d.stats ?? {}), made: d.stats?.made ?? d.stats?.obtained ?? {} } }),
 };
 
 export function migrate(d: AnySave): SaveData {
@@ -173,6 +177,9 @@ export function deserialize(raw: unknown): { state: GameState; view?: SaveData['
   for (const k in st) s.stash[k as ItemId] = st[k as ItemId] ?? 0;
   s.stats = { ...s.stats, ...(d.stats ?? {}) };
   s.stats.obtained = cleanStack(s.stats.obtained);
+  s.stats.made = cleanStack(s.stats.made);
+  const rn = d.renown ?? emptyRenown();
+  s.renown = { ...emptyRenown(), ...rn, perks: { ...(rn.perks ?? {}) }, codex: [...(rn.codex ?? [])] };
   s.known = new Set(d.known ?? ['start']);
   s.known.add('start');
   s.flags = new Set(d.flags ?? []);
