@@ -262,24 +262,27 @@ export class WorldView {
       const size = BUILDINGS[b.type].size;
       for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) busy.add(key(b.x + x, b.y + y));
     }
+    // keep a clear ring around buildings so machines read cleanly
+    const near = (x: number, y: number) => { for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (busy.has(key(x + dx, y + dy))) return true; return false; };
+    const kinds = art.decorKinds;
     for (const t of s.tiles.values()) {
-      if (t.floor !== 'grass' || busy.has(key(t.x, t.y))) continue;
-      for (let q = 0; q < 3; q++) {
-        const h = hashTile(t.x * 5 + q * 31, t.y * 3 - q * 17);
-        if (h > 0.3) continue;
-        const kind = art.decorKinds[Math.floor(hashTile(t.x + q * 13, t.y * 11 + q) * art.decorKinds.length)];
-        const v = Math.floor(hashTile(t.y * 7 + q, t.x * 5 - q) * art.decorVariants);
-        const ox = hashTile(t.x * 13 + q, t.y * 7) - 0.5, oy = hashTile(t.x * 3, t.y * 17 + q) - 0.5;
-        const fx = t.x + ox * 0.7, fy = t.y + oy * 0.7;
-        const sp = new Sprite();
-        setArt(sp, art.img(`decor:${kind}:${v}`));
-        sp.scale.set(1 / art.R);
-        const [wx, wy] = tileCenter(fx, fy);
-        sp.position.set(wx, wy);
-        sp.zIndex = (fx + fy) * 512 + fx + 256;
-        this.objects.addChild(sp);
-        this.decorSprites.push(sp);
-      }
+      if (t.floor !== 'grass' || near(t.x, t.y)) continue;
+      // at most one piece per tile, sparse, and grouped in small patches of one kind
+      if (hashTile(t.x * 5 + 31, t.y * 3 - 17) > 0.22) continue;
+      const patch = hashTile(Math.floor(t.x / 3) * 7 + 3, Math.floor(t.y / 3) * 11 + 5);
+      const kind = patch < 0.5 ? 'tuft' : patch < 0.78 ? 'flowers' : patch < 0.92 ? 'bush' : 'stone';
+      if (!kinds.includes(kind)) continue;
+      const v = Math.floor(hashTile(Math.floor(t.x / 3), Math.floor(t.y / 3) + 9) * art.decorVariants);
+      const ox = hashTile(t.x * 13, t.y * 7) - 0.5, oy = hashTile(t.x * 3, t.y * 17) - 0.5;
+      const fx = t.x + ox * 0.4, fy = t.y + oy * 0.4;
+      const sp = new Sprite();
+      setArt(sp, art.img(`decor:${kind}:${v}`));
+      sp.scale.set(1 / art.R);
+      const [wx, wy] = tileCenter(fx, fy);
+      sp.position.set(wx, wy);
+      sp.zIndex = (fx + fy) * 512 + fx + 256;
+      this.objects.addChild(sp);
+      this.decorSprites.push(sp);
     }
   }
 

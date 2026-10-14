@@ -150,17 +150,18 @@ export function topPiece(c: Canvas, L: TexLib, floor: Floor, mask: number, v: nu
   const sx = v * 3 + 1, sy = v * 5 + mask;
   c.box([0, 0, -1], [1, 1, 0], f(tt), f(ts), f(ts), 1, v);
   if (floor === 'grass') {
-    const tuftN = ['grass', 'grass2', 'grass3', 'fern2', 'sedge'];
-    for (let i = 0; i < 6; i++) {
+    // a few short tufts on open edges (kept sparse so edges read clean)
+    const tuftN = ['grass', 'grass2'];
+    for (let i = 0; i < 4; i++) {
       const side = i % 2;
       if (!(mask & (side === 0 ? 2 : 1))) continue;
-      if (h(sx, sy, i + 40) < 0.35) continue;
-      const t = 0.1 + h(sx, sy, i + 30) * 0.8;
+      if (h(sx, sy, i + 40) < 0.7) continue;
+      const t = 0.2 + h(sx, sy, i + 30) * 0.6;
       const p: [number, number, number] = side === 0 ? [t, 0.97, 0] : [0.97, t, 0];
       c.sprite(p, { tex: L.get('a/plants/' + tuftN[Math.floor(h(sx, sy, i + 50) * tuftN.length)]) }, 1, 2, 0.2);
     }
     for (let side = 0; side < 2; side++) {
-      if (!(mask & (side === 0 ? 2 : 1)) || h(sx + side, sy, 7) < 0.4) continue;
+      if (!(mask & (side === 0 ? 2 : 1)) || h(sx + side, sy, 7) < 0.6) continue;
       const vt = vineTex(L, Math.floor(h(sx, sy, side) * 6));
       const len = 1 + Math.floor(h(sx, sy, side + 3) * 2.5);
       if (side === 0) c.quad([0, 1.01, 0], [1, 0, 0], [0, 0, -len * 1.5], { tex: vt, uv: [0, 0, 16, 48] }, [0.86, 0.84, 0.86], 1, 0.01);
@@ -185,8 +186,8 @@ export function columnPiece(c: Canvas, L: TexLib, depth: number, v: number): voi
 /** Decorations scattered on free grass. */
 export function decor(c: Canvas, L: TexLib, kind: string, v: number): void {
   const p = (n: string, x: number, y: number, s = 2) => c.sprite([x, y, 0], { tex: L.get('a/plants/' + n) }, 2, s);
-  if (kind === 'tuft') { const n = ['grass', 'grass2', 'grass3', 'fern']; p(n[v], 0.45, 0.5); p(n[(v + 1) % 4], 0.6, 0.6); return; }
-  if (kind === 'flowers') { const n = ['aster', 'dandelion', 'forget_me_not', 'oxeye_daisy', 'lupine', 'pimpernel', 'orchid_ground', 'goldenrod']; p(n[v * 2], 0.4, 0.5); p(n[v * 2 + 1], 0.62, 0.6); return; }
+  if (kind === 'tuft') { p(['grass', 'grass2', 'grass', 'fern'][v], 0.5, 0.5); return; }
+  if (kind === 'flowers') { p(['dandelion', 'forget_me_not', 'oxeye_daisy', 'aster'][v], 0.5, 0.5); return; }
   c.castOn = true;
   if (kind === 'bush') {
     const w = (['oak', 'beech', 'maple', 'pine'] as const)[v];

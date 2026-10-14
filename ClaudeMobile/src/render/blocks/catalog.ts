@@ -447,19 +447,16 @@ function bevel(p: Paint, x: number, y: number, w: number, hh: number, lo: number
 function img(p: Paint): Image { return { w: p.w, h: p.h, data: new Uint8ClampedArray(p.data), ax: 0, ay: 0 }; }
 
 const UITEX: Record<string, () => Paint> = {
-  // 24×24, slice 8: oak frame with iron corner plates around dark slate
+  // 16×16, slice 5: slim oak frame with iron corner rivets around dark slate
   panel: () => {
-    const p = new Paint(24, 24);
-    fillTex(p, L().get('a/slate'), 0, 0, 24, 24, [0.27, 0.28, 0.34]);
+    const p = new Paint(16, 16);
+    fillTex(p, L().get('a/slate'), 0, 0, 16, 16, [0.27, 0.28, 0.34]);
     const wood = L().get('a/oak_planks');
-    fillTex(p, wood, 0, 0, 24, 4, [0.9, 0.85, 0.8]); fillTex(p, wood, 0, 20, 24, 4, [0.7, 0.62, 0.58], 0, 8);
-    fillTex(p, wood, 0, 0, 4, 24, [0.85, 0.8, 0.76], 4, 0); fillTex(p, wood, 20, 0, 4, 24, [0.72, 0.66, 0.62], 8, 0);
-    p.frame(0, 0, 24, 24, 0x1a1210).frame(4, 4, 16, 16, 0x1a1210);
-    p.rect(1, 1, 22, 1, 0xd8a868).rect(5, 5, 14, 1, 0x0e0e14);
-    for (const [x, y] of [[0, 0], [17, 0], [0, 17], [17, 17]]) {
-      p.rect(x + 1, y + 1, 5, 5, 0x8a8a96).frame(x + 1, y + 1, 5, 5, 0x3a3a46).set(x + 2, y + 2, 0xd8d8e0);
-      p.set(x + 3, y + 3, 0x4a4a56);
-    }
+    fillTex(p, wood, 0, 0, 16, 3, [0.9, 0.85, 0.8]); fillTex(p, wood, 0, 13, 16, 3, [0.7, 0.62, 0.58], 0, 8);
+    fillTex(p, wood, 0, 0, 3, 16, [0.85, 0.8, 0.76], 4, 0); fillTex(p, wood, 13, 0, 3, 16, [0.72, 0.66, 0.62], 8, 0);
+    p.frame(0, 0, 16, 16, 0x1a1210).frame(4, 4, 8, 8, 0x0e0e14);
+    p.rect(1, 1, 14, 1, 0xd8a868).rect(4, 4, 8, 1, 0x1a1210);
+    for (const [x, y] of [[1, 1], [12, 1], [1, 12], [12, 12]]) p.rect(x, y, 3, 3, 0x8a8a96).set(x, y, 0xd8d8e0);
     return p;
   },
   // 16×16, slice 4: plank button

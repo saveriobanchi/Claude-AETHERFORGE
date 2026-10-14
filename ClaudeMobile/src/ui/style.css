@@ -541,103 +541,186 @@ body.sheet-open .hud-bottom .main-btn:not(.on) { opacity: 0; pointer-events: non
 body.reduced * { animation-duration: 1ms !important; transition-duration: 1ms !important; }
 
 /* ───── block-world theme ─────
-   Pixel frames baked from the CC0 block packs (oak, slate, gold, stone)
-   and drawn with border-image at 2× so every texel stays crisp. */
+   Pixel frames baked from the CC0 block packs (oak, slate, gold, stone),
+   drawn with border-image at exactly 2× so every texel stays crisp. Sized
+   compact so the island stays visible around menus. */
 :root {
   --font-ui: 'Pixelify', 'Atkinson', system-ui, sans-serif;
   --text: #f4ead6;
   --muted: #b8ae98;
   --accent: #ffd35a;
+  font-size: calc(14px * var(--ui));
 }
 #ui *, #ui *::before, #ui *::after { border-radius: 0 !important; }
-#ui img { image-rendering: pixelated; }
-.num, .chip .num, .cost, .rchip, .lvl, .clock .time, .main-btn, .sect-h, .status { font-family: var(--font-ui); font-weight: 600; letter-spacing: 0.02em; }
-.isle, .panel-head .name { font-family: var(--font-ui); font-weight: 600; letter-spacing: 0.03em; }
+/* pixel icons keep their proportions inside fixed boxes */
+#ui img { image-rendering: pixelated; object-fit: contain; }
+.isle, .panel-head .name, .main-btn, .sect-h, .status, .tab, .card .nm, .recipe .nm, .placing .nm, .caps, .title { font-family: var(--font-ui); font-weight: 600; letter-spacing: 0.02em; }
+/* numbers stay in the legible sans (the pixel face's 5 reads as S) */
+.num, .chip .num, .cost, .rchip, .lvl, .clock .time, .slot .num, .btn { font-family: 'Atkinson', system-ui, sans-serif; font-weight: 700; font-variant-numeric: tabular-nums; }
 
+/* frames */
 .panel, .res-plus, .clock, .icon-btn, .hud-bottom.nav {
-  background: none;
-  border: 16px solid transparent;
-  border-image: var(--tex-panel) 8 fill / 16px / 0 repeat;
-  box-shadow: none;
-  image-rendering: pixelated;
-  filter: drop-shadow(0 4px 0 rgba(10, 6, 16, 0.35));
+  background: none; box-shadow: none;
+  border: 10px solid transparent;
+  border-image: var(--tex-panel) 5 fill / 10px / 0 repeat;
+  filter: drop-shadow(0 3px 0 rgba(10, 6, 16, 0.3));
 }
-.panel { padding: 0; }
-.panel > :first-child { margin-top: -8px; }
-.panel > :last-child { margin-bottom: -8px; }
-.panel { border-width: 12px; border-image-width: 16px; border-image-outset: 4px; }
-.res-strip { border-right: 12px solid transparent; padding: 0 2px; }
-.res-plus { border-width: 12px; border-image-outset: 4px; width: 46px; padding: 0; color: #ffe9a8; }
-.icon-btn { width: 50px; height: 50px; border-width: 8px; border-image-width: 16px; border-image-outset: 4px; }
-.icon-btn.on { filter: drop-shadow(0 0 6px rgba(255, 210, 90, 0.8)); }
-.clock { width: 66px; height: 66px; border-width: 8px; border-image-outset: 4px; }
-.clock .sun { border-radius: 0 !important; width: 14px; height: 14px; box-shadow: 0 0 0 2px #ffefa0, 0 0 10px rgba(255, 196, 80, 0.7); background: #ffc24a; }
-.clock.night .sun { background: #e8ecff; box-shadow: 0 0 0 2px #b8c0e8; }
-.hud-bottom.nav { border-width: 10px; border-image-outset: 4px; height: 80px; padding: 0 2px; }
-.main-btn + .main-btn:not(.big)::before, .main-btn.big + .main-btn::before, .chip + .chip::before { background: rgba(0, 0, 0, 0.45); box-shadow: 1px 0 0 rgba(255, 220, 160, 0.12); }
-.main-btn.big::after {
-  background: none; border: 20px solid transparent;
-  border-image: var(--tex-big) 10 fill / 20px / 0 repeat;
-  box-shadow: none; filter: drop-shadow(0 0 10px rgba(255, 200, 90, 0.55));
-}
-.portrait { box-shadow: inset 0 0 0 2px #1a1210, inset 0 0 0 4px #8a6a3a; background: linear-gradient(#7ab0e0, #b8dcf0); }
-.bar, .bar.xp { height: 8px; background: #16151c; box-shadow: inset 0 0 0 1px #000, 0 1px 0 rgba(255, 220, 160, 0.15); }
-.bar i, .bar.xp i { box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 0 rgba(0, 0, 0, 0.25); }
-
 .btn {
-  background: none; border: 8px solid transparent;
+  background: none; box-shadow: none; border: 8px solid transparent;
   border-image: var(--tex-btn) 4 fill / 8px / 0 repeat;
-  box-shadow: none; min-height: 42px; padding: 0 6px;
-  color: #fff4dc; text-shadow: 0 2px 0 #2a1608; font-family: var(--font-ui); font-weight: 600;
+  min-height: 36px; padding: 0 4px; font-size: 0.86rem;
+  color: #fff4dc; text-shadow: 0 2px 0 #2a1608;
 }
 .btn.primary { border-image-source: var(--tex-btnp); color: #2a1606; text-shadow: 0 1px 0 rgba(255, 240, 200, 0.6); box-shadow: none; }
 .btn.ghost, .btn.danger { border-image-source: var(--tex-btnd); }
 .btn.danger { color: #ffb8a8; }
-.btn.small { min-height: 34px; border-width: 6px; border-image-width: 8px; }
+.btn.small { min-height: 30px; }
 .btn:active { transform: translateY(2px); }
-
 .slot, .card, .recipe, .rchip, .sect, .quest .qicon, .panel-head .thumb, .status, .tab.on {
   background: none; box-shadow: none;
   border: 6px solid transparent;
   border-image: var(--tex-slot) 3 fill / 6px / 0 repeat;
 }
-.slot { padding: 0 6px 0 2px; }
-.card { padding: 0 0 2px; }
 .card.on, .rchip.on { border-image-source: var(--tex-btnp); border-image-slice: 4 fill; color: #2a1606; }
 .card.on .nm, .card.on .cost { color: #2a1606; text-shadow: none; }
-.recipe { padding: 0 0 0 2px; }
-.sect { padding: 4px; }
-.status { padding: 0 8px 0 4px; }
-.tab.on { border-bottom: 0; }
+
+/* top bar */
+.hud-top { gap: 6px; top: calc(6px + var(--sat)); left: calc(6px + var(--sal)); right: calc(6px + var(--sar)); }
+.banner { gap: 8px; padding: 0 6px 0 0; min-width: 0; }
+.portrait { width: 36px; height: 36px; box-shadow: inset 0 0 0 2px #1a1210; background: linear-gradient(#7ab0e0, #b8dcf0); }
+.portrait img { width: 32px; height: 32px; }
+.banner .t { gap: 3px; }
+.isle { font-size: 0.95rem; }
+.lvl { font-size: 0.72rem; }
+.bar, .bar.xp { height: 6px; background: #16151c; box-shadow: inset 0 0 0 1px #000; }
+.bar.xp { min-width: 56px; }
+.bar i, .bar.xp i { box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.3); }
+.res-strip { padding: 0; border-right: 10px solid transparent; }
+.chip { min-height: 26px; padding: 0 8px 0 2px; gap: 4px; }
+.chip img { width: 20px; height: 20px; }
+.chip .num { font-size: 0.84rem; }
+.chip + .chip::before { top: 4px; bottom: 4px; background: rgba(0, 0, 0, 0.5); }
+.res-plus { width: 34px; padding: 0; font-size: 1.1rem; color: #ffe9a8; }
+.icon-btn { width: 40px; height: 40px; }
+.icon-btn img { width: 22px; height: 22px; }
+.icon-btn svg { width: 20px; height: 20px; }
+.icon-btn.on { filter: drop-shadow(0 0 5px rgba(255, 210, 90, 0.8)); }
+.clock { width: 46px; height: 46px; top: calc(56px + var(--sat)); right: calc(6px + var(--sar)); gap: 2px; }
+.clock .sun { width: 10px; height: 10px; background: #ffc24a; box-shadow: 0 0 0 2px #ffefa0; }
+.clock.night .sun { background: #e8ecff; box-shadow: 0 0 0 2px #b8c0e8; }
+.clock .time { font-size: 0.68rem; }
+.hud-left { top: calc(56px + var(--sat)); left: calc(6px + var(--sal)); }
+
+/* bottom nav */
+.hud-bottom.nav { height: 60px; padding: 0; bottom: calc(6px + var(--sab)); }
+.main-btn { width: 62px; height: 40px; font-size: 0.64rem; letter-spacing: 0; gap: 1px; justify-content: flex-end; padding-bottom: 0; }
+.main-btn .ico, .main-btn .ico img { width: 24px; height: 24px; }
+.main-btn + .main-btn:not(.big)::before, .main-btn.big + .main-btn::before { top: 4px; bottom: 4px; background: rgba(0, 0, 0, 0.5); }
+.main-btn .dot { top: 0; right: 14px; width: 6px; height: 6px; }
+.main-btn.big { width: 72px; height: 64px; margin: 0 4px -2px; padding-bottom: 6px; }
+.main-btn.big::after {
+  width: 64px; height: 64px; top: -14px;
+  background: none; box-shadow: none; border: 10px solid transparent;
+  border-image: var(--tex-big) 5 fill / 10px / 0 repeat;
+  filter: drop-shadow(0 0 8px rgba(255, 200, 90, 0.5));
+}
+.main-btn.big .ico, .main-btn.big .ico img { width: 34px; height: 34px; }
+.main-btn.big .ico { top: -6px; }
+.main-btn.big .dot { top: -12px; right: 8px; }
+body.sheet-open .hud-bottom.nav { border-image-source: none; filter: none; }
+body.sheet-open .hud-bottom .main-btn.on:not(.big) { border-image: var(--tex-panel) 5 fill / 10px / 6px repeat; }
+
+/* quest card */
+.quest { bottom: calc(76px + var(--sab)); left: calc(6px + var(--sal)); gap: 6px; padding: 0 0 0 0; max-width: min(280px, 70vw); }
+.quest .qicon { width: 34px; height: 34px; }
+.quest .qicon img { max-width: 24px; max-height: 24px; }
+.qtext { font-size: 0.8rem; line-height: 1.25; }
+.quest .caps { font-size: 0.58rem; }
+.quest .chev { width: 18px; height: 18px; font-size: 1rem; }
+
+/* panels */
+.side { top: calc(56px + var(--sat)); bottom: calc(76px + var(--sab)); width: min(290px, 42vw); right: calc(6px + var(--sar)); }
+.sheet { bottom: calc(76px + var(--sab)); left: calc(6px + var(--sal)); right: calc(6px + var(--sar)); }
+.panel-head { gap: 8px; padding: 4px 4px 6px 4px; background: none; border-bottom: 2px solid rgba(0, 0, 0, 0.5); box-shadow: 0 2px 0 rgba(255, 220, 160, 0.08); }
+.panel-head .thumb { width: 40px; height: 40px; }
+.panel-head .thumb img { max-width: 30px; max-height: 30px; }
+.panel-head .name { font-size: 0.98rem; }
+.panel-head .sub { font-size: 0.72rem; }
+.close { width: 30px; height: 30px; }
+.close img { width: 14px; height: 14px; }
+.panel-body { padding: 6px 4px 4px; gap: 6px; }
+.status { font-size: 0.7rem; margin-top: 2px; padding: 0 6px 0 2px; gap: 5px; }
+.status i { width: 7px; height: 7px; }
+.chips { gap: 4px; }
+.rchip { min-height: 30px; padding: 0 6px 0 0; gap: 4px; font-size: 0.74rem; }
+.rchip img { width: 18px; height: 18px; }
+.sect { padding: 2px 2px 4px; gap: 4px; }
+.sect-h { font-size: 0.76rem; }
+.sect-h .r { font-size: 0.7rem; }
+.flow { gap: 4px; }
+.slot { height: 36px; min-width: 64px; max-width: 120px; padding: 0 4px 0 0; }
+.slot img { width: 24px; height: 24px; }
+.slot .num { font-size: 0.78rem; }
+.arrow { font-size: 0.95rem; }
+.actions { gap: 4px; }
+.side .actions { flex-wrap: nowrap; }
+.side .actions .btn { flex: 1 1 0; min-width: 0; min-height: 30px; padding: 0; font-size: 0.72rem; gap: 3px; white-space: nowrap; }
+.side .actions .btn img, .side .actions .btn svg { width: 12px; height: 12px; }
+
+/* build tray */
+.tabs { padding: 0 2px; gap: 0; }
+.tab { height: 28px; padding: 0 8px; font-size: 0.66rem; }
 .tab.on::after { display: none; }
-.panel-head { background: none; border-bottom: 2px solid rgba(0, 0, 0, 0.5); box-shadow: 0 2px 0 rgba(255, 220, 160, 0.08); }
-.quest .chev { background: none; box-shadow: none; }
-.main-btn { font-size: 0.7rem; letter-spacing: 0; width: 80px; }
-.main-btn.big::after { width: 88px; height: 88px; top: -4px; }
+.cards { gap: 4px; padding: 4px 2px 2px; }
+.card { width: 78px; min-height: 0; padding: 0 0 2px; gap: 1px; }
+.card .pic { height: 30px; }
+.card .pic img { max-height: 30px; max-width: 54px; }
+.card .nm { font-size: 0.66rem; }
+.card .cost { font-size: 0.64rem; }
+.card .cost img { width: 12px; height: 12px; }
+.cost img { width: 14px; height: 14px; }
+.placing { gap: 8px; padding: 0 0 0 4px; }
+.placing .pic img { max-height: 30px; max-width: 48px; }
+.placing .nm { font-size: 0.86rem; }
+
+/* craft, stash, modals */
+.recipes { gap: 4px; padding: 4px 2px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+.recipe { padding: 0 0 0 2px; gap: 6px; }
+.recipe .out { width: 30px; }
+.recipe .out img { width: 22px; height: 22px; }
+.recipe .nm { font-size: 0.78rem; }
+.recipe .btns .btn { min-height: 32px; padding: 0 2px; min-width: 34px; }
+.stash-grid { grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 4px; padding: 6px 2px; }
+.modal { width: min(460px, calc(100vw - 20px)); max-height: calc(100vh - 150px - var(--sat) - var(--sab)); }
+.modal.wide { width: min(660px, calc(100vw - 20px)); }
+
 @media (orientation: portrait) {
-  .res-wrap { width: auto; flex: 1 1 100%; padding: 0 64px; }
-  .res-strip { max-width: 100%; }
-  .clock { top: calc(126px + var(--sat)); width: 56px; height: 56px; }
-  .hud-left { top: calc(126px + var(--sat)); }
-  .main-btn { width: 70px; }
-  .main-btn.big { width: 96px; margin: 0 2px -6px; }
+  .hud-top { flex-wrap: wrap; }
+  .banner { max-width: 220px; }
+  .res-wrap { order: 3; flex: 1 1 100%; width: auto; min-width: 0; max-width: 100%; padding: 0 52px; justify-content: center; }
+  .res-strip { max-width: 100%; min-width: 0; flex: 0 1 auto; }
+  .clock, .hud-left { top: calc(102px + var(--sat)); }
+  .clock { width: 46px; height: 46px; }
+  .saved { top: calc(104px + var(--sat)); }
+  .hint-toast { top: calc(104px + var(--sat)); }
+  .side { left: calc(6px + var(--sal)); right: calc(6px + var(--sar)); width: auto; top: auto; bottom: calc(72px + var(--sab)); max-height: 44vh; }
+  .quest { bottom: calc(72px + var(--sab)); }
+  .sheet { bottom: calc(72px + var(--sab)); }
+  .main-btn { width: 60px; }
+  .main-btn.big { width: 70px; margin: 0 2px -2px; }
 }
 @media (max-height: 420px) and (orientation: landscape) {
-  .main-btn { font-size: 0.66rem; }
+  .hud-bottom.nav { height: 52px; }
+  .main-btn { height: 34px; width: 58px; }
+  .main-btn .ico, .main-btn .ico img { width: 20px; height: 20px; }
+  .main-btn.big { height: 56px; }
+  .main-btn.big::after { width: 56px; height: 56px; top: -10px; }
+  .main-btn.big .ico, .main-btn.big .ico img { width: 30px; height: 30px; }
+  .clock { top: calc(56px + var(--sat)); width: 42px; height: 42px; }
+  .hud-left { top: calc(56px + var(--sat)); }
+  .side { bottom: calc(6px + var(--sab)); }
+  .sheet { bottom: calc(64px + var(--sab)); }
+  .quest { bottom: calc(64px + var(--sab)); }
+  .recipes { max-height: calc(100vh - 120px); }
 }
-.main-btn { justify-content: flex-end; padding-bottom: 12px; }
-.main-btn.big { padding-bottom: 12px; }
-@media (orientation: portrait) {
-  .clock, .hud-left { top: calc(160px + var(--sat)); }
-}
-/* numbers stay in the legible sans (the pixel face's 5 reads as S) */
-.num, .chip .num, .cost, .rchip, .lvl, .clock .time, .slot .num { font-family: 'Atkinson', system-ui, sans-serif; font-weight: 700; }
-.btn { font-variant-numeric: tabular-nums; }
-@media (orientation: portrait) {
-  .res-wrap { min-width: 0; max-width: 100%; }
-  .res-strip { min-width: 0; flex: 0 1 auto; }
-}
-/* with a sheet open only the active nav button stays, in its own frame */
-body.sheet-open .hud-bottom.nav { border-image-source: none; filter: none; }
-body.sheet-open .hud-bottom .main-btn.on:not(.big) { border-image: var(--tex-panel) 8 fill / 16px / 4px repeat; }
-.recipe .btns .btn, .btn.qty { font-family: 'Atkinson', system-ui, sans-serif; font-weight: 700; }
+.card .new { top: 1px; right: 2px; font-size: 0.5rem; text-shadow: 0 1px 0 #000; }
