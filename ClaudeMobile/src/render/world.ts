@@ -611,7 +611,11 @@ export class WorldView {
     this.fx.update(dt);
     if (this.falls.children.length) {
       const fi = Math.floor(this.time * 12) % this.fallFrames.length;
-      for (const c of this.falls.children) setArt(c as Sprite, this.fallFrames[fi]);
+      for (const c of this.falls.children) {
+        setArt(c as Sprite, this.fallFrames[fi]);
+        // soft spray where the ribbon thins out
+        if (!o.reduced && c.visible && Math.random() < dt * 3) this.fx.emit('steam', c.x + (Math.random() - 0.5) * 16, c.y + 112, 1, { up: 6, spread: 10, life: 1.4, g: -4, drag: 0.6 });
+      }
     }
     const t1 = performance.now();
     this.app.renderer.render({ container: this.world, target: this.rt!, clear: true });

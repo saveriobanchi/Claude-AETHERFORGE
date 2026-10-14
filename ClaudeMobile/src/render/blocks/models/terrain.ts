@@ -267,26 +267,42 @@ export function decor(c: Canvas, L: TexLib, kind: string, v: number): void {
   c.castOn = false;
 }
 
-/** Waterfall strip texture for frame f: a translucent ribbon (10×96 texels) that frays into spray. */
+/**
+ * Waterfall strip for frame f (12×72 texels): a glassy ribbon with a white
+ * lip, light streaks that slide down with the frames, darker edges, and a
+ * soft fade into spray at the bottom (no noise speckle).
+ */
 export function fallTex(f: number): Tex {
-  const W = 10, H = 96;
+  const W = 12, H = 72;
   const p = { w: W, h: H, data: new Uint8ClampedArray(W * H * 4) };
-  const pal = [[44, 96, 160], [62, 128, 192], [92, 160, 214], [150, 206, 236], [232, 248, 255]];
-  const shift = Math.floor(f * 32);
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    // narrows and breaks up toward the bottom
-    const fray = Math.max(0, (y - (H - 34)) / 34);
-    const edge = Math.floor(fray * 3);
-    if (x < edge || x >= W - edge) continue;
-    if (fray > 0 && h(x, (y + shift) >> 1, 13) < fray * 0.85) continue;
-    const yy = ((y - shift) % 32 + 32) % 32;
-    let i = x === edge || x === W - 1 - edge ? 0 : (x + (yy >> 3)) % 4 === 1 ? 2 : 1;
-    const n = h(x, yy, 3);
-    if (n > 0.84) i = 3;
-    if (n > 0.965) i = 4;
-    if (y < 2) i = 4; else if (y < 4) i = 3;
-    const a = y < 4 ? 255 : i >= 3 ? 235 : Math.round(205 - fray * 60);
-    p.data.set([...pal[i], a], (y * W + x) * 4);
+  const deep = [38, 92, 156], mid = [64, 136, 204], light = [130, 196, 238], foam = [236, 248, 255];
+  const shift = Math.round(f * 24);
+  // a few streaks per column, each a short light run that scrolls down
+  const streak = (x: number, y: number) => {
+    const yy = (y - shift + 240) % 24;
+    const off = Math.floor(h(x, 7, 31) * 24);
+    const d = (yy - off + 24) % 24;
+    return d < 5 + Math.floor(h(x, 3, 31) * 4);
+  };
+  for (let y = 0; y < H; y++) {
+    const fade = Math.max(0, (y - H * 0.55) / (H * 0.45)); // 0 → 1 over the lower part
+    for (let x = 0; x < W; x++) {
+      const edge = x === 0 || x === W - 1;
+      let c = edge ? deep : x % 4 === 1 ? light : mid;
+      if (!edge && streak(x, y)) c = light;
+      if (y < 2) c = foam;
+      else if (y < 4 && h(x, y, 5) > 0.4) c = foam;
+      let a = edge ? 170 : 215;
+      if (y < 4) a = 255;
+      // thin out into spray: fade alpha and drop alternating texels
+      if (fade > 0) {
+        a = Math.round(a * (1 - fade * 0.85));
+        if ((x + y + Math.floor(f * 4)) % 2 && fade > 0.45) continue;
+        if (fade > 0.6) c = foam;
+      }
+      if (a <= 8) continue;
+      p.data.set([c[0], c[1], c[2], a], (y * W + x) * 4);
+    }
   }
   return p;
 }

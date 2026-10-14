@@ -4,6 +4,11 @@
   font-display: swap;
 }
 @font-face {
+  font-family: 'VT323';
+  src: url('../assets/fonts/VT323.woff2') format('woff2');
+  font-display: swap;
+}
+@font-face {
   font-family: 'Atkinson';
   src: url('../assets/fonts/AtkinsonHyperlegible.ttf') format('truetype');
   font-display: swap;
@@ -807,3 +812,26 @@ body.sheet-open .hud-bottom .main-btn.on:not(.big) { border-image: var(--tex-pan
 .gems { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; padding: 4px; }
 .gems img { width: 28px; height: 28px; }
 .gems .unknown { width: 28px; height: 28px; display: grid; place-items: center; color: var(--dim); border: 2px dashed #3a3a46; }
+
+/* ───── numbers: VT323, a pixel face drawn for legible digits ───── */
+:root { --font-num: 'VT323', 'Atkinson', ui-monospace, monospace; }
+.num, .clock .time, .lvl, .cost, .sect-h .r, .slot .num, .btn.qty, .recipe .btns .btn, .tag.combo, .stash-item .num, .stats .num, .reward .num, .marks .num {
+  font-family: var(--font-num); font-weight: 400; letter-spacing: 0.03em; font-variant-numeric: normal;
+}
+.chip .num { font-size: 1.22rem; line-height: 1; }
+.slot .num { font-size: 1.18rem; }
+.cost { font-size: 1.05rem; }
+.card .cost { font-size: 0.98rem; }
+.clock .time { font-size: 1.02rem; line-height: 1; }
+.lvl { font-size: 1.05rem; }
+.stash-item .num { font-size: 1.2rem; }
+.stats .num { font-size: 1.15rem; }
+.reward .num, .contract .reward { font-size: 1.1rem; }
+.trade-head .marks .num { font-size: 1.4rem; }
+.sect-h .r { font-size: 1rem; }
+.recipe .btns .btn { font-size: 1.15rem; }
+.tag.combo { font-size: 1.25rem; }
+.tag.combo.big { font-size: 1.55rem; }
+.chip .num, .chip.power .num, .chip.marks .num { font-family: var(--font-num); font-weight: 400; font-size: 1.12rem; letter-spacing: 0.02em; }
+.chip { gap: 3px; padding-right: 6px; }
+@media (orientation: portrait) { .toasts { top: calc(162px + var(--sat)); } }
