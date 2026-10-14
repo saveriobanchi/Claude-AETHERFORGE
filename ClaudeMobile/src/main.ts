@@ -8,8 +8,25 @@ document.addEventListener('touchmove', (e) => {
   if (!(e.target as HTMLElement)?.closest?.('.scroll, .cards, .tabs, textarea, input')) e.preventDefault();
 }, { passive: false });
 
-boot().catch((e) => {
+/** A failed start after an update is almost always a stale offline cache: clear it and reload, once. */
+async function heal(): Promise<boolean> {
+  try {
+    if (sessionStorage.getItem('af-healed')) return false;
+    sessionStorage.setItem('af-healed', '1');
+    const regs = (await navigator.serviceWorker?.getRegistrations?.()) ?? [];
+    await Promise.all(regs.map((r) => r.unregister()));
+    const keys = (await caches?.keys?.()) ?? [];
+    await Promise.all(keys.filter((k) => k.startsWith('aetherforge-')).map((k) => caches.delete(k)));
+    location.reload();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+boot().then(() => { try { sessionStorage.removeItem('af-healed'); } catch { /* private mode */ } }).catch(async (e) => {
   console.error(e);
+  if (await heal()) return;
   const el = document.getElementById('boot');
   if (el) el.innerHTML = `<div class="boot-title">Something went wrong</div><pre class="boot-err">${String(e?.message ?? e)}</pre>`;
 });

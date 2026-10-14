@@ -778,9 +778,10 @@ export class Game {
 }
 
 export async function boot(): Promise<void> {
+  // register first: if an old cached version fails to start, the new worker still takes over
+  registerSW();
   const g = new Game();
   await g.start();
-  registerSW();
 }
 
 function registerSW(): void {
