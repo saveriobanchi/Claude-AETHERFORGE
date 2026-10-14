@@ -9,6 +9,9 @@ const h = (a: number, b: number, c = 0) => {
 
 export type Wood = 'oak' | 'beech' | 'maple' | 'pine' | 'eucalyptus';
 
+/** Leaf cut-out per species (luminance below which texels become see-through gaps). */
+const CUT: Record<Wood, number> = { oak: 92, beech: 96, maple: 80, pine: 26, eucalyptus: 70 };
+
 /**
  * Block tree on one tile: a slim log trunk and a crown of leaf blocks in
  * half-block steps that spills a little over the neighbours.
@@ -16,7 +19,9 @@ export type Wood = 'oak' | 'beech' | 'maple' | 'pine' | 'eucalyptus';
 export function tree(c: Canvas, L: TexLib, wood: Wood, seed: number, sway = 0, fruit = 0): void {
   const log: Face = { tex: L.get(`a/${wood}_log_side`) };
   const logTop: Face = { tex: L.get(`a/${wood}_log_top`) };
-  const leaves: Face = { tex: L.get(`a/${wood}_leaves`) };
+  // airy outer leaves (dark texels cut away) over a shaded inner core
+  const leaves: Face = { tex: L.get(`a/${wood}_leaves`), cut: CUT[wood] };
+  const core: Face = { tex: L.get(`a/${wood}_leaves`), tint: [0.62, 0.68, 0.72] };
   const trunkH = wood === 'pine' ? 2.5 : 2;
   c.box([0.3125, 0.3125, 0], [0.6875, 0.6875, trunkH], logTop, log, log, 2);
   // roots
@@ -31,6 +36,7 @@ export function tree(c: Canvas, L: TexLib, wood: Wood, seed: number, sway = 0, f
     return;
   }
   // main crown: a 2×2 core with stepped lumps, upper part sways
+  c.box([-0.25, -0.25, 1.8], [1.25, 1.25, 2.7], core, core, core, 3);
   c.box([-0.375, -0.375, 1.75], [1.375, 1.375, 2.75], leaves, leaves, leaves, 3);
   c.box([-0.125 + s, -0.125, 2.75], [1.125 + s, 1.125, 3.25], leaves, leaves, leaves, 3);
   for (let i = 0; i < 6; i++) {

@@ -18,7 +18,7 @@ const c = mod.island(load);
 const W = c.w * S, H = c.h * S, img = new Uint8ClampedArray(W * H * 4);
 for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
   const s = (((y / S) | 0) * c.w + ((x / S) | 0)) * 4, d = (y * W + x) * 4, a = c.col[s + 3] / 255, t = y / H;
-  const bg = [120 + t * 110, 160 + t * 50, 210 - t * 40];
+  const bg = t < 0.6 ? [70 + t * 170, 96 + t * 120, 168 + t * 40] : [172 + (t - 0.6) * 160, 168 + (t - 0.6) * 60, 192 - (t - 0.6) * 60];
   for (let k = 0; k < 3; k++) img[d + k] = bg[k] * (1 - a) + c.col[s + k] * a;
   img[d + 3] = 255;
 }

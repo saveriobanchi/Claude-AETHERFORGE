@@ -15,7 +15,6 @@ export function workbench(c: Canvas, L: TexLib): void {
   side.blit(L.get('as/default_tool_stoneaxe'), 0, 1, 0, 0, 16, 15);
   const side2 = new Paint(16, 16, L.get('a/beech_log_side')).rect(0, 0, 16, 3, 0x7a4e30).rect(0, 1, 16, 1, 0x9a6a40);
   side2.blit(L.get('as/default_tool_woodpick'), 0, 1, 0, 0, 16, 15);
-  c.shadow(0, 0, 1.15, 1.15);
   c.box([0.0625, 0.0625, 0], [0.9375, 0.9375, 0.875], F(top), F(side), F(side2), 5);
 }
 
@@ -31,8 +30,8 @@ export function furnace(c: Canvas, L: TexLib, f = 0): void {
   }
   front.rect(4, 13, 8, 1, 0xffe08a);
   const top = new Paint(16, 16, cobble).rect(4, 4, 8, 8, 0x3a3a42).frame(4, 4, 8, 8, 0x5a5a62);
-  c.shadow(0, 0, 1.15, 1.15);
   c.box([0, 0, 0], [1, 1, 1], F(top), F(front), F(cobble), 5);
+  c.light([0.5, 1.15, 0.35], [120, 70, 20], 1.6);
   // brick chimney with a soot cap
   const brick = L.get('a/mud_bricks');
   c.box([0.125, 0.125, 1], [0.4375, 0.4375, 1.625], F(brick), F(brick), F(brick), 6);
