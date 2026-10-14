@@ -16,12 +16,20 @@ export function masteryThresholds(item: ItemId): number[] {
   return Array.from({ length: MASTERY_STARS }, (_, k) => base * Math.pow(10, k));
 }
 
-/** Mastery stars (0..5) for a count of items made. */
+/**
+ * Mastery stars for a count of items made. Stars I–V speed up machines; past
+ * V each further ×10 is a grandmaster star (renown only) — it never ends.
+ */
 export function masteryStar(item: ItemId, made: number): number {
-  const t = masteryThresholds(item);
+  const base = masteryThresholds(item)[0];
   let k = 0;
-  while (k < t.length && made >= t[k]) k++;
+  while (made >= base * Math.pow(10, k) && k < 60) k++;
   return k;
+}
+
+/** Items needed for star k+1 (k stars held). */
+export function nextStarAt(item: ItemId, stars: number): number {
+  return masteryThresholds(item)[0] * Math.pow(10, stars);
 }
 
 // ───────────────────────── renown ─────────────────────────
@@ -34,6 +42,7 @@ export function xpForLevel(level: number): number {
 }
 
 export type PerkBranch = 'hands' | 'industry' | 'commerce';
+/** Perks with `max: Infinity` are legend perks: small, endless, so points are never wasted. */
 export interface PerkDef { id: string; branch: PerkBranch; name: string; desc: (rank: number) => string; max: number }
 
 export const PERKS: PerkDef[] = [
@@ -49,6 +58,9 @@ export const PERKS: PerkDef[] = [
   { id: 'good_name', branch: 'commerce', name: 'Good Name', desc: (r) => `Reputation from contracts +${15 * r}%.`, max: 3 },
   { id: 'bargains', branch: 'commerce', name: 'Bargains', desc: (r) => `Market prices −${5 * r}%.`, max: 3 },
   { id: 'night_shift', branch: 'commerce', name: 'Night Shift', desc: (r) => `Time away counts ${5 * r}% better.`, max: 3 },
+  { id: 'evergreen', branch: 'hands', name: 'Evergreen', desc: (r) => `Trees and fields grow ${3 * r}% faster. No limit.`, max: Infinity },
+  { id: 'craftsman', branch: 'industry', name: 'Craftsman', desc: (r) => `Every machine works ${2 * r}% faster. No limit.`, max: Infinity },
+  { id: 'renowned', branch: 'commerce', name: 'Renowned', desc: (r) => `Contracts pay ${2 * r}% more Marks. No limit.`, max: Infinity },
 ];
 export const PERK: Record<string, PerkDef> = Object.fromEntries(PERKS.map((p) => [p.id, p]));
 export const RESPEC_PER_POINT = 5;

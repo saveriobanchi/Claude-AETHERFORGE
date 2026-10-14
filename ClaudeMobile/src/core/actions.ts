@@ -1,8 +1,9 @@
 import { openRung } from './ambitions';
-import { AMBITION } from './content/ambitions';
+import { ambitionById } from './content/ambitions';
 import type { Role } from './content/people';
 import { assign, draft } from './people';
 import { BUILDINGS } from './content/buildings';
+import { FRUIT_BY_TREE } from './content/biomes';
 import { ITEMS, type ItemId, type Stack } from './content/items';
 import { FUEL_VALUE, RECIPES } from './content/recipes';
 import { ATTUNE, ISLETS, LAND, SUMMON_TIME, landCost, summonCost } from './content/world';
@@ -131,7 +132,7 @@ export function remove(s: GameState, id: number): Result {
   if (def.removable === false) return fail('It will not move');
   if (b.type === 'tuft') return harvestAt(s, b.x, b.y);
   salvage(s, b);
-  if (def.kind === 'tree') refund(s, { wood: 2, sapling: 1 });
+  if (def.kind === 'tree') refund(s, { wood: 2, [FRUIT_BY_TREE[b.type]?.seed ?? 'sapling']: 1 });
   else refund(s, def.cost);
   sync(s);
   return OK;
@@ -584,7 +585,8 @@ export function draftDesign(s: GameState, id: string): Result {
 
 /** Pin an ambition to the quest card (null unpins). */
 export function pinAmbition(s: GameState, id: string | null): Result {
-  if (id !== null && (!AMBITION[id] || openRung(s, AMBITION[id].path)?.id !== id)) return fail('Not an open ambition');
+  const a = id === null ? null : ambitionById(id);
+  if (id !== null && (!a || openRung(s, a.path).id !== id)) return fail('Not an open ambition');
   s.pinned = s.pinned === id ? null : id;
   return { ok: true };
 }

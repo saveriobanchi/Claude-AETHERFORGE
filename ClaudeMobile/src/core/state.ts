@@ -96,6 +96,8 @@ export interface FlowBucket {
   dt: number;
   inn: Stack;
   out: Stack;
+  /** Items taken by the forge or the trading post (sinks): not a loss to replay offline. */
+  sunk?: Stack;
 }
 
 export interface PeopleState {

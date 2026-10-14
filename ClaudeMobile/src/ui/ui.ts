@@ -1,13 +1,14 @@
 import * as A from '../core/actions';
 import { BUILDINGS, BUILDING_LIST, HIVE, NODE_YIELD, TREE, type BuildCategory } from '../core/content/buildings';
 import { BIOMES, FRUIT_BY_TREE, OFF_HOME } from '../core/content/biomes';
-import { MARKET, CONTRACT_REFRESH, levelSpeed, marketPrice, repForLevel, upgradable, upgradeCost } from '../core/content/trade';
+import { MARKET, CONTRACT_REFRESH, marketPrice, repForLevel, upgradable, upgradeCost } from '../core/content/trade';
 import { dayIndex, weatherFor } from '../core/content/weather';
-import { AMBITION, AMBITIONS, PATHS, type Reward, charmTradeBonus } from '../core/content/ambitions';
+import { AMBITIONS, LADDER_RUNGS, PATHS, type Reward, ambitionById, charmTradeBonus, roman } from '../core/content/ambitions';
+import { SEASON_DAYS, seasonFor, seasonProgress, yearFor } from '../core/content/seasons';
 import { focus, goalDone, goalText, goalValue, openRung } from '../core/ambitions';
 import { BLUEPRINTS, DESIGNS, FOODS, ROLES, SPECIALIST_BONUS } from '../core/content/people';
 import { assigned, canDraft, contentment, housing, idle } from '../core/people';
-import { CODEX, PERKS, type PerkBranch, masteryStar, masteryThresholds, xpForLevel } from '../core/content/renown';
+import { CODEX, MASTERY_STARS, PERKS, type PerkBranch, masteryStar, nextStarAt, xpForLevel } from '../core/content/renown';
 import { DISCOVERIES, DISCOVERY_LIST } from '../core/content/discoveries';
 import { ITEMS, ITEM_IDS, type ItemId, type Stack } from '../core/content/items';
 import { RECIPE_LIST, RECIPES, recipesFor } from '../core/content/recipes';
@@ -15,7 +16,7 @@ import { ATTUNEMENTS, FORGE_STAGES, ISLETS, LANDS, landCost, summonCost } from '
 import type { OfflineReport } from '../core/offline';
 import { flowRates } from '../core/offline';
 import { buildingUnlocked, landUnlocked, recipeUnlocked, teasers } from '../core/progression';
-import { bufCap, currentRecipe, forgeNeeds, weatherNow } from '../core/sim';
+import { biomeAt, bufCap, crafterRate, currentRecipe, forgeNeeds, machineSpeed, weatherNow } from '../core/sim';
 import { type Building, type Dir, capacity, dayFraction, isNight, stackTotal } from '../core/state';
 import type { Game } from '../game';
 import { audio } from '../platform/audio';
@@ -40,6 +41,12 @@ const GEAR_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#efe2c4" stroke-w
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
 const PATH_NAME = Object.fromEntries(PATHS.map((p) => [p.id, p.name])) as Record<string, string>;
 const PATH_ICON = Object.fromEntries(PATHS.map((p) => [p.id, p.icon])) as Record<string, string>;
+
+/** Mastery stars: up to five, then a grandmaster count. */
+function starText(n: number, empty = false): string {
+  const shown = Math.min(n, MASTERY_STARS);
+  return '★'.repeat(shown) + (empty ? '☆'.repeat(MASTERY_STARS - shown) : '') + (n > MASTERY_STARS ? ` +${n - MASTERY_STARS}` : '');
+}
 
 function rewardText(r: Reward): string {
   const parts: string[] = [];
@@ -284,6 +291,8 @@ export class UI {
       this.clockEl.classList.toggle('night', isNight(s));
       const w = weatherNow(s).id;
       if (this.weatherId !== w) { this.weatherId = w; this.weatherImg.src = uiIcon('w_' + w); this.clockEl.dataset.weather = w; }
+      const se = seasonFor(s.time).id;
+      if (this.clockEl.dataset.season !== se) { this.clockEl.dataset.season = se; this.clockEl.title = `${seasonFor(s.time).name} · time and weather`; }
     }
     // main buttons
     const craftVisible = A.hasWorkbench(s);
@@ -573,7 +582,7 @@ export class UI {
       b.level, upgradable(def) ? s.trade.marks + ':' + s.known.has('tinker') + s.known.has('master') : '',
       def.kind === 'post' ? JSON.stringify(s.trade) : '', s.tileRev,
       def.kind === 'home' ? JSON.stringify(s.people) + FOODS.map((f) => s.stash[f]).join() : '',
-      def.kind === 'drafting' ? DESIGNS.map((d) => canDraft(s, d.id)).join() : '',
+      def.kind === 'drafting' ? DESIGNS.map((d) => canDraft(s, d.id) + Object.keys(d.cost).map((k) => s.stash[k as ItemId]).join(':')).join() : '',
     ].join('|');
     if (sig === this.panelSig) return;
     this.panelSig = sig;
@@ -679,14 +688,14 @@ export class UI {
           prod.append(h('span', { class: 'arrow', text: '→' }));
           for (const k in rr.outputs) prod.append(this.slot(k as ItemId, `${rr.outputs[k as ItemId]}`));
           const boost = (g.s.cache.boost.get(b.id) ?? 1);
-          const speed = boost * levelSpeed(b.level);
+          const speed = crafterRate(s, b, rr);
           const outItem = Object.keys(rr.outputs)[0] as ItemId;
           const ms = masteryStar(outItem, s.stats.made[outItem] ?? 0);
-          body.append(this.section('Production', `${ms ? '★'.repeat(ms) + ' · ' : ''}⏱ ${(rr.time / speed).toFixed(1)}s`, prod, this.bar()));
+          body.append(this.section('Production', `${ms ? starText(ms) + ' · ' : ''}⏱ ${speed > 0 ? (rr.time / speed).toFixed(1) + 's' : '—'}`, prod, this.bar()));
           // Inventory: what is buffered inside the machine
           const inv = h('div', { class: 'flow inv' });
           const cap = bufCap(def, b);
-          for (const k in rr.inputs) inv.append(this.slot(k as ItemId, `${fmt(b.inBuf[k as ItemId] ?? 0)}/${(rr.inputs[k as ItemId] ?? 0) * 2}`));
+          for (const k in rr.inputs) inv.append(this.slot(k as ItemId, `${fmt(b.inBuf[k as ItemId] ?? 0)}/${Math.max(cap, (rr.inputs[k as ItemId] ?? 0) * 2)}`));
           for (const k in rr.outputs) inv.append(this.slot(k as ItemId, `${fmt(b.outBuf[k as ItemId] ?? 0)}/${cap}`));
           const info: string[] = [];
           if (rr.fuel) info.push(`fuel ${Math.floor(b.fuel)}`);
@@ -788,7 +797,7 @@ export class UI {
       case 'hive': {
         const trees = [-1, 0, 1].flatMap((dy) => [-1, 0, 1].map((dx) => [dx, dy])).filter(([dx, dy]) => (dx || dy) && [...s.buildings.values()].some((t) => t.x === b.x + dx && t.y === b.y + dy && BUILDINGS[t.type].kind === 'tree')).length;
         body.append(h('div', { class: 'flow' }, this.slot('honey', fmt(b.outBuf.honey ?? 0)), this.slot('wax', fmt(b.outBuf.wax ?? 0))), this.bar());
-        body.append(h('div', { class: 'stats' }, h('span', { text: 'Trees within reach' }), h('span', { class: 'num', text: String(trees) }), h('span', { text: 'Honey every' }), h('span', { class: 'num', text: trees ? `${(15 / ((1 + HIVE.perTree * Math.min(HIVE.maxTrees, trees)) * levelSpeed(b.level))).toFixed(1)}s` : '—' })));
+        body.append(h('div', { class: 'stats' }, h('span', { text: 'Trees within reach' }), h('span', { class: 'num', text: String(trees) }), h('span', { text: 'Honey every' }), h('span', { class: 'num', text: trees ? `${(15 / ((1 + HIVE.perTree * Math.min(HIVE.maxTrees, trees)) * machineSpeed(s, b) * (biomeAt(s, b.x, b.y)?.hive ?? 1) * seasonFor(s.time).hive)).toFixed(1)}s` : '—' })));
         body.append(h('div', { class: 'muted', style: 'font-size:0.78rem', text: 'More trees nearby, more honey. Fruit trees beside a hive bear an extra apple.' }));
         actions.append(h('button', { class: 'btn' + (stackTotal(b.outBuf) ? ' primary' : ''), onclick: () => { const res = g.act(() => A.collect(s, b.id), 'collect'); if (res.ok && res.got) this.floaterCenter(res.got); } }, 'Collect'));
         addCommon();
@@ -933,23 +942,24 @@ export class UI {
     const head = this.modalHead('Ambitions', '', uiIcon('ambition'));
     const render = () => {
       clear(list);
-      head.querySelector('.sub')!.textContent = `${s.ambitions.size} of ${AMBITIONS.length} achieved · pin one to follow it`;
+      head.querySelector('.sub')!.textContent = `${s.ambitions.size} achieved · pin one to follow it`;
       for (const p of PATHS) {
         const a = openRung(s, p.id);
         const rungs = AMBITIONS.filter((x) => x.path === p.id);
-        const pips = h('span', { class: 'pips' }, ...rungs.map((x) => h('i', { class: s.ambitions.has(x.id) ? 'on' : a && x.id === a.id ? 'cur' : '' })));
-        const pinned = !!a && s.pinned === a.id;
-        const card = h('div', { class: 'entry amb' + (pinned ? ' pinned' : '') + (a ? '' : ' done') },
+        const pips = a.rung > LADDER_RUNGS ? h('span', { class: 'legacy', text: `Legacy ${roman(a.rung - LADDER_RUNGS)}` })
+          : h('span', { class: 'pips' }, ...rungs.map((x) => h('i', { class: s.ambitions.has(x.id) ? 'on' : x.id === a.id ? 'cur' : '' })));
+        const pinned = s.pinned === a.id;
+        const card = h('div', { class: 'entry amb' + (pinned ? ' pinned' : '') },
           h('div', { class: 'amb-h' }, img(uiIcon(p.icon)), h('span', { class: 'pn', text: p.name }), pips,
-            a ? h('button', { class: 'btn small' + (pinned ? ' primary' : ' ghost'), title: pinned ? 'Unpin' : 'Pin to the quest card', onclick: () => { g.act(() => A.pinAmbition(s, a.id), 'select'); this.lastNote = ''; render(); } }, pinned ? '★ Pinned' : '☆ Pin') : null));
-        if (a) {
-          card.append(h('div', { class: 'h', text: `${ROMAN[a.rung]} · ${a.title}` }), h('p', { text: a.intro }));
+            h('button', { class: 'btn small' + (pinned ? ' primary' : ' ghost'), title: pinned ? 'Unpin' : 'Pin to the quest card', onclick: () => { g.act(() => A.pinAmbition(s, a.id), 'select'); this.lastNote = ''; render(); } }, pinned ? '★ Pinned' : '☆ Pin')));
+        {
+          card.append(h('div', { class: 'h', text: a.rung > LADDER_RUNGS ? a.title : `${ROMAN[a.rung]} · ${a.title}` }), h('p', { text: a.intro }));
           for (const goal of a.goals) {
             const v = Math.min(goal.n, goalValue(s, goal)), done = v >= goal.n;
             card.append(h('div', { class: 'goal' + (done ? ' done' : '') }, h('span', { class: 'tick', text: done ? '✓' : '' }), h('span', { class: 'gt', text: goalText(goal) }), h('span', { class: 'num', text: `${fmt(v)}/${fmt(goal.n)}` })));
           }
           card.append(h('div', { class: 'reward-line', text: 'Reward: ' + rewardText(a.reward) }));
-        } else card.append(h('p', { text: `${p.desc} — path complete.` }));
+        }
         list.append(card);
       }
     };
@@ -984,7 +994,7 @@ export class UI {
   }
 
   mastery(item: ItemId, star: number): void {
-    this.toast(`${'★'.repeat(star)} ${ITEMS[item].name} mastery ${['', 'I', 'II', 'III', 'IV', 'V'][star]}`, `Machines making ${ITEMS[item].name.toLowerCase()} work ${star * 5}% faster.`, itemIcon(item));
+    this.toast(`${starText(star)} ${ITEMS[item].name} ${star > MASTERY_STARS ? 'grandmaster' : 'mastery'} ${roman(star > MASTERY_STARS ? star - MASTERY_STARS : star)}`, star > MASTERY_STARS ? 'Renown for a lifetime of work.' : `Machines making ${ITEMS[item].name.toLowerCase()} work ${star * 5}% faster.`, itemIcon(item));
   }
 
   renownUp(level: number): void {
@@ -992,9 +1002,9 @@ export class UI {
   }
 
   ambitionDone(id: string): void {
-    const a = AMBITION[id];
+    const a = ambitionById(id);
     if (!a) return;
-    const next = AMBITIONS.find((x) => x.path === a.path && x.rung === a.rung + 1);
+    const next = ambitionById(`${a.path}_${a.rung + 1}`);
     this.toast(`Ambition: ${a.title}`, rewardText(a.reward) + (next ? ` · next: ${next.title}` : ` · ${PATH_NAME[a.path]} path complete`), uiIcon(PATH_ICON[a.path]), 'big');
   }
 
@@ -1022,7 +1032,34 @@ export class UI {
   }
 
   /** A richer toast with an icon (top centre). */
+  /** Notifications: at most three on screen; a burst beyond that is folded into one summary. */
+  private toastQueue: { title: string; sub: string; icon: string; cls: string }[] = [];
+  private toastTimer = 0;
   private toast(title: string, sub: string, icon: string, cls = ''): void {
+    this.toastQueue.push({ title, sub, icon, cls });
+    if (!this.toastTimer) this.toastTimer = window.setTimeout(() => this.flushToasts(), 0);
+  }
+
+  private flushToasts(): void {
+    this.toastTimer = 0;
+    const live = this.toasts.querySelectorAll('.toast:not(.out)').length;
+    const room = Math.max(0, 3 - live);
+    const q = this.toastQueue;
+    if (!q.length) return;
+    if (q.length > room + 1) {
+      // a burst (e.g. a world catching up on load): show the biggest ones and summarise the rest
+      const keep = q.splice(0, Math.max(1, room - 1));
+      for (const t of keep) this.showToast(t.title, t.sub, t.icon, t.cls);
+      const rest = q.splice(0);
+      this.showToast(`+${rest.length} more`, rest.slice(0, 3).map((t) => t.title).join(' · ') + (rest.length > 3 ? ' …' : ''), rest[0].icon, '');
+      return;
+    }
+    const now = q.splice(0, Math.max(1, room));
+    for (const t of now) this.showToast(t.title, t.sub, t.icon, t.cls);
+    if (q.length) this.toastTimer = window.setTimeout(() => this.flushToasts(), 1200);
+  }
+
+  private showToast(title: string, sub: string, icon: string, cls: string): void {
     const el = h('div', { class: 'toast panel ' + cls }, img(icon), h('div', { class: 't' }, h('div', { class: 'tt', text: title }), h('div', { class: 'ts', text: sub })));
     this.toasts.append(el);
     window.setTimeout(() => el.classList.add('out'), 3200);
@@ -1046,7 +1083,8 @@ export class UI {
         for (const p of PERKS.filter((x) => x.branch === br)) {
           const r = rn.perks[p.id] ?? 0;
           const pips = h('span', { class: 'pips' });
-          for (let i = 1; i <= p.max; i++) pips.append(h('i', { class: i <= r ? 'on' : '' }));
+          if (Number.isFinite(p.max)) for (let i = 1; i <= p.max; i++) pips.append(h('i', { class: i <= r ? 'on' : '' }));
+          else pips.append(h('span', { class: 'num rank', text: r ? `×${r}` : '∞' }));
           const can = A.canPerk(s, p.id).ok;
           col.append(h('button', { class: 'perk' + (can ? ' can' : '') + (r >= p.max ? ' max' : ''), onclick: () => { const res = g.act(() => A.takePerk(s, p.id), 'craft'); if (res.ok) this.openRenown(); } },
             h('div', { class: 'nm' }, h('span', { text: p.name }), pips), h('div', { class: 'sub', text: r === 0 ? p.desc(1) : r < p.max ? `${p.desc(r)} Next: ${p.desc(r + 1).replace(/^[^0-9+−-]*/, '')}` : p.desc(r) })));
@@ -1059,13 +1097,13 @@ export class UI {
       const items = ITEM_IDS.filter((i) => (s.stats.made[i] ?? 0) > 0);
       if (!items.length) body.append(h('div', { class: 'muted', text: 'Make things to master them.' }));
       for (const id of items.sort((a, b) => (s.stats.made[b] ?? 0) - (s.stats.made[a] ?? 0))) {
-        const m = s.stats.made[id] ?? 0, st = masteryStar(id, m), th = masteryThresholds(id);
-        const next = th[st];
-        const prev = st ? th[st - 1] : 0;
+        const m = s.stats.made[id] ?? 0, st = masteryStar(id, m);
+        const next = nextStarAt(id, st);
+        const prev = st ? nextStarAt(id, st - 1) : 0;
         body.append(h('div', { class: 'mrow' }, img(itemIcon(id)),
-          h('div', { class: 't' }, h('div', { class: 'nm' }, h('span', { text: ITEMS[id].name }), h('span', { class: 'stars', text: '★'.repeat(st) + '☆'.repeat(5 - st) })),
+          h('div', { class: 't' }, h('div', { class: 'nm' }, h('span', { text: ITEMS[id].name }), h('span', { class: 'stars', text: starText(st, true) })),
             h('div', { class: 'bar' }, h('i', { style: `width:${next ? Math.round(((m - prev) / (next - prev)) * 100) : 100}%` })),
-            h('div', { class: 'sub', text: next ? `${fmt(m)} / ${fmt(next)} made · +${st * 5}% speed` : `${fmt(m)} made · mastered (+25% speed)` }))));
+            h('div', { class: 'sub', text: `${fmt(m)} / ${fmt(next)} made · +${Math.min(st, MASTERY_STARS) * 5}% speed${st > MASTERY_STARS ? ` · grandmaster ${st - MASTERY_STARS}` : st === MASTERY_STARS ? ' · mastered' : ''}` }))));
       }
     } else {
       for (const c of CODEX) {
@@ -1082,7 +1120,9 @@ export class UI {
     const s = this.g.s;
     const day = dayIndex(s.time);
     const w = weatherFor(day, s.seed), n = weatherFor(day + 1, s.seed);
-    this.hint(`${w.name}: ${w.desc} Tomorrow: ${n.name.toLowerCase()}.`, false, 4200);
+    const se = seasonFor(s.time);
+    const d = Math.floor(seasonProgress(s.time) * SEASON_DAYS) + 1;
+    this.hint(`${se.name}, day ${d} of ${SEASON_DAYS} (year ${yearFor(s.time)}): ${se.desc} Today ${w.name.toLowerCase()} — ${w.desc} Tomorrow: ${n.name.toLowerCase()}.`, false, 6000);
   }
 
   private recipeFlow(b: Building, r: (typeof RECIPES)[string], fromStash: boolean): HTMLElement {
@@ -1198,7 +1238,7 @@ export class UI {
     const items = ITEM_IDS.filter((i) => (s.stats.obtained[i] ?? 0) > 0 || s.stash[i] > 0);
     for (const id of items) {
       const star = masteryStar(id, s.stats.made[id] ?? 0);
-      grid.append(h('div', { class: 'stash-item' + (s.stash[id] >= cap ? ' full' : ''), title: ITEMS[id].desc }, img(itemIcon(id)), h('span', { class: 'num', text: fmt(s.stash[id]) }), h('span', { class: 'nm', text: ITEMS[id].name }), star ? h('span', { class: 'stars', text: '★'.repeat(star) }) : null));
+      grid.append(h('div', { class: 'stash-item' + (s.stash[id] >= cap ? ' full' : ''), title: ITEMS[id].desc }, img(itemIcon(id)), h('span', { class: 'num', text: fmt(s.stash[id]) }), h('span', { class: 'nm', text: ITEMS[id].name }), star ? h('span', { class: 'stars', text: starText(star) }) : null));
     }
     if (!items.length) grid.append(h('div', { class: 'muted', text: 'Nothing yet. The tree is a good start.' }));
     const { rate } = flowRates(s);
@@ -1216,10 +1256,10 @@ export class UI {
     this.refreshHud();
     const entries = h('div', { class: 'entries scroll' });
     {
-      const open = PATHS.map((p) => openRung(s, p.id)).filter(Boolean).length;
+      const legacy = s.ambitions.size > AMBITIONS.length || AMBITIONS.every((a) => s.ambitions.has(a.id));
       entries.append(h('button', { class: 'entry chapter link', onclick: () => this.openAmbitions() },
-        h('div', { class: 'caps', text: `Ambitions · ${s.ambitions.size}/${AMBITIONS.length}` }), h('div', { class: 'h', text: open ? 'Choose your next ambition ›' : 'Every ambition achieved' }),
-        h('p', { text: open ? 'Seven paths, all open at once. Grow in the order you like.' : 'The island is yours. Keep the Aetherforge singing.' })));
+        h('div', { class: 'caps', text: `Ambitions · ${s.ambitions.size} achieved` }), h('div', { class: 'h', text: 'Choose your next ambition ›' }),
+        h('p', { text: legacy ? 'Legacy ambitions never run out: every path goes on, a little harder each time.' : 'Seven paths, all open at once. Grow in the order you like.' })));
     }
     const riddles = teasers(s);
     if (riddles.length) {
@@ -1241,7 +1281,8 @@ export class UI {
       h('span', { text: 'Time in this world' }), h('span', { class: 'num', text: duration(st.playSeconds) }),
       h('span', { text: 'Ground' }), h('span', { class: 'num', text: `${s.tiles.size} tiles` }),
       h('span', { text: 'Charm' }), h('span', { class: 'num', text: String(s.cache.charm) }),
-      h('span', { text: 'Ambitions' }), h('span', { class: 'num', text: `${s.ambitions.size}/${AMBITIONS.length}` }),
+      h('span', { text: 'Ambitions' }), h('span', { class: 'num', text: String(s.ambitions.size) }),
+      h('span', { text: 'Year' }), h('span', { class: 'num', text: `${yearFor(s.time)} · ${seasonFor(s.time).name}` }),
       s.people.count ? h('span', { text: 'Settlers' }) : null, s.people.count ? h('span', { class: 'num', text: String(s.people.count) }) : null,
       h('span', { text: 'Structures' }), h('span', { class: 'num', text: String(count((b) => !['tree', 'tuft', 'sapling', 'elder_tree'].includes(b.type) && BUILDINGS[b.type].kind !== 'node')) }),
       h('span', { text: 'Trees' }), h('span', { class: 'num', text: String(count((b) => b.type === 'tree')) }),
@@ -1320,10 +1361,14 @@ export class UI {
     const gains = h('div', { class: 'gains' });
     const items = Object.keys(rep.gained) as ItemId[];
     for (const k of items.slice(0, 16)) gains.append(h('span', { class: 'rchip' }, img(itemIcon(k)), '+' + fmt(rep.gained[k] ?? 0)));
+    const used = Object.keys(rep.spent) as ItemId[];
+    const spentRow = h('div', { class: 'gains spent' });
+    for (const k of used.slice(0, 12)) spentRow.append(h('span', { class: 'rchip' }, img(itemIcon(k)), '−' + fmt(rep.spent[k] ?? 0)));
     const content = h('div', { class: 'away' },
       h('div', { class: 'caps', text: 'While you were away' }),
       h('div', { class: 'h', text: duration(rep.seconds) }),
       items.length ? gains : h('div', { class: 'muted', text: 'The island rested. Trees regrew; nothing else stirred.' }),
+      used.length ? h('div', { class: 'caps', text: 'Used up by your machines' }) : null, used.length ? spentRow : null,
       items.length ? h('div', { class: 'legal', text: `Your machines kept working at an easier pace${rep.counted < rep.seconds ? `, for up to ${duration(rep.counted)}` : ''}.` }) : null,
       h('div', { class: 'actions' }, h('button', { class: 'btn primary', onclick: () => this.closeModal() }, 'Back to the island')));
     this.openModal(content);

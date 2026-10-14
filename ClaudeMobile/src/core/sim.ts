@@ -4,16 +4,17 @@ import { BOARD_SIZE, CONTRACT_REFRESH, contractPool, levelBuffer, levelSpeed, ma
 import { type WeatherDef, dayIndex, weatherFor } from './content/weather';
 import type { ItemId, Stack } from './content/items';
 import { FUEL_VALUE, RECIPES, recipesFor, type RecipeDef } from './content/recipes';
-import { ISLETS, FORGE_STAGES, resonanceRequest } from './content/world';
+import { ISLETS, FORGE_STAGES, resonanceRequest, summonCost } from './content/world';
 import {
   type Building, type Dir, type GameState, DX, DY, key, buildingAt, addTo, stackTotal, stashAdd,
-  rand, isNight, isEdgeTile, computeCapacity, attuneRank, addBuilding, addTile, tileAt, removeBuildingRaw, addXp, made, perkRank,
+  rand, isNight, isEdgeTile, computeCapacity, attuneRank, addBuilding, addTile, tileAt, removeBuildingRaw, addXp, made, perkRank, refund,
 } from './state';
 import { checkDiscoveries } from './progression';
 import { charm, checkAmbitions } from './ambitions';
 import { merchantBonus, present, settlerBonus, tickPeople } from './people';
 import { charmTradeBonus } from './content/ambitions';
-import { CODEX, FRUIT_ITEMS, GEMS, LUCK, MASTERY_SPEED, XP, masteryStar } from './content/renown';
+import { CODEX, FRUIT_ITEMS, GEMS, LUCK, MASTERY_SPEED, MASTERY_STARS, XP, masteryStar } from './content/renown';
+import { seasonFor } from './content/seasons';
 
 export const TICK = 0.05; // 20 Hz fixed simulation step
 export const BELT_GAP = 0.34;
@@ -108,7 +109,10 @@ export function rebuildCache(s: GameState): void {
     c.roostTargets.set(r.id, list);
   }
   // Keep wisp population in sync with roosts.
+  for (const w of s.wisps) if (!s.buildings.has(w.roost) && w.carry && w.n) stashAdd(s, w.carry, w.n);
   s.wisps = s.wisps.filter((w) => s.buildings.has(w.roost));
+  for (const b of s.buildings.values()) b.claimed = 0;
+  for (const w of s.wisps) if (w.phase === 'out') { const t = s.buildings.get(w.target); if (t) t.claimed++; }
   for (const r of roosts) {
     const have = s.wisps.filter((w) => w.roost === r.id).length;
     for (let i = have; i < WISPS_PER_ROOST; i++) {
@@ -190,9 +194,13 @@ export function offer(s: GameState, t: Building, item: ItemId, from: Dir): boole
       return true;
     }
     case 'forge':
-      return forgeAccept(s, item, 1) === 1;
+      if (forgeAccept(s, item, 1) !== 1) return false;
+      addTo((s.flow.cur.sunk ??= {}), item, 1);
+      return true;
     case 'post':
-      return contractAccept(s, item);
+      if (!contractAccept(s, item)) return false;
+      addTo((s.flow.cur.sunk ??= {}), item, 1);
+      return true;
     default:
       return false;
   }
@@ -281,12 +289,12 @@ function primaryOut(b: Building): ItemId | null {
 
 /** Mastery speed bonus for machines making an item. */
 export function masteryBonus(s: GameState, item: ItemId | null): number {
-  return item ? 1 + MASTERY_SPEED * masteryStar(item, s.stats.made[item] ?? 0) : 1;
+  return item ? 1 + MASTERY_SPEED * Math.min(MASTERY_STARS, masteryStar(item, s.stats.made[item] ?? 0)) : 1;
 }
 
 export function machineSpeed(s: GameState, b: Building): number {
   return (s.cache.boost.get(b.id) ?? 1) * (1 + 0.1 * attuneRank(s, 'swift')) * levelSpeed(b.level)
-    * masteryBonus(s, primaryOut(b)) * (1 + 0.05 * perkRank(s, 'well_oiled'));
+    * masteryBonus(s, primaryOut(b)) * (1 + 0.05 * perkRank(s, 'well_oiled') + 0.02 * perkRank(s, 'craftsman')) * settlerBonus(s, b);
 }
 
 /** Chance a machine cycle comes out double. */
@@ -321,6 +329,15 @@ function finishRecipe(s: GameState, b: Building, r: RecipeDef, sink: (item: Item
   s.events.push({ type: 'cycle', id: b.id });
 }
 
+/** Effective progress per second of a crafter on a recipe (everything that speeds or slows it). */
+export function crafterRate(s: GameState, b: Building, r: RecipeDef): number {
+  let rate = machineSpeed(s, b);
+  if (BUILDINGS[b.type].power) rate *= s.power.ratio;
+  if (r.id === 'compost') rate *= biomeAt(s, b.x, b.y)?.compost ?? 1;
+  else if (b.type === 'field') rate *= (biomeAt(s, b.x, b.y)?.crop ?? 1) * seasonFor(s.time).crop * (1 + 0.03 * perkRank(s, 'evergreen'));
+  return rate;
+}
+
 function tickCrafter(s: GameState, b: Building, dt: number): void {
   const def = BUILDINGS[b.type];
   const r = currentRecipe(b);
@@ -334,15 +351,11 @@ function tickCrafter(s: GameState, b: Building, dt: number): void {
     b.working = true;
     b.progress = 0;
   }
-  let rate = machineSpeed(s, b);
   if (def.power) {
     s.power.nextDemand += def.power;
-    rate *= s.power.ratio;
     if (s.power.ratio <= 0) { b.status = 'nopower'; return; }
   }
-  if (r.id === 'compost') rate *= biomeAt(s, b.x, b.y)?.compost ?? 1;
-  else if (b.type === 'field') rate *= biomeAt(s, b.x, b.y)?.crop ?? 1;
-  rate *= settlerBonus(s, b);
+  const rate = crafterRate(s, b, r);
   b.status = 'working';
   b.progress += dt * rate;
   if (b.progress >= r.time) {
@@ -359,7 +372,7 @@ function tickGenerator(s: GameState, b: Building, dt: number): void {
   if ((b.outBuf[p.item] ?? 0) >= bufCap(def, b, 10)) { b.status = 'blocked'; return; }
   let rate = machineSpeed(s, b);
   const w = weatherNow(s);
-  if (p.item === 'dew') rate *= w.dew * (biomeAt(s, b.x, b.y)?.dew ?? 1);
+  if (p.item === 'dew') rate *= w.dew * seasonFor(s.time).dew * (biomeAt(s, b.x, b.y)?.dew ?? 1);
   else if (p.item === 'mist') rate *= w.mist;
   else if (p.item === 'stardust') rate *= w.stardust;
   if (def.power) {
@@ -709,7 +722,7 @@ function tickNature(s: GameState, b: Building, dt: number): void {
     if (b.stock < max) {
       const bio = biomeAt(s, b.x, b.y) ?? BIOMES.meadow;
       const home = !fruit || fruit.home === bio.id ? 1 : OFF_HOME;
-      b.timer += dt * weatherNow(s).regrow * bio.regrow * home * (1 + 0.1 * perkRank(s, 'green_thumb'));
+      b.timer += dt * weatherNow(s).regrow * seasonFor(s.time).regrow * bio.regrow * home * (1 + 0.1 * perkRank(s, 'green_thumb') + 0.03 * perkRank(s, 'evergreen'));
       const per = elder ? TREE.elderRegrow : fruit ? fruit.regrow : TREE.regrow;
       if (b.timer >= per) { b.timer -= per; b.stock++; }
       b.status = 'working';
@@ -750,7 +763,7 @@ function tickHive(s: GameState, b: Building, dt: number): void {
   if (!trees) { b.status = 'noinput'; return; }
   if (stackTotal(b.outBuf) >= bufCap(def, b)) { b.status = 'blocked'; return; }
   b.status = 'working';
-  b.progress += dt * machineSpeed(s, b) * (1 + HIVE.perTree * trees) * (biomeAt(s, b.x, b.y)?.hive ?? 1);
+  b.progress += dt * machineSpeed(s, b) * (1 + HIVE.perTree * trees) * (biomeAt(s, b.x, b.y)?.hive ?? 1) * seasonFor(s.time).hive;
   const every = def.produces?.every ?? 15;
   if (b.progress >= every) {
     b.progress -= every;
@@ -784,13 +797,13 @@ export function completeContract(s: GameState, i: number): void {
   const tr = s.trade;
   const c = tr.board[i];
   if (!c) return;
-  const pay = Math.round(c.marks * (1 + 0.1 * perkRank(s, 'haggler') + charmTradeBonus(s.cache.charm) + merchantBonus(s)));
+  const pay = Math.round(c.marks * (1 + 0.1 * perkRank(s, 'haggler') + 0.02 * perkRank(s, 'renowned') + charmTradeBonus(s.cache.charm) + merchantBonus(s)));
   tr.marks += pay;
   tr.earned += pay;
   tr.rep += Math.round(c.marks * (1 + 0.15 * perkRank(s, 'good_name')));
   addXp(s, Math.round(pay * XP.contractPerMark));
   tr.done++;
-  s.events.push({ type: 'contract', item: c.item, marks: c.marks });
+  s.events.push({ type: 'contract', item: c.item, marks: pay });
   while (tr.rep >= repForLevel(tr.level)) {
     tr.rep -= repForLevel(tr.level);
     tr.level++;
@@ -854,7 +867,8 @@ export function tickSummon(s: GameState, dt: number): void {
   const by = beacon ? beacon.y : 0;
   const spot = findIsletSpot(s, def.layout, bx, by);
   if (!spot) {
-    // nowhere to dock: refund the attempt by keeping the index unchanged
+    // nowhere to dock: refund the attempt (the index is unchanged, so it can be tried again)
+    refund(s, summonCost(sm.index));
     s.events.push({ type: 'islet_docked', name: '', x: bx, y: by });
     return;
   }
@@ -914,7 +928,7 @@ export function tick(s: GameState, dt = TICK): void {
   s.stats.playSeconds += dt;
 
   // Power: generation from wind; demand measured last tick. Engines cover any shortfall.
-  const wind = windFactor(s.time) * weatherNow(s).wind;
+  const wind = windFactor(s.time) * weatherNow(s).wind * seasonFor(s.time).wind;
   s.power.wind = wind;
   let windGen = 0;
   const engines: Building[] = [];

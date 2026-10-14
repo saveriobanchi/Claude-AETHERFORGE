@@ -880,3 +880,12 @@ body.sheet-open .hud-bottom .main-btn.on:not(.big) { border-image: var(--tex-pan
 .flow.cost { align-items: center; gap: 2px; }
 .flow.cost .caps { margin-right: 4px; color: #ffd35a; }
 .flow.cost .slot { transform: scale(0.85); transform-origin: left center; margin-right: -8px; }
+
+/* legacy ambitions, endless perks, seasons */
+.amb-h .legacy { font-size: 0.66rem; color: #c8a0ff; border: 1px solid #6a4a9a; padding: 0 4px; }
+.perk .rank { font-size: 0.95rem; color: #ffd35a; }
+.clock { border-bottom: 3px solid transparent; }
+.clock[data-season='spring'] { border-bottom-color: #8ad86a; }
+.clock[data-season='summer'] { border-bottom-color: #ffc24a; }
+.clock[data-season='autumn'] { border-bottom-color: #e07a3a; }
+.clock[data-season='winter'] { border-bottom-color: #c8e4ff; }

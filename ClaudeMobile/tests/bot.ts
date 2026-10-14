@@ -11,7 +11,7 @@ import { RECIPES, RECIPE_LIST, type RecipeDef } from '../src/core/content/recipe
 import { FORGE_STAGES, ISLETS, summonCost } from '../src/core/content/world';
 import { MARKET_BY_ID, marketPrice, upgradable, upgradeCost } from '../src/core/content/trade';
 import { charm, goalDone, goalValue, openRung } from '../src/core/ambitions';
-import { AMBITION, type Goal } from '../src/core/content/ambitions';
+import { ambitionById, type Goal } from '../src/core/content/ambitions';
 import { DESIGN } from '../src/core/content/people';
 import { buildingUnlocked, recipeUnlocked } from '../src/core/progression';
 import { TICK, forgeNeeds, tick } from '../src/core/sim';
@@ -553,7 +553,7 @@ export class Bot {
 
   /** Climb a path's ambitions until `id` is achieved, satisfying each goal. */
   achieve(id: string): void {
-    const a = AMBITION[id];
+    const a = ambitionById(id)!;
     let guard = 0;
     while (!this.s.ambitions.has(id)) {
       if (++guard > 40) throw new Error(`ambition ${id} stuck: ${this.status()}`);

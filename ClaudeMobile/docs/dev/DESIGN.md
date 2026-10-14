@@ -279,3 +279,40 @@ chain; every system feeds the others.
   design, unlocks all five decor pattern sets via ambitions and
   completes the forge in ≈15.3 h (it now widens a
   starving production chain like a player noticing a bottleneck).
+
+## Endless play and seasons
+
+The game never runs out of things to aim for, and none of it is random loot.
+
+- **Legacy ambitions** (`legacyAmbition` in `content/ambitions.ts`): past
+  rung IV every path keeps going — Vast Isle, Great Works, Merchant Prince,
+  Evergreen, Sky City, Endless Song, Perfectionist — with goals that grow
+  each rung (linear for counts, ×2 for production) and pay
+  150 × 1.5^(L−1) Marks plus a perk point. Ids are `<path>_<rung>`.
+- **Legend perks**: Evergreen (+3 % tree and field growth), Craftsman
+  (+2 % machine speed), Renowned (+2 % contract Marks) — no rank cap, so
+  perk points from endless renown always have a use.
+- **Grandmaster stars**: mastery continues past V at each further ×10
+  (renown only; the speed bonus stops at V, +25 %).
+- **Charm milestones** continue every 500 past 1000.
+- **Resonance** (already endless) remains the Aether path's long goal.
+- **Seasons** (`content/seasons.ts`): spring, summer, autumn, winter, four
+  days each (a 160-minute year). Multipliers on field crops, tree regrowth,
+  wind, dew, bees and settler appetite; every season helps something and
+  slows something. Shown on the clock (coloured bar, tap for details), with
+  snow in winter, falling leaves in autumn and a gentle colour grade.
+
+## Review fixes (this pass)
+- Offline progress no longer replays items sent into the forge or a
+  trading post as a loss; the away screen lists what machines used up.
+- Settler roles and the idle bonus apply to every machine (via
+  `machineSpeed`), as their descriptions say.
+- Removing a Wisp Roost returns what its wisps carried and frees their
+  claimed machines.
+- A summon with no room to dock refunds its cost.
+- Felling a fruit tree returns its own sapling.
+- Contract notifications show the Marks actually paid; machine panels show
+  the true cycle time and buffer sizes.
+- Saves clamp settler roles to the settlers there are, drop unknown
+  ambition ids and refund the retired air dock.
+- Bursts of notifications are folded (at most three on screen).

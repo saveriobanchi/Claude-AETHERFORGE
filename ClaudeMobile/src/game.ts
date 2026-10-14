@@ -122,7 +122,7 @@ export class Game {
     void store.persist();
 
     this.ui.refreshAll();
-    if (offline && (Object.keys(offline.gained).length || offline.seconds > 600)) this.ui.showAway(offline);
+    if (offline && (Object.keys(offline.gained).length || Object.keys(offline.spent).length || offline.seconds > 600)) this.ui.showAway(offline);
     if (this.recovered) this.ui.hint('Your world was restored from a backup.', false, 4000);
     document.getElementById('boot')?.classList.add('gone');
     (window as unknown as { gameReady: boolean; game: Game; actions: typeof A }).gameReady = true;
@@ -427,7 +427,7 @@ export class Game {
         if (away > 2) {
           const rep = applyOffline(this.s, away);
           this.consumeEvents();
-          if (rep && (Object.keys(rep.gained).length || away > 600)) this.ui.showAway(rep);
+          if (rep && (Object.keys(rep.gained).length || Object.keys(rep.spent).length || away > 600)) this.ui.showAway(rep);
           this.ui.refreshAll();
         }
       }

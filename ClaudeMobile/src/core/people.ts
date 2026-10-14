@@ -4,6 +4,7 @@ import {
   ARRIVE_EVERY, DESIGN, FOODS, HOME_CAPACITY, IDLE_BONUS, LEAVE_AFTER, MEAL_EVERY, MEMORY,
   ROLES, type Role, SPECIALIST_BONUS,
 } from './content/people';
+import { seasonFor } from './content/seasons';
 import { type Building, type GameState, canAfford, pay } from './state';
 
 /** Settlers: housing, meals, contentment and the roles the player assigns. */
@@ -92,7 +93,7 @@ export function tickPeople(s: GameState, dt: number): void {
   } else p.arriveT = 0;
   if (!p.count) { p.hungry = 0; return; }
   p.mealT += dt;
-  const every = MEAL_EVERY / Math.max(1, present(s));
+  const every = MEAL_EVERY / Math.max(1, present(s)) / seasonFor(s.time).appetite;
   while (p.mealT >= every) {
     p.mealT -= every;
     if (eat(s)) p.hungry = 0;

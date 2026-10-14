@@ -19,7 +19,8 @@ export type Goal =
   | { t: 'renown'; n: number }                               // renown level (as shown, 1-based)
   | { t: 'codex'; n: number }
   | { t: 'settlers'; n: number }
-  | { t: 'blueprints'; n: number };
+  | { t: 'blueprints'; n: number }
+  | { t: 'maxed'; n: number };                               // machines at the top upgrade level
 
 export type PathId = 'land' | 'industry' | 'trade' | 'nature' | 'settlement' | 'aether' | 'invention';
 
@@ -131,10 +132,50 @@ const LADDERS: Record<PathId, Rung[]> = {
 export const AMBITIONS: AmbitionDef[] = PATHS.flatMap((p) =>
   LADDERS[p.id].map((r, i) => ({ ...r, id: `${p.id}_${i + 1}`, path: p.id, rung: i + 1 })));
 export const AMBITION: Record<string, AmbitionDef> = Object.fromEntries(AMBITIONS.map((a) => [a.id, a]));
+/** Rungs per path that are written by hand; past them, legacy rungs go on forever. */
+export const LADDER_RUNGS = 4;
+
+export function roman(n: number): string {
+  const R: [number, string][] = [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];
+  let out = '';
+  for (const [v, s] of R) while (n >= v) { out += s; n -= v; }
+  return out || '0';
+}
+
+/** Legacy ambitions: endless, steadily harder rungs that keep every path alive. L = 1, 2, 3… */
+const LEGACY: Record<PathId, { title: string; intro: string; goals: (L: number) => Goal[] }> = {
+  land: { title: 'Vast Isle', intro: 'More ground, and lovelier for it.', goals: (L) => [{ t: 'tiles', n: 100 + 50 * L }, { t: 'charm', n: 300 + 150 * L }] },
+  industry: { title: 'Great Works', intro: 'The machines never rest; neither does ambition.', goals: (L) => [{ t: 'made', item: 'mechanism', n: 20 * 2 ** L }, { t: 'made', item: 'sunmetal', n: 10 * 2 ** L }] },
+  trade: { title: 'Merchant Prince', intro: 'Every contract adds to a legend.', goals: (L) => [{ t: 'contracts', n: 100 + 60 * L }] },
+  nature: { title: 'Evergreen', intro: 'Orchards without end.', goals: (L) => [{ t: 'built', type: '*fruit', n: 8 + 2 * L, label: `Grow ${8 + 2 * L} fruit trees` }, { t: 'made', item: 'honey', n: 20 * 2 ** L }] },
+  settlement: { title: 'Sky City', intro: 'More homes, more neighbours, more pies.', goals: (L) => [{ t: 'settlers', n: 12 + 4 * L }, { t: 'made', item: 'pie', n: 10 * 2 ** L }] },
+  aether: { title: 'Endless Song', intro: 'The Aetherforge can always sing higher.', goals: (L) => [{ t: 'resonance', n: 3 + 2 * L }] },
+  invention: { title: 'Perfectionist', intro: 'Every machine at its very best.', goals: (L) => [{ t: 'maxed', n: 2 * L }] },
+};
+
+export function legacyAmbition(path: PathId, rung: number): AmbitionDef {
+  const L = rung - LADDER_RUNGS, d = LEGACY[path];
+  return { id: `${path}_${rung}`, path, rung, title: `${d.title} ${roman(L)}`, intro: d.intro, goals: d.goals(L),
+    reward: { marks: Math.round(150 * Math.pow(1.5, L - 1)), points: 1 } };
+}
+
+/** Any ambition by id, hand-written or legacy. */
+export function ambitionById(id: string): AmbitionDef | null {
+  if (AMBITION[id]) return AMBITION[id];
+  const m = /^([a-z]+)_(\d+)$/.exec(id);
+  if (!m || !(m[1] in LEGACY)) return null;
+  const rung = Number(m[2]);
+  return rung > LADDER_RUNGS && rung < 10000 ? legacyAmbition(m[1] as PathId, rung) : null;
+}
 export const AMBITION_XP = 60;
 
-/** Charm milestones: each grants renown. */
+/** Charm milestones: each grants renown. Past 1000, every further 500 is another. */
 export const CHARM_MILESTONES = [20, 60, 150, 300, 600, 1000];
+export function charmMilestones(charm: number): number[] {
+  const out = CHARM_MILESTONES.filter((m) => m <= charm);
+  for (let m = 1500; m <= charm; m += 500) out.push(m);
+  return out;
+}
 export const CHARM_XP = 40;
 /** Contract Marks bonus from charm: +1% per 5 charm, up to +30%. */
 export const charmTradeBonus = (charm: number) => Math.min(0.3, Math.floor(charm / 5) / 100);

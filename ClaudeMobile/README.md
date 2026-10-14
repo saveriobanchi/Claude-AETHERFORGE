@@ -56,7 +56,9 @@ camera drifts so you can simply watch the island live.
   crafted, built and earned.
 - Twenty decor pieces to make the island your own (charm makes traders pay
   more).
-- An endgame that keeps going.
+- An endgame that never ends: legacy ambitions on every path, perks with
+  no cap, grandmaster mastery, endless resonance and charm — and seasons
+  that turn the year, so the island never plays quite the same way twice.
 
 The rest is meant to be discovered. (Developers: see `docs/dev/DESIGN.md`,
 which contains spoilers.)

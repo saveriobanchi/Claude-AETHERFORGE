@@ -75,7 +75,7 @@ describe('renown and perks', () => {
     expect(A.respec(s).ok).toBe(true);
     expect(s.renown.points).toBe(3);
     expect(s.trade.marks).toBe(90);
-    expect(PERKS.length).toBe(12);
+    expect(PERKS.length).toBe(15);
   });
 
   it('lucky gears raise lucky output', () => {

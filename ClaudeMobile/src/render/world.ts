@@ -4,6 +4,10 @@ import { BIOMES } from '../core/content/biomes';
 import { ITEM_IDS, type ItemId } from '../core/content/items';
 import { RECIPES } from '../core/content/recipes';
 import { ISLETS, SUMMON_TIME } from '../core/content/world';
+import { seasonFor } from '../core/content/seasons';
+
+/** A gentle colour grade per season (multiplies the time-of-day tint). */
+const SEASON_GRADE: Record<string, [number, number, number]> = { spring: [1, 1, 1], summer: [1, 0.99, 0.95], autumn: [1, 0.94, 0.86], winter: [0.9, 0.95, 1] };
 import { currentRecipe, weatherNow } from '../core/sim';
 import { type Building, type GameState, type SimEvent, DX, DY, dayFraction, key, stackTotal } from '../core/state';
 import { P } from './art/palette';
@@ -549,9 +553,12 @@ export class WorldView {
     this.worldView.position.set(this.vw / 2 - (this.cam.x - shx / z) * z - rx * z / k, this.vh / 2 - (this.cam.y - shy / z) * z - ry * z / k);
 
     this.sky.weather = weatherNow(s).id;
+    this.sky.season = seasonFor(s.time).id;
     const sky = this.sky.update(dayFraction(s), this.time, this.cam.x * z, this.cam.y * z, this.vw, this.vh, o.reduced, !o.observe || true, (this.islandBottom - this.cam.y) * z + this.vh / 2);
     this.night = sky.night;
-    for (const layer of [this.terrain, this.shadows, this.floor, this.items, this.objects, this.fx.layer]) layer.tint = sky.tint;
+    const grade = SEASON_GRADE[this.sky.season] ?? [1, 1, 1];
+    const tint = ((Math.min(255, ((sky.tint >> 16) & 255) * grade[0]) << 16) | (Math.min(255, ((sky.tint >> 8) & 255) * grade[1]) << 8) | Math.min(255, (sky.tint & 255) * grade[2])) >>> 0;
+    for (const layer of [this.terrain, this.shadows, this.floor, this.items, this.objects, this.fx.layer]) layer.tint = tint;
 
     // visible world rect
     const margin = 140;

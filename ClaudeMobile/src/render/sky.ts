@@ -167,6 +167,10 @@ export class Sky {
   private meteors = new Graphics();
   /** Today's weather id (set by the world each frame). */
   weather = 'clear';
+  /** Current season id (set by the world each frame). */
+  season = 'spring';
+  private snow: TilingSprite;
+  private leaves: TilingSprite;
 
   constructor() {
     // rain: pale diagonal streaks on a tile; veil: flat tint for fog and overcast
@@ -185,7 +189,25 @@ export class Sky {
     this.rain.visible = false;
     this.veil = new Sprite(Texture.WHITE);
     this.veil.visible = false;
-    this.front.addChild(this.veil, this.rain, this.meteors);
+    // seasons: soft pixel snowflakes in winter, drifting leaves in autumn
+    const flakes = (cols: string[], n: number, size: number) => {
+      const c = document.createElement('canvas');
+      c.width = 96; c.height = 96;
+      const x = c.getContext('2d')!;
+      for (let i = 0; i < n; i++) {
+        x.fillStyle = cols[i % cols.length];
+        const px = (i * 41 + (i * i) % 17) % 96, py = (i * 29 + (i * 7) % 13) % 96;
+        x.fillRect(px, py, size, size);
+        if (size > 1 && i % 2) x.fillRect(px + size, py + 1, 1, 1);
+      }
+      const t = Texture.from(c);
+      t.source.scaleMode = 'nearest';
+      return new TilingSprite({ texture: t, width: 100, height: 100 });
+    };
+    this.snow = flakes(['rgba(255,255,255,0.9)', 'rgba(220,236,255,0.75)'], 18, 2);
+    this.leaves = flakes(['#e07a3a', '#c8502a', '#e8b040', '#a85a2a'], 7, 2);
+    this.snow.visible = this.leaves.visible = false;
+    this.front.addChild(this.veil, this.rain, this.snow, this.leaves, this.meteors);
 
     this.grad = document.createElement('canvas');
     this.grad.width = 1;
@@ -321,6 +343,20 @@ export class Sky {
       this.rain.tileScale.set(2);
       this.rain.tilePosition.set(-t * 60 - camX * 0.2, t * 420 - camY * 0.2);
       this.rain.alpha = 0.75;
+    }
+    this.snow.visible = this.season === 'winter' && !reduced && w !== 'rain';
+    if (this.snow.visible) {
+      this.snow.width = vw; this.snow.height = vh;
+      this.snow.tileScale.set(2);
+      this.snow.tilePosition.set(Math.sin(t * 0.4) * 30 - camX * 0.2, t * 40 - camY * 0.2);
+      this.snow.alpha = 0.8;
+    }
+    this.leaves.visible = this.season === 'autumn' && !reduced && w !== 'rain';
+    if (this.leaves.visible) {
+      this.leaves.width = vw; this.leaves.height = vh;
+      this.leaves.tileScale.set(2);
+      this.leaves.tilePosition.set(-t * 35 + Math.sin(t * 0.7) * 20 - camX * 0.2, t * 26 - camY * 0.2);
+      this.leaves.alpha = 0.85;
     }
     this.veil.visible = w === 'rain' || w === 'fog';
     if (this.veil.visible) {

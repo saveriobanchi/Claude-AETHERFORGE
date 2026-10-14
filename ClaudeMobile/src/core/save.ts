@@ -7,6 +7,10 @@ import {
 import { rebuildCache } from './sim';
 import type { Contract } from './content/trade';
 import { BIOMES, type BiomeId } from './content/biomes';
+import { ambitionById } from './content/ambitions';
+import { ROLES } from './content/people';
+
+const RETIRED_AIRDOCK: Stack = { plank: 40, cloth: 12, gear: 10, iron: 10 };
 
 /** On-disk shape (current version). Plain JSON; Maps flattened to arrays. */
 export interface SaveData {
@@ -125,7 +129,7 @@ export const MIGRATIONS: Record<number, (d: AnySave) => AnySave> = {
   // v4 → v5: renown and perks; mastery counts start from what was gathered.
   // v5 → v6: chapters (older worlds catch up — finished chapters pay out on load).
   5: (d) => ({ ...d, v: 6, chapters: d.chapters ?? 0 }),
-  // v6 → v7: settlers and ambitions (chapters are converted on load).
+  // v6 → v7: settlers and ambitions. Chapters are dropped; ambitions whose goals the world already meets are achieved (and paid) on load.
   6: (d) => ({ ...d, v: 7, people: d.people ?? emptyPeople() }),
   4: (d) => ({ ...d, v: 5, renown: d.renown ?? emptyRenown(), stats: { ...(d.stats ?? {}), made: d.stats?.made ?? d.stats?.obtained ?? {} } }),
 };
@@ -160,9 +164,11 @@ export function deserialize(raw: unknown): { state: GameState; view?: SaveData['
   }
   if (!s.tiles.size) throw new Error('Save has no ground');
   let maxId = 0;
+  const pendingRefund: Stack[] = [];
   for (const [id, type, x, y, dir, e] of d.buildings ?? []) {
     const def = BUILDINGS[type];
-    if (!def) continue;
+    // a building that no longer exists gives its materials back (the retired air dock)
+    if (!def) { if (type === 'airdock') pendingRefund.push(RETIRED_AIRDOCK); continue; }
     const b = newBuilding(id, type, x, y, ((dir | 0) & 3) as Dir);
     b.recipe = e.recipe ?? null;
     b.progress = e.progress ?? 0;
@@ -191,10 +197,18 @@ export function deserialize(raw: unknown): { state: GameState; view?: SaveData['
   s.stats.obtained = cleanStack(s.stats.obtained);
   s.stats.made = cleanStack(s.stats.made);
   const rn = d.renown ?? emptyRenown();
-  s.ambitions = new Set((d.ambitions ?? []).filter((a) => typeof a === 'string'));
+  for (const c of pendingRefund) for (const k in c) if (isItemId(k)) s.stash[k] += c[k as ItemId] ?? 0;
+  s.ambitions = new Set((d.ambitions ?? []).filter((a) => typeof a === 'string' && !!ambitionById(a)));
   s.pinned = typeof d.pinned === 'string' ? d.pinned : null;
   const pp = d.people ?? emptyPeople();
-  s.people = { ...emptyPeople(), count: Math.max(0, Math.floor(pp.count ?? 0)), mealT: pp.mealT ?? 0, arriveT: pp.arriveT ?? 0, hungry: pp.hungry ?? 0, roles: { ...(pp.roles ?? {}) }, meals: (pp.meals ?? []).filter((m) => isItemId(m)) as ItemId[] };
+  s.people = { ...emptyPeople(), count: Math.max(0, Math.floor(pp.count ?? 0)), mealT: pp.mealT ?? 0, arriveT: pp.arriveT ?? 0, hungry: pp.hungry ?? 0, roles: {}, meals: (pp.meals ?? []).filter((m) => isItemId(m)) as ItemId[] };
+  // roles: whole, non-negative, and never more than there are settlers
+  let free = s.people.count;
+  for (const r of ROLES) {
+    const n = Math.min(free, Math.max(0, Math.floor(Number(pp.roles?.[r.id] ?? 0) || 0)));
+    if (n) s.people.roles[r.id] = n;
+    free -= n;
+  }
   s.renown = { ...emptyRenown(), ...rn, perks: { ...(rn.perks ?? {}) }, codex: [...(rn.codex ?? [])] };
   s.known = new Set(d.known ?? ['start']);
   s.known.add('start');

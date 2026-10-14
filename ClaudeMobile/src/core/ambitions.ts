@@ -1,6 +1,7 @@
 import { BUILDINGS } from './content/buildings';
 import { FRUIT_BY_TREE } from './content/biomes';
-import { AMBITIONS, AMBITION_XP, PATHS, type AmbitionDef, type Goal, type PathId, CHARM_MILESTONES, CHARM_XP } from './content/ambitions';
+import { AMBITIONS, AMBITION_XP, LADDER_RUNGS, PATHS, type AmbitionDef, type Goal, type PathId, CHARM_XP, charmMilestones, legacyAmbition } from './content/ambitions';
+import { MAX_LEVEL } from './content/trade';
 import { BLUEPRINTS } from './content/people';
 import { ITEMS, type ItemId } from './content/items';
 import { checkDiscoveries } from './progression';
@@ -47,6 +48,7 @@ export function goalValue(s: GameState, g: Goal): number {
     case 'codex': return s.renown.codex.length;
     case 'settlers': return s.people.count;
     case 'blueprints': return BLUEPRINTS.filter((b) => s.known.has(b)).length;
+    case 'maxed': { let n = 0; for (const b of s.buildings.values()) if (b.level >= MAX_LEVEL) n++; return n; }
   }
 }
 
@@ -71,16 +73,21 @@ export function goalText(g: Goal): string {
     case 'codex': return `Complete ${g.n} codex sets`;
     case 'settlers': return `Be home to ${g.n} settlers`;
     case 'blueprints': return g.n > 1 ? `Draft ${g.n} designs` : 'Draft a design';
+    case 'maxed': return `Upgrade ${g.n} machines to level V`;
   }
 }
 
 /** The open rung of a path (the first not yet achieved), or null when the path is done. */
-export function openRung(s: GameState, path: PathId): AmbitionDef | null {
-  return AMBITIONS.find((a) => a.path === path && !s.ambitions.has(a.id)) ?? null;
+export function openRung(s: GameState, path: PathId): AmbitionDef {
+  const hand = AMBITIONS.find((a) => a.path === path && !s.ambitions.has(a.id));
+  if (hand) return hand;
+  let r = LADDER_RUNGS + 1;
+  while (s.ambitions.has(`${path}_${r}`)) r++;
+  return legacyAmbition(path, r);
 }
 
 export function openAmbitions(s: GameState): AmbitionDef[] {
-  return PATHS.map((p) => openRung(s, p.id)).filter((a): a is AmbitionDef => !!a);
+  return PATHS.map((p) => openRung(s, p.id));
 }
 
 /** 0..1 — the mean fraction of each goal. */
@@ -121,8 +128,8 @@ export function checkAmbitions(s: GameState): void {
   }
   if (any) checkDiscoveries(s);
   const ch = charm(s);
-  for (const m of CHARM_MILESTONES) {
-    if (ch < m || s.flags.has('charm_' + m)) continue;
+  for (const m of charmMilestones(ch)) {
+    if (s.flags.has('charm_' + m)) continue;
     s.flags.add('charm_' + m);
     addXp(s, CHARM_XP);
     s.events.push({ type: 'charm', milestone: m });
