@@ -724,3 +724,44 @@ body.sheet-open .hud-bottom .main-btn.on:not(.big) { border-image: var(--tex-pan
   .recipes { max-height: calc(100vh - 120px); }
 }
 .card .new { top: 1px; right: 2px; font-size: 0.5rem; text-shadow: 0 1px 0 #000; }
+.chip, .chip .num { white-space: nowrap; }
+.tab { padding: 0 6px; font-size: 0.62rem; letter-spacing: 0.04em; }
+@media (orientation: portrait) {
+  .quest { bottom: calc(92px + var(--sab)); }
+}
+
+/* ───── trade, upgrades, weather ───── */
+.clock { pointer-events: auto; cursor: pointer; }
+.clock img { width: 18px; height: 18px; }
+.clock.night img { filter: brightness(0.85) saturate(0.7); }
+.chip.marks .num { color: #ffd35a; }
+.trade-head { display: flex; align-items: center; gap: 8px; }
+.trade-head .marks { display: inline-flex; align-items: center; gap: 4px; font-size: 1rem; color: #ffd35a; }
+.trade-head .marks img { width: 20px; height: 20px; }
+.trade-head .bar { flex: 1; }
+.contract, .offer { display: flex; align-items: center; gap: 6px; border: 6px solid transparent; border-image: var(--tex-slot) 3 fill / 6px / 0 repeat; padding: 0 2px 0 0; }
+.contract.empty { justify-content: center; min-height: 40px; font-size: 0.74rem; }
+.contract .ci, .offer .ci { width: 32px; height: 32px; display: grid; place-items: center; flex: none; }
+.contract .ci img, .offer .ci img { max-width: 28px; max-height: 28px; }
+.contract .ct, .offer .ct { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.contract .nm, .offer .nm { font-family: var(--font-ui); font-weight: 600; font-size: 0.78rem; }
+.contract .sub, .offer .sub { font-size: 0.68rem; color: var(--muted); }
+.contract .bar { height: 5px; }
+.contract .bar i { background: linear-gradient(180deg, #ffe08a, #d8a03a); }
+.contract .cr { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.contract .reward { display: inline-flex; align-items: center; gap: 2px; color: #ffd35a; font-size: 0.78rem; }
+.contract .reward img, .offer .btn img, .upgrade .cost img { width: 14px; height: 14px; }
+.contract .cb { display: flex; gap: 2px; }
+.contract .cb .btn { min-height: 28px; min-width: 36px; font-size: 0.72rem; }
+.market { display: flex; flex-direction: column; gap: 4px; padding: 6px 2px; }
+.offer .btn { min-width: 64px; gap: 3px; }
+.upgrade { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.upgrade .cost { flex: 1; min-width: 0; }
+.upgrade .btn { gap: 3px; min-width: 56px; }
+.upgrade .btn img { width: 14px; height: 14px; }
+.pips { display: inline-flex; gap: 2px; }
+.pips i { width: 8px; height: 8px; background: #2c2b36; box-shadow: inset 0 0 0 1px #000; }
+.pips i.on { background: #ffd35a; box-shadow: inset 0 0 0 1px #8a5a16, inset 0 2px 0 #fff2b0; }
+.pips i.lock { opacity: 0.35; }
+.offer .btn.primary img, .upgrade .btn.primary img, .side .actions .btn.primary img.ui { filter: none; }
+.sect-h .r { font-family: 'Atkinson', system-ui, sans-serif; }

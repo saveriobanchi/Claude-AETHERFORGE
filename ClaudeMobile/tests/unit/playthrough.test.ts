@@ -52,12 +52,19 @@ describe('full playthrough', () => {
     until('iron', () => bot.ensure('iron_grit', 3));
     bot.ensure('sand', 2);
     bot.automate('smelt_iron', 1);
+    // trade: contracts for Marks, then the market's orchard, hives and lanterns
+    until('trade', () => bot.wait(10));
+    bot.buy('fruit');
+    bot.buy('hive');
+    bot.buy('lanterns');
     until('assembler', () => bot.ensure('iron', 6));
     bot.build('assembler');
     bot.buildGrove();
     bot.automate('compost', 2);
     bot.automate('saw', 1);
     bot.automate('gear', 1);
+    until('tinker', () => bot.ensure('gear', 20));
+    bot.buy('master');
     until('aether', () => { bot.ensure('mechanism', 4); bot.ensure('lens', 2); });
     tAether = bot.t;
     until('distill', () => bot.ensure('mist', 4));
@@ -78,6 +85,10 @@ describe('full playthrough', () => {
     tForgeKnown = bot.t;
     bot.automate('plate', 1);
     bot.automate('wire', 1);
+    // the Heart stage eats copper (wire, sunmetal): widen the copper line first
+    bot.automate('crush', 1);
+    bot.automate('sift_gravel', 2);
+    bot.automate('smelt_copper', 1);
     bot.buildForge();
     } finally { dump(); }
 

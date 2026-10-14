@@ -1,4 +1,6 @@
-import { BUILDINGS, HARVESTER_INTERVAL, DISPATCH_INTERVAL, NODE_YIELD, TREE, TUFT } from './content/buildings';
+import { BUILDINGS, HARVESTER_INTERVAL, DISPATCH_INTERVAL, HIVE, NODE_YIELD, ORCHARD, TREE, TUFT, type BuildingDef } from './content/buildings';
+import { BOARD_SIZE, CONTRACT_REFRESH, contractPool, levelBuffer, levelSpeed, makeContract, repForLevel } from './content/trade';
+import { type WeatherDef, dayIndex, weatherFor } from './content/weather';
 import type { ItemId, Stack } from './content/items';
 import { FUEL_VALUE, RECIPES, recipesFor, type RecipeDef } from './content/recipes';
 import { ISLETS, FORGE_STAGES, resonanceRequest } from './content/world';
@@ -16,6 +18,16 @@ const WISP_SPEED = 3.2;
 const WISP_LOAD = 6;
 const FLOW_BUCKET = 30;
 const FLOW_HISTORY = 10;
+
+/** Today's weather. */
+export function weatherNow(s: GameState): WeatherDef {
+  return weatherFor(dayIndex(s.time), s.seed);
+}
+
+/** Buffer capacity of a machine, grown by its upgrade level. */
+export function bufCap(def: BuildingDef, b: Building, fallback = 12): number {
+  return Math.round((def.bufferCap ?? fallback) * levelBuffer(b.level));
+}
 
 // ───────────────────────────────── topology ─────────────────────────────────
 
@@ -73,7 +85,7 @@ export function rebuildCache(s: GameState): void {
     const list: number[] = [];
     for (const m of c.machines) {
       const k = BUILDINGS[m.type].kind;
-      if (!['crafter', 'generator', 'harvester', 'drill', 'engine'].includes(k)) continue;
+      if (!['crafter', 'generator', 'harvester', 'drill', 'engine', 'hive'].includes(k)) continue;
       if (Math.abs(m.x - r.x) <= rad && Math.abs(m.y - r.y) <= rad) list.push(m.id);
     }
     c.roostTargets.set(r.id, list);
@@ -124,7 +136,7 @@ export function offer(s: GameState, t: Building, item: ItemId, from: Dir): boole
     case 'crafter': {
       const r = currentRecipe(t);
       if (!r) return false;
-      const cap = def.bufferCap ?? 12;
+      const cap = bufCap(def, t);
       if (r.inputs[item] !== undefined) {
         if ((t.inBuf[item] ?? 0) >= Math.max(cap, (r.inputs[item] ?? 0) * 2)) return false;
         addTo(t.inBuf, item, 1);
@@ -161,6 +173,8 @@ export function offer(s: GameState, t: Building, item: ItemId, from: Dir): boole
     }
     case 'forge':
       return forgeAccept(s, item, 1) === 1;
+    case 'post':
+      return contractAccept(s, item);
     default:
       return false;
   }
@@ -236,11 +250,11 @@ function advanceForge(s: GameState): void {
 // ───────────────────────────────── machines ─────────────────────────────────
 
 function machineSpeed(s: GameState, b: Building): number {
-  return (s.cache.boost.get(b.id) ?? 1) * (1 + 0.1 * attuneRank(s, 'swift'));
+  return (s.cache.boost.get(b.id) ?? 1) * (1 + 0.1 * attuneRank(s, 'swift')) * levelSpeed(b.level);
 }
 
-function outputsFit(def: { bufferCap?: number }, b: Building, r: RecipeDef): boolean {
-  const cap = def.bufferCap ?? 12;
+function outputsFit(def: BuildingDef, b: Building, r: RecipeDef): boolean {
+  const cap = bufCap(def, b);
   for (const k in r.outputs) if ((b.outBuf[k as ItemId] ?? 0) + (r.outputs[k as ItemId] ?? 0) > cap) return false;
   return true;
 }
@@ -289,8 +303,12 @@ function tickGenerator(s: GameState, b: Building, dt: number): void {
   const def = BUILDINGS[b.type];
   const p = def.produces!;
   if (p.nightOnly && !isNight(s)) { b.status = 'night'; return; }
-  if ((b.outBuf[p.item] ?? 0) >= (def.bufferCap ?? 10)) { b.status = 'blocked'; return; }
+  if ((b.outBuf[p.item] ?? 0) >= bufCap(def, b, 10)) { b.status = 'blocked'; return; }
   let rate = machineSpeed(s, b);
+  const w = weatherNow(s);
+  if (p.item === 'dew') rate *= w.dew;
+  else if (p.item === 'mist') rate *= w.mist;
+  else if (p.item === 'stardust') rate *= w.stardust;
   if (def.power) {
     s.power.nextDemand += def.power;
     rate *= s.power.ratio;
@@ -316,6 +334,18 @@ export function harvestTree(s: GameState, t: Building, sink: (item: ItemId, n: n
   const got: Stack = {};
   if (t.stock < 1) return got;
   t.stock -= 1;
+  if (t.type === 'fruit_tree') {
+    const y: Stack = { ...ORCHARD.yield };
+    // bees nearby pollinate: an extra apple
+    if (hivesNear(s, t) > 0) y.apple = (y.apple ?? 0) + 1;
+    for (const k in y) {
+      const n = sink(k as ItemId, y[k as ItemId] ?? 0);
+      if (n) got[k as ItemId] = n;
+    }
+    s.stats.harvests++;
+    if (rand(s) < ORCHARD.saplingChance && sink('fruit_sapling', 1)) got.fruit_sapling = 1;
+    return got;
+  }
   const y = elder ? TREE.elderYield : TREE.yield;
   for (const k in y) {
     const item = k as ItemId;
@@ -338,7 +368,7 @@ export function harvestTree(s: GameState, t: Building, sink: (item: ItemId, n: n
 
 function tickHarvester(s: GameState, b: Building, dt: number): void {
   const def = BUILDINGS[b.type];
-  const full = stackTotal(b.outBuf) >= (def.bufferCap ?? 24) - 3;
+  const full = stackTotal(b.outBuf) >= bufCap(def, b, 24) - 3;
   if (full) { b.status = 'blocked'; return; }
   b.timer += dt * machineSpeed(s, b);
   const ready: Building[] = [];
@@ -372,7 +402,7 @@ function tickDrill(s: GameState, b: Building, dt: number): void {
     if (t && BUILDINGS[t.type].kind === 'node') node = t;
   }
   if (!node) { b.status = 'noinput'; return; }
-  if (stackTotal(b.outBuf) >= (def.bufferCap ?? 16)) { b.status = 'blocked'; return; }
+  if (stackTotal(b.outBuf) >= bufCap(def, b, 16)) { b.status = 'blocked'; return; }
   s.power.nextDemand += def.power ?? 0;
   if (s.power.ratio <= 0) { b.status = 'nopower'; return; }
   b.status = 'working';
@@ -609,11 +639,11 @@ function findWispJob(s: GameState, w: (typeof s.wisps)[number], roost: Building)
 function tickNature(s: GameState, b: Building, dt: number): void {
   const def = BUILDINGS[b.type];
   if (def.kind === 'tree') {
-    const elder = b.type === 'elder_tree';
-    const max = elder ? TREE.elderMaxStock : TREE.maxStock;
+    const elder = b.type === 'elder_tree', fruit = b.type === 'fruit_tree';
+    const max = elder ? TREE.elderMaxStock : fruit ? ORCHARD.maxStock : TREE.maxStock;
     if (b.stock < max) {
-      b.timer += dt;
-      const per = elder ? TREE.elderRegrow : TREE.regrow;
+      b.timer += dt * weatherNow(s).regrow;
+      const per = elder ? TREE.elderRegrow : fruit ? ORCHARD.regrow : TREE.regrow;
       if (b.timer >= per) { b.timer -= per; b.stock++; }
       b.status = 'working';
     } else { b.timer = 0; b.status = 'ready'; }
@@ -621,7 +651,7 @@ function tickNature(s: GameState, b: Building, dt: number): void {
     b.progress += dt;
     b.status = 'working';
     if (b.progress >= TREE.saplingGrowTime) {
-      b.type = 'tree';
+      b.type = def.growsInto ?? 'tree';
       b.stock = 2;
       b.progress = 0;
       b.timer = 0;
@@ -629,6 +659,94 @@ function tickNature(s: GameState, b: Building, dt: number): void {
       s.events.push({ type: 'grown', x: b.x, y: b.y });
     }
   }
+}
+
+// ───────────────────────────────── bees ─────────────────────────────────
+
+function treesNear(s: GameState, b: Building): number {
+  let n = 0;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && isTree(buildingAt(s, b.x + dx, b.y + dy))) n++;
+  return n;
+}
+function hivesNear(s: GameState, b: Building): number {
+  let n = 0;
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    const t = (dx || dy) ? buildingAt(s, b.x + dx, b.y + dy) : undefined;
+    if (t && BUILDINGS[t.type].kind === 'hive') n++;
+  }
+  return n;
+}
+
+function tickHive(s: GameState, b: Building, dt: number): void {
+  const def = BUILDINGS[b.type];
+  const trees = Math.min(HIVE.maxTrees, treesNear(s, b));
+  if (!trees) { b.status = 'noinput'; return; }
+  if (stackTotal(b.outBuf) >= bufCap(def, b)) { b.status = 'blocked'; return; }
+  b.status = 'working';
+  b.progress += dt * machineSpeed(s, b) * (1 + HIVE.perTree * trees);
+  const every = def.produces?.every ?? 15;
+  if (b.progress >= every) {
+    b.progress -= every;
+    addTo(b.outBuf, 'honey', 1);
+    if (rand(s) < HIVE.waxChance) addTo(b.outBuf, 'wax', 1);
+    b.cycles++;
+    s.events.push({ type: 'cycle', id: b.id });
+  }
+}
+
+// ───────────────────────────────── trade ─────────────────────────────────
+
+/** A belt or wisp offers an item to a trading post: accepted if a contract wants it. */
+function contractAccept(s: GameState, item: ItemId): boolean {
+  const tr = s.trade;
+  for (let i = 0; i < tr.board.length; i++) {
+    const c = tr.board[i];
+    if (!c || c.item !== item || c.got >= c.n) continue;
+    c.got++;
+    s.stats.delivered++;
+    if (c.got >= c.n) completeContract(s, i);
+    return true;
+  }
+  return false;
+}
+
+/** Pay out a finished contract and schedule its replacement. */
+export function completeContract(s: GameState, i: number): void {
+  const tr = s.trade;
+  const c = tr.board[i];
+  if (!c) return;
+  tr.marks += c.marks;
+  tr.earned += c.marks;
+  tr.rep += c.marks;
+  tr.done++;
+  s.events.push({ type: 'contract', item: c.item, marks: c.marks });
+  while (tr.rep >= repForLevel(tr.level)) {
+    tr.rep -= repForLevel(tr.level);
+    tr.level++;
+    s.events.push({ type: 'trade_level', level: tr.level });
+  }
+  tr.board[i] = null;
+  tr.refresh[i] = CONTRACT_REFRESH;
+}
+
+/** Fill empty board slots whose refresh time has passed. */
+export function fillBoard(s: GameState, force = false, avoidAlso: ItemId[] = []): void {
+  const tr = s.trade;
+  const pool = contractPool(s.stats.obtained);
+  for (let i = 0; i < BOARD_SIZE; i++) {
+    if (tr.board[i] || (!force && tr.refresh[i] > 0)) continue;
+    const avoid = [...avoidAlso, ...tr.board.filter((c): c is NonNullable<typeof c> => !!c).map((c) => c.item)];
+    tr.board[i] = makeContract(pool, tr.level, rand(s), rand(s), avoid);
+    tr.refresh[i] = 0;
+  }
+}
+
+function tickTrade(s: GameState, dt: number, hasPost: boolean): void {
+  const tr = s.trade;
+  if (tr.skipCd > 0) tr.skipCd = Math.max(0, tr.skipCd - dt);
+  if (!hasPost) return;
+  for (let i = 0; i < BOARD_SIZE; i++) if (tr.refresh[i] > 0) tr.refresh[i] = Math.max(0, tr.refresh[i] - dt);
+  if (tr.board.some((c) => !c)) fillBoard(s);
 }
 
 function spawnTufts(s: GameState, dt: number): void {
@@ -725,7 +843,7 @@ export function tick(s: GameState, dt = TICK): void {
   s.stats.playSeconds += dt;
 
   // Power: generation from wind; demand measured last tick. Engines cover any shortfall.
-  const wind = windFactor(s.time);
+  const wind = windFactor(s.time) * weatherNow(s).wind;
   s.power.wind = wind;
   let windGen = 0;
   const engines: Building[] = [];
@@ -733,7 +851,7 @@ export function tick(s: GameState, dt = TICK): void {
     const def = BUILDINGS[b.type];
     if (def.kind === 'windmill') {
       const edge = s.cache.edge.has(key(b.x, b.y)) ? 1.25 : 1;
-      windGen += (def.powerGen ?? 6) * wind * edge * (1 + 0.15 * attuneRank(s, 'tailwind'));
+      windGen += (def.powerGen ?? 6) * wind * edge * (1 + 0.15 * attuneRank(s, 'tailwind')) * levelSpeed(b.level);
       b.status = 'working';
     } else if (def.kind === 'engine') engines.push(b);
   }
@@ -749,6 +867,7 @@ export function tick(s: GameState, dt = TICK): void {
   if (s.power.demand <= 0) s.power.ratio = gen > 0 ? 1 : 0;
   s.power.nextDemand = 0;
 
+  let hasPost = false;
   for (const b of s.cache.machines) {
     const def = BUILDINGS[b.type];
     switch (def.kind) {
@@ -759,6 +878,8 @@ export function tick(s: GameState, dt = TICK): void {
       case 'dispatcher': tickDispatcher(s, b, dt); break;
       case 'splitter': case 'sorter': tickRouter(s, b); break;
       case 'tree': case 'sapling': tickNature(s, b, dt); break;
+      case 'hive': tickHive(s, b, dt); pushOutput(s, b, dt); break;
+      case 'post': hasPost = true; b.status = s.trade.board.some((c) => c) ? 'working' : 'idle'; break;
       case 'roost':
         s.power.nextDemand += def.power ?? 0;
         b.status = s.power.ratio > 0 ? 'working' : 'nopower';
@@ -774,6 +895,7 @@ export function tick(s: GameState, dt = TICK): void {
 
   spawnTufts(s, dt);
   tickSummon(s, dt);
+  tickTrade(s, dt, hasPost);
 
   const f = s.flow.cur;
   f.dt += dt;

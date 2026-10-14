@@ -66,8 +66,9 @@ next few appears in the journal.
 `tests/unit/playthrough.test.ts` drives an unoptimised scripted player that
 uses one-machine-per-cell layouts (no shared conveyors, no pylons, no wisps):
 
-- automation ≈ 10 min, conveyors ≈ 20 min, wind ≈ 25 min, iron ≈ 2.8 h,
-  aether ≈ 5.4 h, the Great Work discovered ≈ 8.3 h, completed ≈ 17 h.
+- automation ≈ 10 min, conveyors ≈ 20 min, trade ≈ 20 min, wind ≈ 25 min,
+  iron ≈ 2.6 h, hives & orchards ≈ 3.5 h, aether ≈ 5.7 h, the Great Work
+  discovered ≈ 7.7 h, completed ≈ 14 h (with daily weather on).
 
 A human using dense layouts, pylons and wisps will be faster through the
 middle; the endless resonance levels then scale geometrically.
@@ -81,3 +82,54 @@ middle; the endless resonance levels then scale geometrically.
   paved (also found by the bot).
 - Machine sprites are never mirrored (it would flip the light direction);
   output direction is shown by a brass chevron on the ground.
+
+## Expansion: trade, upgrades, weather, orchards & hives
+
+Goal: more variety without leaving the managerial grind. Every addition is
+another reason to scale a production line, not a new minigame.
+
+### Sky Traders (managerial core loop)
+- Discovery **Sails** (after *Flow*, 60 items delivered) unlocks the
+  **Trading Post** (edge only). Its board always holds 3 **contracts**:
+  "deliver N × item". No timers and no expiry: a contract waits until it's done.
+- Fill a contract by routing conveyors into the post (only items a contract
+  wants are accepted, so lines back up instead of wasting) or by handing items
+  over from the stash on the panel.
+- Rewards: **Marks** (the trade currency; only earned by playing) and
+  reputation. Trade level L raises contract sizes (×(1 + 0.3L)) and Marks.
+  A finished contract is replaced after 20 s. **Skip** swaps one contract
+  (free, 90 s cooldown) so nothing ever blocks the board.
+- Contracts pick from items the player has made before, weighted toward
+  recent tiers; orchard/hive goods are worth the most Marks.
+- The **Market** (post panel) sells, for Marks: fruit saplings, a hive kit
+  (unlocks Apiary), master tools (upgrade levels IV–V), crates of copper /
+  iron flakes / stardust (prices rise 25 % per purchase) and trade lanterns
+  (decor that glows at night). Nothing in the market is required to finish
+  the game; it accelerates and adds variety.
+
+### Machine upgrades (grind sink)
+- Discovery **Tinkering** (after *Wind*, 20 gears ever) lets production
+  machines (crafters, generators, Treewrights, drills, windmills, hives) be
+  upgraded to level III; master tools from the market allow IV–V.
+- Each level: +25 % speed (windmills: +25 % breeze) and +50 % buffers.
+- Cost to reach level L: the machine's build cost × 2^(L−1); levels IV and V
+  also cost 15 / 30 Marks. Removing a machine refunds its build cost only.
+
+### Weather (variety, planning)
+- Each in-game day rolls deterministic weather (day 1 is always clear):
+  Clear 35 %, Breezy 20 % (wind ×1.25), Calm 12 % (wind ×0.8, trees regrow
+  ×1.25), Rain 18 % (dew ×2, trees regrow ×1.5, wind ×0.95), Fog 10 % (mist
+  ×2, stardust ×0.75), Starfall 5 % (stardust ×2.5). Tomorrow's weather is
+  shown on the clock, so a player can plan around it.
+- Averages stay close to 1 so pacing measured by the bot holds.
+
+### Orchards & hives (new branch, trade goods)
+- **Fruit Sapling** (market) grows into a **Fruit Tree**: 4 stock, +1 / 8 s,
+  each harvest gives 1 apple + 1 leaf; Treewrights harvest them too.
+- **Beehive** (Apiary): needs a tree within reach (8 neighbours); makes honey
+  every 15 s (+40 % wax), faster with more trees around (×1 + 0.15 per tree,
+  max 4). Fruit trees next to a hive yield an extra apple (pollination).
+- Recipes: Stone Press 4 apple → cider; Kiln (fuel) 2 apple + 1 honey →
+  preserves; Workbench / Assembler 2 wax + 1 twine → 2 candles.
+- Apples, honey, wax, cider, candles and preserves are mostly trade goods:
+  they make the trade loop varied and give grass tiles a late-game use.

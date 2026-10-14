@@ -570,8 +570,93 @@ export function forge(c: Canvas, L: TexLib, stage: number, f = 0): void {
     }
     for (let i = 0; i < 8; i++) {
       const a = f * TAU + (i * TAU) / 8;
-      c.sprite([1.5 + Math.cos(a) * 1.1, 1.5 + Math.sin(a) * 1.1, 4.8 + bob], { tex: L.get('as/default_mese_crystal_fragment'), glow: true }, 6, 2);
+      c.sprite([1.5 + Math.cos(a) * 1.1, 1.5 + Math.sin(a) * 1.1, 4.8 + bob], { tex: L.get('as/default_mese_crystal_fragment'), glow: true }, 6, 1);
     }
     c.light([1.5, 1.5, 4.8], [90, 70, 150], 3.5);
   }
+}
+
+// ───────────────────────── trade & orchard ─────────────────────────
+
+/** Trading Post: a plank pier with a cargo crane, crates and a pennant. */
+export function tradingPost(c: Canvas, L: TexLib, f = 0): void {
+  const ctx = { c, L };
+  blk(ctx, [0, 0, 0], [1, 1, 0.1875], 'a/oak_planks', 'a/oak_log_side');
+  for (const [x, y] of [[0.02, 0.02], [0.86, 0.02], [0.02, 0.86], [0.86, 0.86]]) blk(ctx, [x, y, 0], [x + 0.12, y + 0.12, 0.45], 'a/oak_log_top', 'a/oak_log_side');
+  // rope rail
+  for (const [a, b] of [[[0.02, 0.9, 0.38], [0.98, 0.94, 0.42]], [[0.9, 0.02, 0.38], [0.94, 0.98, 0.42]]] as [V3, V3][]) blk(ctx, a, b, new Paint().rect(0, 0, 16, 16, 0xc8a86a).rect(0, 7, 16, 2, 0x8a6a3a));
+  // crates and a barrel
+  c.box([0.12, 0.42, 0.1875], [0.44, 0.74, 0.5], F(new Paint(16, 16, L.get('a/oak_planks')).frame(0, 0, 16, 16, 0x4a2e1e)), F(chestFront(L)), F(new Paint(16, 16, L.get('a/oak_planks')).frame(0, 0, 16, 16, 0x4a2e1e).rect(0, 7, 16, 1, 0x4a2e1e)), 5);
+  c.box([0.18, 0.48, 0.5], [0.38, 0.68, 0.68], F(L.get('a/hay_top')), F(L.get('a/hay_side')), F(L.get('a/hay_side')), 5);
+  blk(ctx, [0.52, 0.56, 0.1875], [0.74, 0.78, 0.5], 'a/pine_log_top', new Paint(16, 16, L.get('a/pine_planks')).rect(0, 3, 16, 1, 0x3a3440).rect(0, 12, 16, 1, 0x3a3440));
+  // crane: mast, jib and a hanging net
+  blk(ctx, [0.12, 0.12, 0.1875], [0.22, 0.22, 1.7], 'a/oak_log_top', 'a/oak_log_side');
+  const sw = Math.sin(f * TAU) * 0.04;
+  for (let i = 0; i <= 6; i++) blk(ctx, [0.12 + i * 0.12, 0.13, 1.6], [0.24 + i * 0.12, 0.21, 1.68], 'a/beech_planks');
+  c.quad([0.86 + sw, 0.17, 1.6], [0, 0, 0.001], [0, 0, -0.55], F(new Paint().rect(7, 0, 2, 16, 0xc8a86a)), [1, 1, 1], 6, 0.1);
+  c.box([0.78 + sw, 0.1, 0.85], [0.94 + sw, 0.24, 1.05], F(gridTex(0xc8a86a, 3)), F(gridTex(0xc8a86a, 3)), F(gridTex(0xc8a86a, 3)), 6);
+  c.box([0.8 + sw, 0.12, 0.87], [0.92 + sw, 0.22, 0.98], F(L.get('as/default_apple')), F(L.get('as/default_apple')), F(L.get('as/default_apple')), 6);
+  // pennant on the mast, flapping
+  const flag = new Paint(16, 8);
+  for (let x = 0; x < 16; x++) { const h = Math.round(3 - x / 6 + Math.sin(f * TAU + x * 0.6) * 1.2); for (let y = 4 - h; y <= 3 + h; y++) flag.set(x, y, x % 6 < 3 ? 0xd84a3a : 0xf0e2c4); }
+  c.quad([0.17, 0.2, 2.05], [0, 0.55, 0.0], [0, 0, -0.28], F(flag), [1, 1, 1], 6, 0.2);
+  blk(ctx, [0.15, 0.15, 1.7], [0.19, 0.19, 2.1], 'as/default_steel_block');
+  lantern(ctx, [0.92, 0.92, 0.45]);
+}
+
+/** A trader's airship (drawn beside the post while traders are docked). */
+export function airship(c: Canvas, L: TexLib, f = 0): void {
+  const ctx = { c, L };
+  const z0 = 1.2 + Math.sin(f * TAU) * 0.06;
+  // hull: stepped plank keel
+  blk(ctx, [0.3, 0.2, z0], [1.7, 0.8, z0 + 0.25], 'a/maple_planks', 'a/maple_log_side');
+  blk(ctx, [0.1, 0.1, z0 + 0.25], [1.9, 0.9, z0 + 0.55], 'a/maple_planks');
+  blk(ctx, [0.05, 0.08, z0 + 0.55], [1.95, 0.92, z0 + 0.62], 'a/oak_log_side', 'a/oak_log_side', 'a/oak_log_top');
+  blk(ctx, [1.95, 0.35, z0 + 0.3], [2.25, 0.65, z0 + 0.62], 'a/maple_planks');
+  // cargo and the cabin
+  c.box([0.4, 0.25, z0 + 0.62], [0.8, 0.65, z0 + 0.95], F(new Paint(16, 16, L.get('a/oak_planks')).frame(0, 0, 16, 16, 0x4a2e1e)), F(chestFront(L)), F(chestFront(L)), 6);
+  blk(ctx, [1.1, 0.25, z0 + 0.62], [1.6, 0.75, z0 + 1.1], 'a/beech_planks', 'a/beech_log_side');
+  c.quad([1.25, 0.751, z0 + 1.0], [0.2, 0, 0], [0, 0, -0.18], F(lanternTex(), { glow: true, uv: [4, 4, 12, 12] }), [1, 1, 1], 6, 0.01);
+  // balloon: striped canvas cylinder made of stacked slabs
+  const cloth = new Paint();
+  for (let x = 0; x < 16; x++) for (let y = 0; y < 16; y++) cloth.set(x, y, (x >> 2) % 2 ? 0xd84a3a : 0xf0e2c4);
+  const ropes = new Paint().rect(7, 0, 1, 16, 0x6a4a2a);
+  for (const x of [0.4, 1.6]) for (const y of [0.25, 0.75]) c.quad([x, y, z0 + 1.55], [0, 0, 0.001], [0, 0, -0.95], F(ropes), [1, 1, 1], 6, 0.1);
+  const prof = [0.2, 0.32, 0.38, 0.38, 0.32, 0.2];
+  for (let k = 0; k < prof.length; k++) {
+    const r = prof[k];
+    c.box([0.25 - r * 0.6, 0.5 - r, z0 + 1.55 + k * 0.17], [1.75 + r * 0.6, 0.5 + r, z0 + 1.72 + k * 0.17], F(cloth), F(cloth), F(cloth, { tint: [0.9, 0.9, 0.95] }), 6);
+  }
+  // propeller
+  const a = f * TAU * 2;
+  c.quad([-0.05, 0.5 + Math.cos(a) * 0.25, z0 + 0.45 + Math.sin(a) * 0.25], [0, -Math.cos(a) * 0.5, -Math.sin(a) * 0.5], [0.02, 0, 0], F(L.get('a/oak_planks')), [0.8, 0.8, 0.8], 6, 0.2);
+}
+
+/** Bee nest on a stump; bees circle it. */
+export function hive(c: Canvas, L: TexLib, f = 0): void {
+  const ctx = { c, L };
+  blk(ctx, [0.25, 0.25, 0], [0.75, 0.75, 0.3], 'a/oak_log_top', 'a/oak_log_side');
+  const comb = new Paint(16, 16).rect(0, 0, 16, 16, 0xd8a03a);
+  for (let y = 0; y < 16; y += 3) for (let x = (y / 3) % 2 ? 0 : 2; x < 16; x += 4) comb.rect(x, y, 2, 2, 0xf0c45a).set(x + 1, y + 1, 0xa8701a);
+  comb.rect(0, 0, 16, 2, 0x8a5a2a).rect(0, 14, 16, 2, 0x8a5a2a);
+  const front = new Paint(16, 16, comb).rect(5, 8, 6, 4, 0x3a2418).rect(6, 9, 4, 2, 0x24181a);
+  const top = new Paint(16, 16, L.get('a/hay_top')).tint([1.05, 0.9, 0.6]);
+  c.box([0.18, 0.18, 0.3], [0.82, 0.82, 0.95], F(top), F(front), F(comb), 5);
+  blk(ctx, [0.12, 0.12, 0.95], [0.88, 0.88, 1.02], 'a/oak_planks');
+  // honey drip
+  c.quad([0.6, 0.821, 0.62], [0.06, 0, 0], [0, 0, -0.18], F(new Paint().rect(0, 0, 16, 16, 0xffc04a), { glow: true }), [1, 1, 1], 5, 0.01);
+  const bee = new Paint(4, 3).draw(['wbw', 'ybk', '.k.'], { w: 0xe8f4ff, b: 0x24181a, y: 0xffd040, k: 0x24181a });
+  for (let i = 0; i < 4; i++) {
+    const a = f * TAU + (i * TAU) / 4;
+    c.sprite([0.5 + Math.cos(a) * 0.55, 0.5 + Math.sin(a) * 0.55, 0.7 + Math.sin(a * 2 + i) * 0.2], { tex: bee }, 6, 2);
+  }
+}
+
+/** A trade lantern on a post. */
+export function lanternPost(c: Canvas, L: TexLib, f = 0): void {
+  const ctx = { c, L };
+  blk(ctx, [0.38, 0.38, 0], [0.62, 0.62, 0.12], 'a/cobblestone');
+  blk(ctx, [0.45, 0.45, 0.12], [0.55, 0.55, 1.2], 'a/oak_log_top', 'a/oak_log_side');
+  blk(ctx, [0.45, 0.45, 1.15], [0.9, 0.55, 1.22], 'a/oak_planks');
+  lantern(ctx, [0.78, 0.5, 0.8 + Math.sin(f * TAU) * 0.02]);
 }

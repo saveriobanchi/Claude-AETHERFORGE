@@ -82,3 +82,18 @@ test('is an installable, offline-capable PWA', async ({ page, context }) => {
   await page.waitForFunction(() => window.gameReady === true, null, { timeout: 30_000 });
   await context.setOffline(false);
 });
+
+test('trading post: give goods for Marks, then shop in the market', async ({ page }) => {
+  await page.goto('./?demo');
+  await page.waitForFunction(() => window.gameReady === true);
+  await page.evaluate(() => { const g = window.game; const b = [...g.s.buildings.values()].find((b) => b.type === 'trading_post')!; g.select(b.id); });
+  await expect(page.locator('.contract').first()).toBeVisible();
+  const before = await page.evaluate(() => window.game.s.trade.done);
+  await page.locator('.contract .btn:has-text("Give")').first().click();
+  await expect.poll(() => page.evaluate(() => window.game.s.trade.done)).toBeGreaterThan(before);
+  await page.click('.btn:has-text("Market")');
+  await expect(page.locator('.offer').first()).toBeVisible();
+  const marks = await page.evaluate(() => window.game.s.trade.marks);
+  await page.locator('.offer .btn').first().click();
+  await expect.poll(() => page.evaluate(() => window.game.s.trade.marks)).toBeLessThan(marks);
+});

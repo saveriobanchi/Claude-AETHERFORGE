@@ -1,4 +1,4 @@
-import { Container, Sprite, Texture, TilingSprite } from 'pixi.js';
+import { Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
 import { PixelCanvas, hash2, rgb } from './art/pixel';
 import { art } from './artpack';
 
@@ -161,8 +161,32 @@ export class Sky {
   readonly pixel = 2;
   /** Light quality: skip every other cloud to cut overdraw. */
   lite = false;
+  /** Weather overlays (screen space, over the world). */
+  private rain: TilingSprite;
+  private veil: Sprite;
+  private meteors = new Graphics();
+  /** Today's weather id (set by the world each frame). */
+  weather = 'clear';
 
   constructor() {
+    // rain: pale diagonal streaks on a tile; veil: flat tint for fog and overcast
+    const rc = document.createElement('canvas');
+    rc.width = 64; rc.height = 64;
+    const rx = rc.getContext('2d')!;
+    rx.strokeStyle = 'rgba(214,232,255,0.55)';
+    rx.lineWidth = 1;
+    for (let i = 0; i < 14; i++) {
+      const x = (i * 37) % 64, y = (i * 23) % 64;
+      rx.beginPath(); rx.moveTo(x, y); rx.lineTo(x - 3, y + 9); rx.stroke();
+      rx.beginPath(); rx.moveTo(x + 64, y); rx.lineTo(x + 61, y + 9); rx.stroke();
+    }
+    const rt = Texture.from(rc);
+    this.rain = new TilingSprite({ texture: rt, width: 100, height: 100 });
+    this.rain.visible = false;
+    this.veil = new Sprite(Texture.WHITE);
+    this.veil.visible = false;
+    this.front.addChild(this.veil, this.rain, this.meteors);
+
     this.grad = document.createElement('canvas');
     this.grad.width = 1;
     this.grad.height = 256;
@@ -197,11 +221,13 @@ export class Sky {
       const im = art.img(`islet:${i % 5}`);
       const s = new Sprite(im.tex);
       s.anchor.set(0.5, 0.25);
-      const sc = 1 + Math.floor(hash2(i, 7) * 2);
+      // small and high: far islets sit above the cloud bands
+      const sc = 1;
       s.scale.set(sc);
-      s.alpha = 0.55 + sc * 0.2;
+      // opaque: the bake already fades them into the haze (translucent blocks read as glass)
+      s.alpha = 1;
       this.back.addChild(s);
-      this.far.push({ s, px: hash2(i, 8) * 1.4 - 0.2, py: 0.24 + hash2(i, 9) * 0.34, speed: 0.0015 + hash2(i, 10) * 0.002, par: 0.03 + hash2(i, 11) * 0.04, w: s.width / this.pixel, bob: 3 + hash2(i, 12) * 5, haze: 0.45 });
+      this.far.push({ s, px: hash2(i, 8) * 1.4 - 0.2, py: 0.14 + hash2(i, 9) * 0.2, speed: 0.0015 + hash2(i, 10) * 0.002, par: 0.03 + hash2(i, 11) * 0.04, w: s.width / this.pixel, bob: 3 + hash2(i, 12) * 5, haze: 0.2 });
     }
     // mid-sky clouds: three depths
     for (let i = 0; i < 12; i++) {
@@ -287,6 +313,32 @@ export class Sky {
       d.s.y = seaY + d.py * vh * 0.35 + 60;
     }
     this.front.visible = showFront;
+    // weather overlays
+    const w = this.weather;
+    this.rain.visible = w === 'rain' && !reduced;
+    if (this.rain.visible) {
+      this.rain.width = vw; this.rain.height = vh;
+      this.rain.tileScale.set(2);
+      this.rain.tilePosition.set(-t * 60 - camX * 0.2, t * 420 - camY * 0.2);
+      this.rain.alpha = 0.75;
+    }
+    this.veil.visible = w === 'rain' || w === 'fog';
+    if (this.veil.visible) {
+      this.veil.width = vw; this.veil.height = vh;
+      this.veil.tint = w === 'fog' ? 0xe8eef4 : 0x6a7890;
+      this.veil.alpha = w === 'fog' ? 0.2 + 0.04 * Math.sin(t * 0.3) : 0.16;
+    }
+    this.meteors.clear();
+    if (w === 'starfall' && st.night > 0.5 && !reduced) {
+      for (let i = 0; i < 3; i++) {
+        const cyc = (t * 0.35 + i * 0.37) % 1;
+        if (cyc > 0.25) continue;
+        const k = cyc / 0.25, seed = Math.floor(t * 0.35 + i * 0.37) * 7 + i;
+        const x0 = hash2(seed, 1) * vw, y0 = hash2(seed, 2) * vh * 0.4;
+        const x = x0 - k * 180, y = y0 + k * 90;
+        this.meteors.moveTo(x, y).lineTo(x + 26, y - 13).stroke({ color: 0xfff2c0, width: 2, alpha: (1 - k) * st.night });
+      }
+    }
     return st;
   }
 }

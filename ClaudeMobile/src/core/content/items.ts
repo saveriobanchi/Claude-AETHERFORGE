@@ -6,7 +6,8 @@ export type ItemId =
   | 'dew' | 'clay' | 'charcoal' | 'brick' | 'copper_grit' | 'copper' | 'gear' | 'wire'
   | 'gravel' | 'sand' | 'iron_grit' | 'iron' | 'glass' | 'plate' | 'mechanism' | 'lens'
   | 'mist' | 'aether' | 'stardust' | 'crystal' | 'skystone' | 'sunmetal' | 'amber'
-  | 'cell' | 'coil' | 'core';
+  | 'cell' | 'coil' | 'core'
+  | 'fruit_sapling' | 'apple' | 'honey' | 'wax' | 'cider' | 'candle' | 'preserves';
 
 export interface ItemDef {
   id: ItemId;
@@ -52,6 +53,13 @@ const list: ItemDef[] = [
   { id: 'cell', name: 'Aether Cell', desc: 'A sealed charge of living aether.', tier: 5 },
   { id: 'coil', name: 'Lumen Coil', desc: 'A spiral that remembers light.', tier: 5 },
   { id: 'core', name: 'Heart Core', desc: 'It beats.', tier: 6 },
+  { id: 'fruit_sapling', name: 'Fruit Sapling', desc: 'A grafted cutting from far away. Plant it on grass.', tier: 1 },
+  { id: 'apple', name: 'Apple', desc: 'Crisp and sweet. Traders love them.', tier: 1 },
+  { id: 'honey', name: 'Honey', desc: 'Slow gold from busy bees.', tier: 2 },
+  { id: 'wax', name: 'Beeswax', desc: 'Soft, fragrant and useful.', tier: 2 },
+  { id: 'cider', name: 'Cider', desc: 'Pressed apples, gently fizzing.', tier: 2 },
+  { id: 'candle', name: 'Candle', desc: 'A warm light for long voyages.', tier: 2 },
+  { id: 'preserves', name: 'Preserves', desc: 'Apples and honey, sealed for the journey.', tier: 3 },
 ];
 
 export const ITEMS: Record<ItemId, ItemDef> = Object.fromEntries(list.map((i) => [i.id, i])) as Record<ItemId, ItemDef>;

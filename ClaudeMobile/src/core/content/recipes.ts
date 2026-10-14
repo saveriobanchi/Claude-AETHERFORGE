@@ -33,6 +33,8 @@ const R: RecipeDef[] = [
   { id: 'coil', name: 'Lumen Coil', inputs: { crystal: 1, mechanism: 1, glass: 2 }, outputs: { coil: 1 }, time: 12, stations: ['assembler'], unlock: 'wisps' },
   { id: 'core', name: 'Heart Core', inputs: { sunmetal: 4, cell: 2, coil: 1, amber: 2 }, outputs: { core: 1 }, time: 30, stations: ['assembler'], unlock: 'forge' },
 
+  { id: 'candle', name: 'Candles', inputs: { wax: 2, twine: 1 }, outputs: { candle: 2 }, time: 4, stations: ['hand', 'assembler'], unlock: 'apiary' },
+
   // ── Nature-driven processes ──────────────────────────────────────────────
   { id: 'compost', name: 'Compost', inputs: { leaf: 2 }, outputs: { loam: 1 }, time: 8, stations: ['composter'], unlock: 'compost' },
   { id: 'sift_loam', name: 'Sift loam', inputs: { loam: 1 }, outputs: { pebble: 2 }, chance: { copper_grit: 0.35, sapling: 0.04 }, time: 2.5, stations: ['sieve', 'wind_sifter'], unlock: 'sieve' },
@@ -44,6 +46,7 @@ const R: RecipeDef[] = [
   { id: 'brick', name: 'Brick', inputs: { clay: 1 }, outputs: { brick: 1 }, time: 6, fuel: 1, stations: ['kiln'], unlock: 'kiln' },
   { id: 'smelt_copper', name: 'Copper', inputs: { copper_grit: 2 }, outputs: { copper: 1 }, time: 6, fuel: 1, stations: ['kiln'], unlock: 'kiln' },
   { id: 'glass', name: 'Glass', inputs: { sand: 2 }, outputs: { glass: 1 }, time: 8, fuel: 1, stations: ['kiln'], unlock: 'glass' },
+  { id: 'preserves', name: 'Preserves', inputs: { apple: 2, honey: 1 }, outputs: { preserves: 1 }, time: 8, fuel: 1, stations: ['kiln'], unlock: 'apiary' },
   { id: 'smelt_iron', name: 'Iron', inputs: { iron_grit: 2, charcoal: 1 }, outputs: { iron: 1 }, time: 6, stations: ['furnace'], unlock: 'iron' },
   { id: 'fast_copper', name: 'Copper', inputs: { copper_grit: 2 }, outputs: { copper: 1 }, time: 3, stations: ['furnace'], unlock: 'iron' },
   { id: 'fast_glass', name: 'Glass', inputs: { sand: 2 }, outputs: { glass: 1 }, time: 3, stations: ['furnace'], unlock: 'iron' },
@@ -52,6 +55,7 @@ const R: RecipeDef[] = [
   { id: 'saw', name: 'Planks', inputs: { wood: 3 }, outputs: { plank: 2 }, time: 3, stations: ['sawmill'], unlock: 'wind' },
   { id: 'press', name: 'Stone', inputs: { pebble: 4 }, outputs: { stone: 1 }, time: 3, stations: ['press'], unlock: 'wind' },
   { id: 'twist', name: 'Twine', inputs: { fiber: 3 }, outputs: { twine: 1 }, time: 3, stations: ['press'], unlock: 'wind' },
+  { id: 'cider', name: 'Cider', inputs: { apple: 4 }, outputs: { cider: 1 }, time: 5, stations: ['press'], unlock: 'orchard' },
   { id: 'crush', name: 'Gravel', inputs: { stone: 1 }, outputs: { gravel: 3 }, time: 4, stations: ['millstone'], unlock: 'mill' },
 
   // ── Aether ───────────────────────────────────────────────────────────────

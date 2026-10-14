@@ -9,7 +9,7 @@ export function demoWorld(): GameState {
   const s = createState(7);
   for (const d of DISCOVERY_LIST) s.known.add(d.id);
   s.extraCapacity = 100000;
-  for (const id of ITEM_IDS) s.stash[id] = 5000;
+  for (const id of ITEM_IDS) { s.stash[id] = 5000; s.stats.obtained[id] = 5000; }
   for (let r = 2; r <= 6; r++) for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) if (Math.abs(x) + Math.abs(y) <= r + 2) A.expand(s, 'plot', x, y);
   for (let y = -1; y <= 3; y++) for (let x = 2; x <= 6; x++) A.expand(s, 'flagstone', x, y);
   A.place(s, 'workbench', -1, -1);
@@ -46,8 +46,18 @@ export function demoWorld(): GameState {
   A.place(s, 'distiller', 6, 6);
   A.place(s, 'crate', 2, -4);
   A.place(s, 'silo', 4, -4);
-  stampIslet(s, 0, -10, -3);
+  // trade, orchard and bees
+  for (const [x, y] of [[-6, 2], [-6, 1], [-5, 3], [-4, 4]]) if (A.place(s, 'trading_post', x, y, 0).ok) break;
+  for (const [x, y] of [[-5, -1], [-6, -1], [-4, -3]]) { s.stash.fruit_sapling = 9; A.place(s, 'fruit_sapling', x, y); }
+  A.place(s, 'hive', -5, -2);
+  A.place(s, 'lantern', -1, 3);
+  A.place(s, 'lantern', 4, 5);
+  s.trade.marks = 140;
+  s.trade.level = 2;
   run(s, 40);
+  for (const b of s.buildings.values()) if (b.type === 'fruit_sapling') { b.progress = 1e9; }
+  stampIslet(s, 0, -10, -3);
+  run(s, 1);
   return s;
 }
 

@@ -221,6 +221,16 @@ export class Game {
           } else this.ui.hint('The islet found no room to dock. Clear space by the beacon.', true, 4000);
           this.markDirty();
           break;
+        case 'contract':
+          audio.play('collect');
+          haptic(12, this.settings.haptics);
+          this.ui.hint(`Contract done: +${e.marks} Marks`, false, 2200);
+          this.markDirty();
+          break;
+        case 'trade_level':
+          audio.play('discover');
+          this.ui.hint(`Trade level ${e.level + 1}: bigger contracts, better pay.`, false, 3000);
+          break;
         case 'forge_stage':
           audio.play('forge');
           haptic([30, 80, 40], this.settings.haptics);

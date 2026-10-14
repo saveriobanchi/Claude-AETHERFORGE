@@ -22,7 +22,10 @@ export type BuildingKind =
   | 'pylon'       // resonance field (speed aura)
   | 'beacon'      // summons islets
   | 'roost'       // wisp logistics
-  | 'forge';      // the great work
+  | 'forge'       // the great work
+  | 'post'        // trading post: contracts with sky traders
+  | 'hive'        // beehive: honey and wax near trees
+  | 'decor';      // purely decorative
 
 export type Floor = 'grass' | 'stone' | 'sky';
 export type BuildCategory = 'nature' | 'craft' | 'logistics' | 'power' | 'storage' | 'aether' | 'wonder';
@@ -50,6 +53,7 @@ export interface BuildingDef {
   produces?: { item: ItemId; every: number; nightOnly?: boolean }; // generators
   radius?: number;
   bufferCap?: number;      // input/output buffer cap per item
+  growsInto?: string;      // saplings: the tree they become
 }
 
 const B: BuildingDef[] = [
@@ -57,6 +61,9 @@ const B: BuildingDef[] = [
   { id: 'tree', name: 'Islet Tree', desc: 'Tap to gather timber and leaves. It regrows.', kind: 'tree', category: 'nature', size: 1, cost: {}, floors: ['grass'], unlock: '_never' },
   { id: 'sapling', name: 'Sapling', desc: 'Plant on grass. Grows into a tree.', kind: 'sapling', category: 'nature', size: 1, cost: { sapling: 1 }, floors: ['grass'], unlock: 'sapling' },
   { id: 'tuft', name: 'Tall Grass', desc: 'Tap to pull fiber.', kind: 'tuft', category: 'nature', size: 1, cost: {}, floors: ['grass'], unlock: '_never' },
+  { id: 'fruit_sapling', name: 'Fruit Sapling', desc: 'Grows into a fruit tree.', kind: 'sapling', category: 'nature', size: 1, cost: { fruit_sapling: 1 }, floors: ['grass'], unlock: 'orchard', growsInto: 'fruit_tree' },
+  { id: 'fruit_tree', name: 'Fruit Tree', desc: 'Tap to pick apples. Bees nearby make it bear more.', kind: 'tree', category: 'nature', size: 1, cost: {}, floors: ['grass'], unlock: '_never' },
+  { id: 'hive', name: 'Beehive', desc: 'Bees make honey and wax. Needs trees within reach.', kind: 'hive', category: 'nature', size: 1, cost: { plank: 8, twine: 4 }, floors: ['grass'], unlock: 'apiary', rotatable: true, produces: { item: 'honey', every: 15 }, bufferCap: 12 },
   { id: 'elder_tree', name: 'Elder Tree', desc: 'Ancient and generous.', kind: 'tree', category: 'nature', size: 1, cost: {}, unlock: '_never', removable: false },
 
   // ── Crafting / production ──
@@ -88,6 +95,9 @@ const B: BuildingDef[] = [
   { id: 'splitter', name: 'Splitter', desc: 'Shares items between left, front and right.', kind: 'splitter', category: 'logistics', size: 1, cost: { plank: 2, gear: 2 }, unlock: 'routing', rotatable: true },
   { id: 'sorter', name: 'Sorter', desc: 'One chosen item goes straight on; the rest turn aside.', kind: 'sorter', category: 'logistics', size: 1, cost: { plank: 2, gear: 2, wire: 4 }, unlock: 'routing', rotatable: true },
   { id: 'roost', name: 'Wisp Roost', desc: 'Wisps ferry items between your stash and nearby machines.', kind: 'roost', category: 'logistics', size: 1, cost: { coil: 2, skystone: 8, plate: 6 }, unlock: 'wisps', power: 4, radius: 5 },
+
+  { id: 'trading_post', name: 'Trading Post', desc: 'Sky traders dock here. Must touch the edge.', kind: 'post', category: 'logistics', size: 1, cost: { plank: 12, stone: 6, twine: 4 }, edge: true, unlock: 'trade', bufferCap: 999 },
+  { id: 'lantern', name: 'Trade Lantern', desc: 'A gift from the traders. Glows at night.', kind: 'decor', category: 'storage', size: 1, cost: { plank: 2, candle: 2 }, unlock: 'tradelights' },
 
   // ── Storage ──
   { id: 'crate', name: 'Storage Crate', desc: 'Your stash holds 50 more of everything.', kind: 'storage', category: 'storage', size: 1, cost: { plank: 8, stone: 2 }, unlock: 'storage', capacity: 50 },
@@ -133,6 +143,10 @@ export const TREE = {
   amberChance: 0.12,
   saplingGrowTime: 45,
 };
+
+/** Fruit trees and beehives. */
+export const ORCHARD = { maxStock: 4, regrow: 8, yield: { apple: 1, leaf: 1 } as Stack, saplingChance: 0.03 };
+export const HIVE = { waxChance: 0.4, perTree: 0.15, maxTrees: 4 };
 
 export const HARVESTER_INTERVAL = 1.5; // seconds per harvest
 export const DISPATCH_INTERVAL = 0.4;

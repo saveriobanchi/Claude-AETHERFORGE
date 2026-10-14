@@ -3,7 +3,8 @@ import { ITEMS, type ItemId, type Stack } from './content/items';
 import { FUEL_VALUE, RECIPES } from './content/recipes';
 import { ATTUNE, ISLETS, LAND, SUMMON_TIME, landCost, summonCost } from './content/world';
 import { buildingUnlocked, checkDiscoveries, landUnlocked, recipeUnlocked } from './progression';
-import { currentRecipe, defaultRecipe, forgeAccept, forgeNeeds, harvestTree, rebuildCache, salvage } from './sim';
+import { bufCap, completeContract, currentRecipe, defaultRecipe, fillBoard, forgeAccept, forgeNeeds, harvestTree, rebuildCache, salvage } from './sim';
+import { BASIC_MAX_LEVEL, MARKET_BY_ID, MAX_LEVEL, SKIP_COOLDOWN, marketPrice, upgradable, upgradeCost } from './content/trade';
 import {
   type Building, type Dir, type GameState, DX, DY, addBuilding, addTile, addTo, buildingAt, canAfford, key,
   pay, refund, room, stashAdd, tileAt, isEdgeTile, stackTotal, removeBuildingRaw, rand,
@@ -323,7 +324,7 @@ export function load(s: GameState, id: number): Result {
   }
   const r = currentRecipe(b);
   if (!r) return fail('');
-  const cap = def.bufferCap ?? 12;
+  const cap = bufCap(def, b);
   for (const k in r.inputs) {
     const item = k as ItemId;
     const want = Math.max(cap, (r.inputs[item] ?? 0) * 2) - (b.inBuf[item] ?? 0);
@@ -398,4 +399,89 @@ export function attune(s: GameState, id: string): Result {
   sync(s);
   return OK;
 }
+
+// ───────────────────────── trade ─────────────────────────
+
+/** Fill a contract from the stash (as much as is there). */
+export function handOver(s: GameState, slot: number): Result {
+  const c = s.trade.board[slot];
+  if (!c) return fail('');
+  const n = Math.min(s.stash[c.item], c.n - c.got);
+  if (n <= 0) return fail(`No ${ITEMS[c.item].name} in your stash`);
+  s.stash[c.item] -= n;
+  c.got += n;
+  s.stats.delivered += n;
+  if (c.got >= c.n) completeContract(s, slot);
+  checkDiscoveries(s);
+  return { ok: true, got: { [c.item]: n } };
+}
+
+/** Swap a contract for a new one (free, on a cooldown). Delivered goods are kept as Marks pro rata. */
+export function skipContract(s: GameState, slot: number): Result {
+  const tr = s.trade;
+  const c = tr.board[slot];
+  if (!c) return fail('');
+  if (tr.skipCd > 0) return fail(`Traders need ${Math.ceil(tr.skipCd)} s`);
+  const part = Math.floor((c.marks * c.got) / c.n);
+  tr.marks += part;
+  tr.earned += part;
+  tr.board[slot] = null;
+  tr.refresh[slot] = 0;
+  tr.skipCd = SKIP_COOLDOWN;
+  fillBoard(s, true, [c.item]);
+  return OK;
+}
+
+export function marketVisible(s: GameState, id: string): boolean {
+  const m = MARKET_BY_ID[id];
+  if (!m) return false;
+  if (m.needs && !s.known.has(m.needs)) return false;
+  return !(m.once && (s.trade.bought[id] ?? 0) > 0);
+}
+
+export function buy(s: GameState, id: string): Result {
+  const m = MARKET_BY_ID[id];
+  if (!m || !marketVisible(s, id)) return fail('Not offered');
+  const price = marketPrice(m, s.trade.bought[id] ?? 0);
+  if (s.trade.marks < price) return fail(`Need ${price - s.trade.marks} more Marks`);
+  if (m.gives) for (const k in m.gives) if (room(s, k as ItemId) < (m.gives[k as ItemId] ?? 0)) return fail('Stash is full');
+  s.trade.marks -= price;
+  s.trade.bought[id] = (s.trade.bought[id] ?? 0) + 1;
+  if (m.gives) for (const k in m.gives) stashAdd(s, k as ItemId, m.gives[k as ItemId] ?? 0);
+  if (m.flag) s.flags.add(m.flag);
+  checkDiscoveries(s);
+  return { ok: true, got: m.gives };
+}
+
+// ───────────────────────── upgrades ─────────────────────────
+
+export function maxLevel(s: GameState): number {
+  return s.known.has('master') ? MAX_LEVEL : BASIC_MAX_LEVEL;
+}
+
+/** Can this machine be upgraded right now? (`ok` false with a reason otherwise.) */
+export function canUpgrade(s: GameState, id: number): Result {
+  const b = s.buildings.get(id);
+  if (!b) return fail('');
+  const def = BUILDINGS[b.type];
+  if (!upgradable(def) || !s.known.has('tinker')) return fail('Cannot be upgraded');
+  if (b.level >= MAX_LEVEL) return fail('Fully upgraded');
+  if (b.level >= maxLevel(s)) return fail('Needs master tools');
+  const c = upgradeCost(def, b.level + 1);
+  if (s.trade.marks < c.marks) return fail(`Need ${c.marks - s.trade.marks} more Marks`);
+  if (!canAfford(s, c.items)) return fail(missing(s, c.items));
+  return OK;
+}
+
+export function upgrade(s: GameState, id: number): Result {
+  const r = canUpgrade(s, id);
+  if (!r.ok) return r;
+  const b = s.buildings.get(id)!;
+  const c = upgradeCost(BUILDINGS[b.type], b.level + 1);
+  pay(s, c.items);
+  s.trade.marks -= c.marks;
+  b.level++;
+  return OK;
+}
+
 export { canAfford } from './state';

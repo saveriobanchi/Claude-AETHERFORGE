@@ -9,6 +9,7 @@ import type { ItemId } from '../src/core/content/items';
 import { ITEMS } from '../src/core/content/items';
 import { RECIPES, RECIPE_LIST, type RecipeDef } from '../src/core/content/recipes';
 import { FORGE_STAGES, ISLETS, summonCost } from '../src/core/content/world';
+import { MARKET_BY_ID, marketPrice } from '../src/core/content/trade';
 import { buildingUnlocked, recipeUnlocked } from '../src/core/progression';
 import { TICK, forgeNeeds, tick } from '../src/core/sim';
 import { type Building, type Dir, type GameState, DX, DY, buildingAt, capacity, createState, key, tileAt, isEdgeTile, stackTotal } from '../src/core/state';
@@ -501,6 +502,32 @@ export class Bot {
   landCost(land: string): Partial<Record<ItemId, number>> {
     // mirrors content/world.landCost through the public API
     return land === 'plot' ? plotCostFor(this.s.tiles.size) : land === 'flagstone' ? { stone: 2 } : { skystone: 3 };
+  }
+
+  // ───────────────────────── trade ─────────────────────────
+
+  /** Fill contracts (making the goods as needed) until the bot holds `marks`. */
+  tradeUntil(marks: number): void {
+    if (!this.countOf('trading_post')) this.build('trading_post');
+    let g = 0;
+    while (this.s.trade.marks < marks) {
+      if (++g > 300) throw new Error(`trade stuck: ${this.status()}`);
+      const i = this.s.trade.board.findIndex((c) => c);
+      if (i < 0) { this.wait(5); continue; }
+      const c = this.s.trade.board[i]!;
+      this.ensure(c.item, Math.min(c.n - c.got, Math.floor(capacity(this.s) * 0.8)));
+      A.handOver(this.s, i);
+      this.flushEvents();
+    }
+  }
+
+  buy(id: string): void {
+    const m = MARKET_BY_ID[id];
+    this.tradeUntil(marketPrice(m, this.s.trade.bought[id] ?? 0));
+    const r = A.buy(this.s, id);
+    if (!r.ok) throw new Error(`buy ${id}: ${r.reason}`);
+    this.flushEvents();
+    this.log(`bought ${id}`);
   }
 
   // ───────────────────────── wonders ─────────────────────────

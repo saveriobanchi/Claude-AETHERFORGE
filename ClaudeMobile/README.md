@@ -40,7 +40,10 @@ camera drifts so you can simply watch the island live.
 - Real, physical production: items ride conveyors you lay, machines visibly
   work, idle, starve or back up, and tell you why.
 - The island itself is built tile by tile, and space matters.
-- Day and night, weather-like wind, ambient life, synthesized music and sound.
+- Day and night with daily weather you can plan around, ambient life,
+  synthesized music and sound.
+- Sky traders with contracts to fill, a market, machine upgrades, and a few
+  gentler side industries — all earned in play (no shop, no timers to pay off).
 - An endgame that keeps going.
 
 The rest is meant to be discovered. (Developers: see `docs/dev/DESIGN.md`,

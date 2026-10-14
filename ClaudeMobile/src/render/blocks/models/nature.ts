@@ -57,8 +57,8 @@ export function tree(c: Canvas, L: TexLib, wood: Wood, seed: number, sway = 0, f
 
 /** The great elder tree: a wide maple crown with lanterns hung under it. */
 export function elderTree(c: Canvas, L: TexLib, sway = 0): void {
-  const log: Face = { tex: L.get('a/maple_log_side') };
-  const logTop: Face = { tex: L.get('a/maple_log_top') };
+  const log: Face = { tex: L.get('a/oak_log_side'), tint: [0.8, 0.72, 0.68] };
+  const logTop: Face = { tex: L.get('a/oak_log_top') };
   const leaves: Face = { tex: L.get('a/maple_leaves'), cut: CUT.maple };
   const core: Face = { tex: L.get('a/maple_leaves'), tint: [0.62, 0.66, 0.72] };
   c.box([0.25, 0.25, 0], [0.75, 0.75, 2.6], logTop, log, log, 2);
@@ -161,4 +161,27 @@ export function islet(c: Canvas, L: TexLib, seed: number, withTree: boolean): vo
     }
   }
   if (withTree) { c.castOn = true; tree(c, L, h(seed, 9) > 0.5 ? 'pine' : 'oak', seed); c.castOn = false; }
+}
+
+/** Fruit tree: a beech-like crown heavy with apples. */
+export function fruitTree(c: Canvas, L: TexLib, sway = 0, apples = 12): void {
+  tree(c, L, 'beech', 5, sway, 0);
+  // plump apples on the crown's visible faces
+  const ap = (p: V3) => c.box(p, [p[0] + 0.14, p[1] + 0.14, p[2] + 0.14], { tex: L.get('as/default_apple'), uv: [6, 6, 9, 9] }, { tex: L.get('as/default_apple'), uv: [5, 6, 8, 9] }, { tex: L.get('as/default_apple'), uv: [5, 6, 8, 9], tint: [0.8, 0.8, 0.85] }, 4);
+  for (let i = 0; i < apples; i++) {
+    const side = i % 3, t1 = h(5, i, 7), t2 = h(5, i, 8);
+    ap(side === 0 ? [-0.3 + t1 * 1.6, 1.37, 1.85 + t2 * 0.7] : side === 1 ? [1.37, -0.3 + t1 * 1.6, 1.85 + t2 * 0.7] : [-0.2 + t1 * 1.3, -0.2 + t2 * 1.3, 2.76]);
+  }
+}
+
+/** Young fruit tree in three growth stages. */
+export function fruitSapling(c: Canvas, L: TexLib, stage: number, sway = 0): void {
+  if (stage === 0) { c.sprite([0.5, 0.5, 0], { tex: L.get('a/plants/sapling_beech') }, 2, 2); return; }
+  const log: Face = { tex: L.get('a/beech_log_side') };
+  const leaves: Face = { tex: L.get('a/beech_leaves'), cut: CUT.beech };
+  const tH = stage === 1 ? 0.75 : 1.25;
+  c.box([0.4375, 0.4375, 0], [0.5625, 0.5625, tH], log, log, log, 2);
+  const r = stage === 1 ? 0.3 : 0.5, s = sway * 0.04;
+  c.box([0.5 - r + s, 0.5 - r, tH - 0.125], [0.5 + r + s, 0.5 + r, tH + r * 1.2], leaves, leaves, leaves, 3);
+  if (stage === 2) for (const [x, y, z] of [[0.05, 0.6, 1.4], [0.6, 0.02, 1.6], [0.95, 0.5, 1.3]] as V3[]) c.box([x, y, z], [x + 0.1, y + 0.1, z + 0.1], { tex: L.get('as/default_apple'), uv: [6, 6, 8, 8] }, { tex: L.get('as/default_apple'), uv: [5, 7, 7, 9] }, { tex: L.get('as/default_apple'), uv: [5, 7, 7, 9] }, 4);
 }

@@ -69,6 +69,11 @@ export const SPRITES: Record<string, SpriteSpec> = {
   pylon: { frames: 6, fps: 6, make: (c, L, f) => B.pylon(c, L, f) },
   beacon: { frames: 6, fps: 6, make: (c, L, f) => B.beacon(c, L, f) },
   roost: { frames: 4, fps: 4, make: (c, L, f) => B.roost(c, L, f), lamp: true },
+  trading_post: { frames: 4, fps: 3, make: (c, L, f) => B.tradingPost(c, L, f) },
+  hive: { frames: 4, fps: 6, make: (c, L, f) => B.hive(c, L, f) },
+  lantern: { frames: 2, fps: 2, make: (c, L, f) => B.lanternPost(c, L, f) },
+  fruit_tree: { frames: 2, fps: 1.2, make: (c, L, f) => N.fruitTree(c, L, sway(f)) },
+  fruit_sapling: { frames: 2, fps: 1.2, main: 'g0', variants: { g0: 2, g1: 2, g2: 2 }, make: (c, L, f, v) => N.fruitSapling(c, L, Number(v.slice(1)), sway(f)) },
   forge: { frames: 1, fps: 8, main: 'st0', variants: { st0: 1, st1: 1, st2: 1, st3: 8 }, make: (c, L, f, v) => B.forge(c, L, Number(v.slice(2)), f) },
 };
 
@@ -233,9 +238,28 @@ JOBS['islets'] = () => {
     N.islet(c, L(), i * 7 + 3, i % 2 === 0);
     c.at(0, 0);
     c.finish({ haze: false, outline: 0.4 });
-    out.push([`islet:${i}`, cropSet([image(c, ax, ay)])[0]]);
+    // far away: fade toward the sky haze, more toward the bottom
+    const im = image(c, ax, ay);
+    for (let k = 0; k < im.w * im.h; k++) {
+      if (!im.data[k * 4 + 3]) continue;
+      const t = 0.32 + 0.25 * (Math.floor(k / im.w) / im.h);
+      im.data[k * 4] += (200 - im.data[k * 4]) * t; im.data[k * 4 + 1] += (214 - im.data[k * 4 + 1]) * t; im.data[k * 4 + 2] += (238 - im.data[k * 4 + 2]) * t;
+    }
+    out.push([`islet:${i}`, cropSet([im])[0]]);
   }
   return out;
+};
+
+/** Trader airship frames (the world floats it beside a trading post). */
+JOBS['ship'] = () => {
+  const imgs = [0, 1, 2, 3].map((i) => {
+    // floats beyond the island: no ground shadow
+    const { c, ax, ay } = canvas({ size: 2, above: 4 });
+    B.airship(c, L(), i / 4);
+    c.finish({});
+    return image(c, ax, ay);
+  });
+  return cropSet(imgs).map((im, i) => [`ship:${i}`, im]);
 };
 
 // ───────────────────────── icons ─────────────────────────
@@ -244,6 +268,7 @@ type Cube = { cube: [string | Tex, (string | Tex)?, (string | Tex)?]; h?: number
 type Flat = { flat: string | Tex; tint?: [number, number, number] };
 type IconDef = Cube | Flat;
 
+const TAU2 = Math.PI * 2;
 const disc = (p: Paint, cx: number, cy: number, r: number, col: number, hi?: number, lo?: number) => {
   for (let y = 0; y < p.h; y++) for (let x = 0; x < p.w; x++) {
     const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
@@ -263,6 +288,100 @@ const ring = (p: Paint, cx: number, cy: number, r0: number, r1: number, a: numbe
 
 function painted(): Record<string, () => Tex> {
   return {
+    jar: () => new Paint().draw([
+      '................',
+      '....aaaaaaaa....',
+      '....abbbbbba....',
+      '...cccccccccc...',
+      '...cddddddddc...',
+      '...cdeeeeeedc...',
+      '...cdeffeeedc...',
+      '...cdeffeeedc...',
+      '...cdeeeeeedc...',
+      '...cdeeeeeedc...',
+      '...cdeeeeeedc...',
+      '...cddddddddc...',
+      '...cccccccccc...',
+    ], { a: 0x6a4a2a, b: 0xc89a64, c: 0x5a6a78, d: 0xb8e0f0, e: 0xffb83a, f: 0xfff0b0 }, 0, 1),
+    preserves: () => new Paint().draw([
+      '................',
+      '....aaaaaaaa....',
+      '...abbbbbbbba...',
+      '...cccccccccc...',
+      '...cddddddddc...',
+      '...cdeeffeedc...',
+      '...cdeeeeeedc...',
+      '...cdgggggedc...',
+      '...cdghhhhgdc...',
+      '...cdgggggedc...',
+      '...cdeeeeeedc...',
+      '...cddddddddc...',
+      '...cccccccccc...',
+    ], { a: 0x8a2a2a, b: 0xd84a3a, c: 0x5a6a78, d: 0xb8e0f0, e: 0xc8402a, f: 0xff9a6a, g: 0xf0e2c4, h: 0x8a5a36 }, 0, 1),
+    candle: () => new Paint().draw([
+      '.......y........',
+      '......yoy.......',
+      '......yoy.......',
+      '.......k........',
+      '.....wwwww......',
+      '.....wvvvw......',
+      '.....wvvvw......',
+      '.....wvvvw......',
+      '.....wvvvw......',
+      '.....wvvvw......',
+      '.....wvvvw......',
+      '....bbbbbbb.....',
+      '...bcccccccb....',
+      '....bbbbbbb.....',
+    ], { y: 0xfff2a0, o: 0xff8a2a, k: 0x3a2418, w: 0xe8d8a8, v: 0xf8ecc8, b: 0x8a5a2a, c: 0xc8962a }, 0, 1),
+    cider: () => new Paint().draw([
+      '......aa........',
+      '......bb........',
+      '......cc........',
+      '.....cddc.......',
+      '....cddddc......',
+      '....ceeeec......',
+      '....cefffc......',
+      '....cefeec......',
+      '....ceeeec......',
+      '....ceeeec......',
+      '....ceeeec......',
+      '....cccccc......',
+    ], { a: 0x8a5a2a, b: 0xc89a64, c: 0x3a5a3a, d: 0x6a9a6a, e: 0xe89a3a, f: 0xffe0a0 }, 3, 2),
+    coin: () => { const p = disc(new Paint(), 8, 8, 6.5, 0xe8b440, 0xfff0a0, 0x9a6a1a); disc(p, 8, 8, 4.2, 0xd8a03a); p.rect(7, 5, 2, 6, 0xfff0a0).rect(6, 6, 4, 1, 0xfff0a0).rect(6, 9, 4, 1, 0xfff0a0); return p; },
+    up: () => new Paint().draw([
+      '.......aa.......',
+      '......abba......',
+      '.....abbbba.....',
+      '....abbbbbba....',
+      '...aaabbbbaaa...',
+      '.....abbbba.....',
+      '.....abbbba.....',
+      '.....abbbba.....',
+      '.....aaaaaa.....',
+      '................',
+      '...cccccccccc...',
+      '...cddddddddc...',
+      '...cccccccccc...',
+    ], { a: 0x2a5a1a, b: 0x8ae85a, c: 0x7a5a1a, d: 0xe8b440 }, 0, 1),
+    sun: () => { const p = new Paint(); for (let i = 0; i < 8; i++) { const a = (i / 8) * TAU2; p.set(Math.round(8 + Math.cos(a) * 6.5), Math.round(8 + Math.sin(a) * 6.5), 0xffd040); } return disc(p, 8, 8, 4.2, 0xffd040, 0xfff2a0, 0xe8962a); },
+    cloud: () => { const p = new Paint(); disc(p, 6, 9, 3.6, 0xe8f0f8, 0xffffff, 0xa8b8c8); disc(p, 10, 8, 4.2, 0xe8f0f8, 0xffffff, 0xa8b8c8); return p.rect(3, 10, 11, 2, 0xe8f0f8); },
+    rain: () => { const p = new Paint(); disc(p, 6, 6, 3.4, 0xc8d4e0, 0xe8f0f8, 0x8898a8); disc(p, 10, 5, 3.8, 0xc8d4e0, 0xe8f0f8, 0x8898a8); p.rect(3, 6, 11, 2, 0xc8d4e0); for (const [x, y] of [[4, 11], [8, 12], [12, 11], [6, 14], [10, 14]]) p.rect(x, y, 1, 2, 0x4a92cc); return p; },
+    breeze: () => new Paint().draw([
+      '................',
+      '..........aa....',
+      '...........a....',
+      '.aaaaaaaaaa.....',
+      '................',
+      '...aaaaaaaaaaaa.',
+      '..............a.',
+      '.............a..',
+      '..aaaaaaaa......',
+      '..........a.....',
+      '.........a......',
+    ], { a: 0xd8eef8 }, 0, 2),
+    fog: () => new Paint().rect(2, 4, 12, 2, 0xd8e0e8).rect(4, 7, 11, 2, 0xb8c4d0).rect(1, 10, 12, 2, 0xd8e0e8).rect(5, 13, 9, 2, 0xb8c4d0),
+    stars: () => { const p = new Paint(); for (const [x, y, r] of [[5, 5, 2], [11, 9, 2], [4, 12, 1], [12, 3, 1]]) { p.rect(x - r, y, r * 2 + 1, 1, 0xfff2a0); p.rect(x, y - r, 1, r * 2 + 1, 0xfff2a0); p.set(x, y, 0xffffff); } return p.rect(8, 12, 6, 1, 0xffd040); },
     mist: () => { const p = new Paint(); disc(p, 5.5, 10, 3.6, 0xc8e6f2, 0xf2fbff, 0x8ec4dc); disc(p, 10.5, 9, 4.2, 0xd8f0f8, 0xffffff, 0x9acce0); disc(p, 8, 6, 3.2, 0xe8f8ff, 0xffffff, 0xb0d8ea); return p; },
     pebble: () => { const p = new Paint(); disc(p, 5, 10, 3, 0x8a8890, 0xb8b6c0, 0x5a5862); disc(p, 11, 11, 2.6, 0x9a9488, 0xc8c2b4, 0x6a6458); disc(p, 8, 5.5, 2.2, 0x7a7c88, 0xa8aab4, 0x4a4c58); return p; },
     dew: () => {
@@ -360,6 +479,13 @@ function itemDefs(): Record<ItemId, IconDef> {
     cell: { flat: 'as/glass bottle 2', tint: [0.7, 1, 1.25] },
     coil: { flat: P.coil() },
     core: { cube: ['as/default_diamond_block'], glow: true, tint: [1.15, 0.7, 0.85] },
+    fruit_sapling: { flat: 'a/plants/sapling_beech' },
+    apple: { flat: 'as/default_apple' },
+    honey: { flat: P.jar() },
+    wax: { cube: ['as/default_gold_block'], h: 0.5, tint: [1.05, 1, 0.72] },
+    cider: { flat: P.cider() },
+    candle: { flat: P.candle() },
+    preserves: { flat: P.preserves() },
   };
 }
 
@@ -409,6 +535,15 @@ const UI: Record<string, () => Image> = {
   sack: () => flatImage(painted().sack(), 2),
   gear: () => flatImage(B.gearTex(0xc8c0b0, 0x5a5462, 0), 2),
   compass: () => flatImage(painted().compass(), 2),
+  marks: () => flatImage(painted().coin(), 2),
+  upgrade: () => flatImage(painted().up(), 2),
+  market: () => flatImage(painted().sack(), 2),
+  w_clear: () => flatImage(painted().sun(), 2),
+  w_calm: () => flatImage(painted().sun(), 2, [1, 0.95, 0.85]),
+  w_breezy: () => flatImage(painted().breeze(), 2),
+  w_rain: () => flatImage(painted().rain(), 2),
+  w_fog: () => flatImage(painted().fog(), 2),
+  w_starfall: () => flatImage(painted().stars(), 2),
   island: () => {
     const { c } = canvas({ size: 3, S: 0.5, above: 4, below: 6 });
     c.at(1, 1); N.islet(c, L(), 3, true); c.at(0, 0);
@@ -423,7 +558,7 @@ JOBS['icons'] = () => {
   const defs = itemDefs();
   for (const id of ICON_IDS) {
     const d = defs[id];
-    if ('cube' in d) { out.push([`icon:${id}`, cubeImage(d, 0.5)], [`iconw:${id}`, cubeImage(d, 0.25)]); }
+    if ('cube' in d) { out.push([`icon:${id}`, cubeImage(d, 0.5)], [`iconw:${id}`, cubeImage(d, 0.1875)]); }
     else { out.push([`icon:${id}`, flatImage(tex(d.flat), 2, d.tint)], [`iconw:${id}`, flatImage(tex(d.flat), 1, d.tint)]); }
   }
   for (const [name, f] of Object.entries(UI)) out.push([`ui:${name}`, f()]);

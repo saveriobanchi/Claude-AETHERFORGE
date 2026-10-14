@@ -239,7 +239,7 @@ export class Canvas {
         r *= ao; g *= ao * 0.99; b *= ao * 0.97 + 0.03 * (1 - ao);
         // haze on deep cliff blocks so the island floats in the sky
         if (o.haze !== false && this.wz[k] < -1.2) {
-          const t = Math.min(0.55, (-this.wz[k] - 1.2) / 9);
+          const t = Math.min(0.4, (-this.wz[k] - 1.2) / 11);
           r += (HAZE[0] - r) * t; g += (HAZE[1] - g) * t; b += (HAZE[2] - b) * t;
         }
         col[k * 4] = r; col[k * 4 + 1] = g; col[k * 4 + 2] = b;

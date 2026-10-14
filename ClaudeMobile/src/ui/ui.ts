@@ -1,5 +1,7 @@
 import * as A from '../core/actions';
-import { BUILDINGS, BUILDING_LIST, NODE_YIELD, TREE, type BuildCategory } from '../core/content/buildings';
+import { BUILDINGS, BUILDING_LIST, HIVE, NODE_YIELD, ORCHARD, TREE, type BuildCategory } from '../core/content/buildings';
+import { MARKET, CONTRACT_REFRESH, levelSpeed, marketPrice, repForLevel, upgradable, upgradeCost } from '../core/content/trade';
+import { dayIndex, weatherFor } from '../core/content/weather';
 import { DISCOVERIES, DISCOVERY_LIST } from '../core/content/discoveries';
 import { ITEMS, ITEM_IDS, type ItemId, type Stack } from '../core/content/items';
 import { RECIPE_LIST, RECIPES, recipesFor } from '../core/content/recipes';
@@ -7,7 +9,7 @@ import { ATTUNEMENTS, FORGE_STAGES, ISLETS, LANDS, landCost, summonCost } from '
 import type { OfflineReport } from '../core/offline';
 import { flowRates } from '../core/offline';
 import { buildingUnlocked, landUnlocked, recipeUnlocked, teasers } from '../core/progression';
-import { currentRecipe, forgeNeeds } from '../core/sim';
+import { bufCap, currentRecipe, forgeNeeds, weatherNow } from '../core/sim';
 import { type Building, type Dir, capacity, dayFraction, isNight, stackTotal } from '../core/state';
 import type { Game } from '../game';
 import { audio } from '../platform/audio';
@@ -28,6 +30,7 @@ const CATS: { id: BuildCategory | 'land'; name: string }[] = [
 
 const GEAR_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#efe2c4" stroke-width="1.8" stroke-linejoin="round"><path d="M10.3 2.6h3.4l.5 2.6 1.9.8 2.2-1.5 2.4 2.4-1.5 2.2.8 1.9 2.6.5v3.4l-2.6.5-.8 1.9 1.5 2.2-2.4 2.4-2.2-1.5-1.9.8-.5 2.6h-3.4l-.5-2.6-1.9-.8-2.2 1.5-2.4-2.4 1.5-2.2-.8-1.9-2.6-.5v-3.4l2.6-.5.8-1.9-1.5-2.2 2.4-2.4 2.2 1.5 1.9-.8z"/><circle cx="12" cy="12" r="3.4"/></svg>';
 
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
 const STATUS_TEXT: Record<string, string> = {
   working: 'Working', idle: 'Idle', noinput: 'Waiting for input', blocked: 'Output full', nopower: 'No breeze', night: 'Waiting for night', ready: 'Ready to collect',
 };
@@ -41,6 +44,8 @@ export class UI {
   private lvlEl!: HTMLElement;
   private lvlBar!: HTMLElement;
   private clockEl!: HTMLElement;
+  private weatherImg!: HTMLImageElement;
+  private weatherId = '';
   private questIcon!: HTMLImageElement;
   private btnBuild!: HTMLButtonElement;
   private btnCraft!: HTMLButtonElement;
@@ -93,7 +98,8 @@ export class UI {
     const banner = h('div', { class: 'banner panel', onclick: () => this.openJournal() },
       h('div', { class: 'portrait' }, img(uiIcon('island'))),
       h('div', { class: 't' }, h('div', { class: 'isle', text: 'Emberleaf Isle' }), h('div', { class: 'lvlrow' }, this.lvlEl, h('div', { class: 'bar xp' }, this.lvlBar))));
-    this.clockEl = h('div', { class: 'clock', title: 'Time of day' }, h('i', { class: 'sun' }), h('span', { class: 'time' }));
+    this.weatherImg = img(uiIcon('w_clear'));
+    this.clockEl = h('button', { class: 'clock', title: 'Time and weather', 'aria-label': 'Weather', onclick: () => this.showWeather() }, this.weatherImg, h('span', { class: 'time' }));
     const plus = h('button', { class: 'res-plus', 'aria-label': 'Open stash', onclick: () => { audio.unlock(); this.openStash(); } }, '+');
     const menu = this.iconBtn('gear', 'Menu', () => this.openSettings());
     menu.innerHTML = GEAR_SVG;
@@ -201,10 +207,11 @@ export class UI {
     }
     const shown = this.recent.filter((id) => s.stash[id] > 0).slice(0, window.innerWidth < 900 ? 4 : 6);
     const cap = capacity(s);
-    const sig = shown.map((id) => `${id}:${s.stash[id]}`).join('|') + `|${cap}|${s.power.gen.toFixed(0)}/${s.power.demand}`;
+    const sig = shown.map((id) => `${id}:${s.stash[id]}`).join('|') + `|${cap}|${s.power.gen.toFixed(0)}/${s.power.demand}|${s.trade.marks}|${s.known.has('trade')}`;
     if (sig !== this.res.dataset.sig) {
       this.res.dataset.sig = sig;
       clear(this.res);
+      if (s.known.has('trade')) this.res.append(h('span', { class: 'chip marks', title: 'Marks (trade)' }, img(uiIcon('marks')), h('span', { class: 'num', text: fmt(s.trade.marks) })));
       for (const id of shown) {
         const chip = h('span', { class: 'chip' + (s.stash[id] >= cap ? ' full' : ''), title: ITEMS[id].name }, img(itemIcon(id)), h('span', { class: 'num', text: fmt(s.stash[id]) }));
         this.res.append(chip);
@@ -243,6 +250,8 @@ export class UI {
     if (time.textContent !== `${hh}:${mm}`) {
       time.textContent = `${hh}:${mm}`;
       this.clockEl.classList.toggle('night', isNight(s));
+      const w = weatherNow(s).id;
+      if (this.weatherId !== w) { this.weatherId = w; this.weatherImg.src = uiIcon('w_' + w); this.clockEl.dataset.weather = w; }
     }
     // main buttons
     const craftVisible = A.hasWorkbench(s);
@@ -499,7 +508,8 @@ export class UI {
     if (def.kind === 'generator') return b.progress / (def.produces?.every ?? 1);
     if (def.kind === 'drill') { const n = this.nodeOf(b); return n ? b.progress / NODE_YIELD[n.type].every : 0; }
     if (def.kind === 'harvester') return b.timer / 1.5;
-    if (def.kind === 'tree') return b.stock / (b.type === 'elder_tree' ? TREE.elderMaxStock : TREE.maxStock);
+    if (def.kind === 'tree') return b.stock / (b.type === 'elder_tree' ? TREE.elderMaxStock : b.type === 'fruit_tree' ? ORCHARD.maxStock : TREE.maxStock);
+    if (def.kind === 'hive') return b.progress / (def.produces?.every ?? 15);
     if (def.kind === 'sapling') return b.progress / TREE.saplingGrowTime;
     if (def.kind === 'beacon' && this.g.s.islets.summon) return 1 - this.g.s.islets.summon.t / 45;
     return 0;
@@ -528,6 +538,8 @@ export class UI {
       def.kind === 'windmill' || def.kind === 'engine' ? Math.round(s.power.gen) + '/' + s.power.demand : '',
       def.kind === 'dispatcher' || def.kind === 'sorter' ? Object.keys(s.stats.obtained).length : '',
       Math.floor(this.progressOf(b) * (def.kind === 'sapling' ? 20 : 0)),
+      b.level, upgradable(def) ? s.trade.marks + ':' + s.known.has('tinker') + s.known.has('master') : '',
+      def.kind === 'post' ? JSON.stringify(s.trade) : '',
     ].join('|');
     if (sig === this.panelSig) return;
     this.panelSig = sig;
@@ -540,10 +552,12 @@ export class UI {
       statusText = miss ? `Needs ${ITEMS[miss as ItemId].name}` : r.fuel && b.fuel < (r.fuel ?? 0) ? 'Needs fuel' : statusText;
     }
     if (def.kind === 'harvester' && b.status === 'noinput') statusText = 'No trees ready nearby';
+    if (def.kind === 'hive' && b.status === 'noinput') statusText = 'Needs trees within reach';
+    if (def.kind === 'post') statusText = '';
     if (['tree', 'sapling', 'node', 'storage', 'workbench', 'depot', 'forge', 'beacon', 'pylon', 'splitter', 'sorter', 'manual'].includes(def.kind)) statusText = '';
     const head = h('div', { class: 'panel-head' },
       h('div', { class: 'thumb' }, img(thumb(b.type))),
-      h('div', { class: 't' }, h('div', { class: 'name', text: def.name }),
+      h('div', { class: 't' }, h('div', { class: 'name', text: def.name + (b.level > 1 ? ' · ' + ROMAN[b.level] : '') }),
         statusText ? h('div', { class: 'status ' + statusCls }, h('i'), statusText) : h('div', { class: 'sub', text: def.desc })),
       h('button', { class: 'close', 'aria-label': 'Close', onclick: () => { this.g.select(null); audio.play('close'); } }, img(glyph('close'))));
     const body = h('div', { class: 'panel-body scroll' });
@@ -585,11 +599,11 @@ export class UI {
     };
     switch (def.kind) {
       case 'tree': {
-        const max = b.type === 'elder_tree' ? TREE.elderMaxStock : TREE.maxStock;
+        const max = b.type === 'elder_tree' ? TREE.elderMaxStock : b.type === 'fruit_tree' ? ORCHARD.maxStock : TREE.maxStock;
         body.append(h('div', { class: 'caps', text: 'Ready to gather' }), h('div', { class: 'num', style: 'font-size:1.1rem', text: `${Math.floor(b.stock)} / ${max}` }), this.bar());
         body.append(h('div', { class: 'muted', style: 'font-size:0.82rem', text: 'Tap the tree in the world to gather. Treewrights beside it can do this for you.' }));
         actions.append(h('button', { class: 'btn primary', onclick: () => { const r = A.harvestAt(s, b.x, b.y); if (r.ok) { audio.play('harvest'); g.markDirty(); this.floaterCenter(r.got ?? {}); } else g.fail(r.reason || 'Regrowing'); } }, img(glyph('hand')), 'Gather'));
-        if (b.type === 'tree') actions.append(h('button', { class: 'btn', onclick: () => g.tryRemove(b.x, b.y) }, img(glyph('trash')), 'Fell'));
+        if (b.type === 'tree' || b.type === 'fruit_tree') actions.append(h('button', { class: 'btn', onclick: () => g.tryRemove(b.x, b.y) }, img(glyph('trash')), 'Fell'));
         break;
       }
       case 'sapling':
@@ -628,16 +642,17 @@ export class UI {
           for (const k in rr.inputs) prod.append(this.slot(k as ItemId, `${rr.inputs[k as ItemId]}`, (b.inBuf[k as ItemId] ?? 0) < (rr.inputs[k as ItemId] ?? 0)));
           prod.append(h('span', { class: 'arrow', text: '→' }));
           for (const k in rr.outputs) prod.append(this.slot(k as ItemId, `${rr.outputs[k as ItemId]}`));
-          const speed = (g.s.cache.boost.get(b.id) ?? 1);
+          const boost = (g.s.cache.boost.get(b.id) ?? 1);
+          const speed = boost * levelSpeed(b.level);
           body.append(this.section('Production', `⏱ ${(rr.time / speed).toFixed(1)}s`, prod, this.bar()));
           // Inventory: what is buffered inside the machine
           const inv = h('div', { class: 'flow inv' });
-          const cap = def.bufferCap ?? 12;
+          const cap = bufCap(def, b);
           for (const k in rr.inputs) inv.append(this.slot(k as ItemId, `${fmt(b.inBuf[k as ItemId] ?? 0)}/${(rr.inputs[k as ItemId] ?? 0) * 2}`));
           for (const k in rr.outputs) inv.append(this.slot(k as ItemId, `${fmt(b.outBuf[k as ItemId] ?? 0)}/${cap}`));
           const info: string[] = [];
           if (rr.fuel) info.push(`fuel ${Math.floor(b.fuel)}`);
-          if (speed > 1) info.push('resonating ×1.5');
+          if (boost > 1) info.push('resonating ×1.5');
           if (def.power) info.push(`uses ${def.power} breeze`);
           body.append(this.section('Inventory', info.join(' · '), inv));
         }
@@ -719,6 +734,16 @@ export class UI {
         break;
       }
       case 'beacon': this.fillBeacon(body, actions, b); addCommon(); break;
+      case 'post': this.fillPost(body, actions); addCommon(); break;
+      case 'hive': {
+        const trees = [-1, 0, 1].flatMap((dy) => [-1, 0, 1].map((dx) => [dx, dy])).filter(([dx, dy]) => (dx || dy) && [...s.buildings.values()].some((t) => t.x === b.x + dx && t.y === b.y + dy && BUILDINGS[t.type].kind === 'tree')).length;
+        body.append(h('div', { class: 'flow' }, this.slot('honey', fmt(b.outBuf.honey ?? 0)), this.slot('wax', fmt(b.outBuf.wax ?? 0))), this.bar());
+        body.append(h('div', { class: 'stats' }, h('span', { text: 'Trees within reach' }), h('span', { class: 'num', text: String(trees) }), h('span', { text: 'Honey every' }), h('span', { class: 'num', text: trees ? `${(15 / ((1 + HIVE.perTree * Math.min(HIVE.maxTrees, trees)) * levelSpeed(b.level))).toFixed(1)}s` : '—' })));
+        body.append(h('div', { class: 'muted', style: 'font-size:0.78rem', text: 'More trees nearby, more honey. Fruit trees beside a hive bear an extra apple.' }));
+        actions.append(h('button', { class: 'btn' + (stackTotal(b.outBuf) ? ' primary' : ''), onclick: () => { const res = g.act(() => A.collect(s, b.id), 'collect'); if (res.ok && res.got) this.floaterCenter(res.got); } }, 'Collect'));
+        addCommon();
+        break;
+      }
       case 'forge': this.fillForge(body, actions); break;
       case 'node': {
         const y = NODE_YIELD[b.type];
@@ -732,6 +757,77 @@ export class UI {
         addCommon();
     }
     if (actions.childElementCount) body.append(actions);
+    if (upgradable(def) && s.known.has('tinker')) body.append(this.upgradeSection(b));
+  }
+
+  private upgradeSection(b: Building): HTMLElement {
+    const g = this.g, s = g.s;
+    const def = BUILDINGS[b.type];
+    const max = A.maxLevel(s);
+    const row = h('div', { class: 'upgrade' });
+    const pips = h('span', { class: 'pips' });
+    for (let i = 1; i <= 5; i++) pips.append(h('i', { class: i <= b.level ? 'on' : i > max ? 'lock' : '' }));
+    if (b.level >= 5) row.append(pips, h('span', { class: 'muted', style: 'font-size:0.74rem', text: 'Fully upgraded' }));
+    else {
+      const c = upgradeCost(def, b.level + 1);
+      const can = A.canUpgrade(s, b.id);
+      const cost = this.costEl(c.items);
+      if (c.marks) cost.append(h('span', { class: s.trade.marks < c.marks ? 'lack' : '' }, img(uiIcon('marks')), String(c.marks)));
+      row.append(pips, b.level >= max ? h('span', { class: 'muted', style: 'font-size:0.72rem', text: 'Master tools from the market unlock IV–V' }) : cost,
+        h('button', { class: 'btn small' + (can.ok ? ' primary' : ''), disabled: b.level >= max, onclick: () => { const r = g.act(() => A.upgrade(s, b.id), 'craft'); if (r.ok) { g.view.pulse(b.id, 0.8); this.hint(`${def.name} is now level ${ROMAN[b.level]}.`); } } }, img(uiIcon('upgrade')), ROMAN[b.level + 1]));
+    }
+    return this.section('Upgrade', `+25% speed per level`, row);
+  }
+
+  private fillPost(body: HTMLElement, actions: HTMLElement): void {
+    const g = this.g, s = g.s, tr = s.trade;
+    const need = repForLevel(tr.level);
+    const head = h('div', { class: 'trade-head' }, h('span', { class: 'marks' }, img(uiIcon('marks')), h('span', { class: 'num', text: fmt(tr.marks) })),
+      h('span', { class: 'caps', text: `Trade level ${tr.level + 1}` }), h('div', { class: 'bar xp' }, h('i', { style: `width:${Math.round((tr.rep / need) * 100)}%` })));
+    body.append(head);
+    tr.board.forEach((c, i) => {
+      if (!c) {
+        body.append(h('div', { class: 'contract empty' }, h('span', { class: 'muted', text: `A new trader arrives in ${Math.ceil(tr.refresh[i] || CONTRACT_REFRESH)}s…` })));
+        return;
+      }
+      const have = s.stash[c.item];
+      const pct = Math.round((c.got / c.n) * 100);
+      body.append(h('div', { class: 'contract' },
+        h('div', { class: 'ci' }, img(itemIcon(c.item))),
+        h('div', { class: 'ct' }, h('div', { class: 'nm', text: `${fmt(c.n)} ${ITEMS[c.item].name}` }), h('div', { class: 'bar' }, h('i', { style: `width:${pct}%` })), h('div', { class: 'sub', text: `${fmt(c.got)} / ${fmt(c.n)} · you have ${fmt(have)}` })),
+        h('div', { class: 'cr' }, h('span', { class: 'reward' }, img(uiIcon('marks')), h('span', { class: 'num', text: String(c.marks) })),
+          h('div', { class: 'cb' },
+            h('button', { class: 'btn small' + (have ? ' primary' : ''), title: 'Hand over from your stash', onclick: () => { const r = g.act(() => A.handOver(s, i), 'collect'); if (r.ok) this.panelSig = ''; } }, 'Give'),
+            h('button', { class: 'btn small ghost', title: tr.skipCd > 0 ? `Next swap in ${Math.ceil(tr.skipCd)}s` : 'Swap for another contract', onclick: () => { g.act(() => A.skipContract(s, i), 'tap'); this.panelSig = ''; } }, '↻')))));
+    });
+    body.append(h('div', { class: 'muted', style: 'font-size:0.74rem', text: 'Conveyors pointing into the post fill contracts too. Only wanted goods are taken.' }));
+    actions.append(h('button', { class: 'btn primary', onclick: () => this.openMarket() }, img(uiIcon('market'), 'ui'), 'Market'));
+  }
+
+  openMarket(): void {
+    const g = this.g, s = g.s;
+    const list = h('div', { class: 'market scroll' });
+    const render = () => {
+      clear(list);
+      for (const m of MARKET) {
+        if (!A.marketVisible(s, m.id)) continue;
+        const price = marketPrice(m, s.trade.bought[m.id] ?? 0);
+        const icon = m.gives ? itemIcon(Object.keys(m.gives)[0] as ItemId) : uiIcon(m.id === 'master' ? 'upgrade' : m.id === 'hive' ? 'market' : 'marks');
+        list.append(h('div', { class: 'offer' }, h('div', { class: 'ci' }, img(m.id === 'hive' ? thumb('hive') : m.id === 'lanterns' ? thumb('lantern') : icon)),
+          h('div', { class: 'ct' }, h('div', { class: 'nm', text: m.name }), h('div', { class: 'sub', text: m.desc })),
+          h('button', { class: 'btn small' + (s.trade.marks >= price ? ' primary' : ''), onclick: () => { const r = g.act(() => A.buy(s, m.id), 'collect'); if (r.ok) { this.hint(`Bought: ${m.name}`); render(); head.querySelector('.sub')!.textContent = `You have ${fmt(s.trade.marks)} Marks`; } } }, img(uiIcon('marks')), String(price))));
+      }
+    };
+    const head = this.modalHead('Market', `You have ${fmt(s.trade.marks)} Marks`, uiIcon('market'));
+    render();
+    this.openModal(h('div', { style: 'display:flex;flex-direction:column;min-height:0;max-height:inherit' }, head, list));
+  }
+
+  private showWeather(): void {
+    const s = this.g.s;
+    const day = dayIndex(s.time);
+    const w = weatherFor(day, s.seed), n = weatherFor(day + 1, s.seed);
+    this.hint(`${w.name}: ${w.desc} Tomorrow: ${n.name.toLowerCase()}.`, false, 4200);
   }
 
   private recipeFlow(b: Building, r: (typeof RECIPES)[string], fromStash: boolean): HTMLElement {

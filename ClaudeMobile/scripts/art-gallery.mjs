@@ -7,6 +7,7 @@ const man = JSON.parse(readFileSync('public/art/manifest.json', 'utf8'));
 const sheets = Array.from({ length: man.sheets }, (_, i) => decodePNG(readFileSync(`public/art/sheet${i}.png`)));
 let keys;
 if (prefix === 'sprite') keys = Object.entries(man.sprites).map(([t, s]) => `${t}:${s.main}:0`);
+else if (prefix.startsWith('@')) keys = readFileSync(prefix.slice(1), 'utf8').split('\n').filter(Boolean);
 else keys = Object.keys(man.rects).filter((k) => k.startsWith(prefix)).sort();
 const W = 2000, pad = 12;
 let x = pad, y = pad, rowH = 0;

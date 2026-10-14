@@ -2,13 +2,15 @@ import { BUILDINGS } from './content/buildings';
 import { isItemId, type ItemId, type Stack } from './content/items';
 import type { Floor } from './content/buildings';
 import {
-  type Building, type Dir, type GameState, SAVE_VERSION, createState, emptyStash, newBuilding, key, hashSeed, emptyCache,
+  type Building, type Dir, type GameState, SAVE_VERSION, createState, emptyStash, newBuilding, key, hashSeed, emptyCache, emptyTrade,
 } from './state';
 import { rebuildCache } from './sim';
+import type { Contract } from './content/trade';
 
 /** On-disk shape (current version). Plain JSON; Maps flattened to arrays. */
 export interface SaveData {
   v: number;
+  seed: number;
   rng: number;
   time: number;
   tiles: [number, number, Floor, string?][];
@@ -20,6 +22,7 @@ export interface SaveData {
   nextId: number;
   islets: GameState['islets'];
   forge: GameState['forge'];
+  trade: GameState['trade'];
   flow: GameState['flow'];
   tuftTimer: number;
   savedAt: number;
@@ -28,7 +31,7 @@ export interface SaveData {
 
 type SavedBuilding = [
   id: number, type: string, x: number, y: number, dir: number,
-  extra: Partial<Pick<Building, 'recipe' | 'progress' | 'working' | 'inBuf' | 'outBuf' | 'fuel' | 'stock' | 'timer' | 'hold' | 'filter' | 'rr'>> & { items?: [ItemId, number][] },
+  extra: Partial<Pick<Building, 'recipe' | 'progress' | 'working' | 'inBuf' | 'outBuf' | 'fuel' | 'stock' | 'timer' | 'hold' | 'filter' | 'rr' | 'level'>> & { items?: [ItemId, number][] },
 ];
 
 function cleanStack(st: Stack | undefined): Stack {
@@ -56,6 +59,7 @@ export function serialize(s: GameState, view?: SaveData['view']): SaveData {
     if (b.hold) e.hold = b.hold;
     if (b.filter) e.filter = b.filter;
     if (b.rr) e.rr = b.rr;
+    if (b.level > 1) e.level = b.level;
     if (b.items.length) e.items = b.items.map((i) => [i.item, i.pos]);
     buildings.push([b.id, b.type, b.x, b.y, b.dir, e]);
   }
@@ -65,6 +69,7 @@ export function serialize(s: GameState, view?: SaveData['view']): SaveData {
   for (const w of s.wisps) if (w.carry && w.n) stash[w.carry] = (stash[w.carry] ?? 0) + w.n;
   return {
     v: SAVE_VERSION,
+    seed: s.seed,
     rng: s.rng,
     time: s.time,
     tiles: [...s.tiles.values()].map((t) => (t.islet ? [t.x, t.y, t.floor, t.islet] : [t.x, t.y, t.floor])),
@@ -76,6 +81,7 @@ export function serialize(s: GameState, view?: SaveData['view']): SaveData {
     nextId: s.nextId,
     islets: s.islets,
     forge: s.forge,
+    trade: s.trade,
     flow: s.flow,
     tuftTimer: s.tuftTimer,
     savedAt: s.savedAt,
@@ -101,6 +107,8 @@ export const MIGRATIONS: Record<number, (d: AnySave) => AnySave> = {
       tuftTimer: 0,
     };
   },
+  // v2 → v3: world seed (weather), trade state, machine levels (default 1).
+  2: (d) => ({ ...d, v: 3, seed: (d.seed ?? d.rng ?? 1) >>> 0, trade: d.trade ?? emptyTrade() }),
 };
 
 export function migrate(d: AnySave): SaveData {
@@ -123,6 +131,7 @@ export function deserialize(raw: unknown): { state: GameState; view?: SaveData['
   s.buildings.clear();
   s.occ.clear();
   s.rng = d.rng >>> 0;
+  s.seed = (d.seed ?? d.rng) >>> 0;
   s.time = +d.time || 0;
   for (const [x, y, floor, islet] of d.tiles ?? []) {
     if (!Number.isInteger(x) || !Number.isInteger(y)) continue;
@@ -145,6 +154,7 @@ export function deserialize(raw: unknown): { state: GameState; view?: SaveData['
     b.hold = e.hold && isItemId(e.hold) ? e.hold : null;
     b.filter = e.filter && isItemId(e.filter) ? e.filter : null;
     b.rr = e.rr ?? 0;
+    b.level = Math.max(1, Math.min(5, Math.floor(e.level ?? 1)));
     b.items = (e.items ?? []).filter(([it]) => isItemId(it)).map(([item, pos]) => ({ item, pos, prev: pos }));
     let clash = false;
     for (let dy = 0; dy < def.size; dy++) for (let dx = 0; dx < def.size; dx++) if (s.occ.has(key(x + dx, y + dy))) clash = true;
@@ -165,6 +175,15 @@ export function deserialize(raw: unknown): { state: GameState; view?: SaveData['
   s.islets = d.islets ?? { docked: 0, summon: null };
   s.forge = { ...s.forge, ...(d.forge ?? {}) };
   s.flow = d.flow ?? s.flow;
+  const tr = d.trade ?? emptyTrade();
+  const okContract = (c: Contract | null): Contract | null => (c && isItemId(c.item) && c.n > 0 ? { item: c.item, n: c.n | 0, got: Math.min(c.n, c.got | 0), marks: c.marks | 0 } : null);
+  s.trade = {
+    ...emptyTrade(),
+    ...tr,
+    board: [0, 1, 2].map((i) => okContract(tr.board?.[i] ?? null)),
+    refresh: [0, 1, 2].map((i) => +(tr.refresh?.[i] ?? 0) || 0),
+    bought: { ...(tr.bought ?? {}) },
+  };
   s.tuftTimer = d.tuftTimer ?? 0;
   s.savedAt = d.savedAt ?? 0;
   s.cache = emptyCache();

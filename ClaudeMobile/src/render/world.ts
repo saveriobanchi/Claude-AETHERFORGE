@@ -1,9 +1,9 @@
 import { Application, Container, Graphics, Rectangle, RenderTexture, Sprite, Texture, TextureSource } from 'pixi.js';
-import { BUILDINGS } from '../core/content/buildings';
+import { BUILDINGS, TREE } from '../core/content/buildings';
 import { ITEM_IDS, type ItemId } from '../core/content/items';
 import { RECIPES } from '../core/content/recipes';
 import { ISLETS, SUMMON_TIME } from '../core/content/world';
-import { currentRecipe } from '../core/sim';
+import { currentRecipe, weatherNow } from '../core/sim';
 import { type Building, type GameState, type SimEvent, DX, DY, dayFraction, key, stackTotal } from '../core/state';
 import { P } from './art/palette';
 import { PixelCanvas, rgb } from './art/pixel';
@@ -99,6 +99,8 @@ export class WorldView {
   private arrowTex: Texture[] = [];
   private breezeTex!: Texture;
   private isletArrival: Sprite | null = null;
+  private ship: Sprite | null = null;
+  private shipFrames: ArtImage[] = [];
   private time = 0;
   private shakeT = 0;
   bloom = false;
@@ -532,6 +534,7 @@ export class WorldView {
     this.worldView.scale.set(z / k);
     this.worldView.position.set(this.vw / 2 - (this.cam.x - shx / z) * z - rx * z / k, this.vh / 2 - (this.cam.y - shy / z) * z - ry * z / k);
 
+    this.sky.weather = weatherNow(s).id;
     const sky = this.sky.update(dayFraction(s), this.time, this.cam.x * z, this.cam.y * z, this.vw, this.vh, o.reduced, !o.observe || true, (this.islandBottom - this.cam.y) * z + this.vh / 2);
     this.night = sky.night;
     for (const layer of [this.terrain, this.shadows, this.floor, this.items, this.objects, this.fx.layer]) layer.tint = sky.tint;
@@ -582,6 +585,7 @@ export class WorldView {
     this.renderWisps(s, alpha);
     this.renderOverlay(s, o);
     this.renderIsletArrival(s, dt);
+    this.renderShip(s);
     // hide unused item sprites
     for (let i = this.itemUsed; i < this.itemPool.length; i++) this.itemPool[i].visible = false;
 
@@ -625,14 +629,14 @@ export class WorldView {
     if (kind === 'tree') {
       if (b.type === 'tree') frames = vars[b.stock >= 4 ? 's5' : b.stock >= 1 ? 's3' : 's0'] ?? frames;
     } else if (kind === 'sapling') {
-      const stage = Math.min(2, Math.floor((b.progress / 45) * 3));
+      const stage = Math.min(2, Math.floor((b.progress / TREE.saplingGrowTime) * 3));
       frames = vars['g' + stage] ?? frames;
     } else if (kind === 'storage') {
       frames = vars['f' + this.fillLevel] ?? frames;
     } else if (kind === 'forge') {
       frames = vars['st' + Math.max(0, Math.min(3, s.forge.stage))] ?? frames;
     }
-    const animated = b.status === 'working' || ['tree', 'tuft', 'node', 'pylon', 'beacon', 'sapling', 'forge', 'elder'].includes(kind) || b.type === 'elder_tree';
+    const animated = b.status === 'working' || ['tree', 'tuft', 'node', 'pylon', 'beacon', 'sapling', 'forge', 'elder', 'post', 'decor'].includes(kind) || b.type === 'elder_tree';
     const raw = animated && frames.length > 1 ? Math.floor((t + v.phase) * st.def.fps) % frames.length : 0;
     const fr = frames[Number.isFinite(raw) && raw >= 0 ? raw : 0];
     if (v.sprite.texture !== fr.tex) setArt(v.sprite, fr);
@@ -650,7 +654,7 @@ export class WorldView {
     // problem bubbles after a short grace period
     const problem = status === 'noinput' || status === 'blocked' || status === 'nopower' || status === 'ready';
     v.problem = problem ? v.problem + dt : 0;
-    const show = o.bubbles && !o.observe && problem && v.problem > (status === 'ready' ? 1.5 : 3) && (kind === 'crafter' || kind === 'harvester' || kind === 'generator' || kind === 'drill' || kind === 'engine');
+    const show = o.bubbles && !o.observe && problem && v.problem > (status === 'ready' ? 1.5 : 3) && (kind === 'crafter' || kind === 'harvester' || kind === 'generator' || kind === 'drill' || kind === 'engine' || kind === 'hive');
     if (show) {
       if (!v.bubble) {
         v.bubble = new Container();
@@ -834,18 +838,35 @@ export class WorldView {
     for (let i = gi; i < this.ghostPool.length; i++) this.ghostPool[i].visible = false;
   }
 
+  /** A trader's airship hovers beside the first trading post while contracts are open. */
+  private renderShip(s: GameState): void {
+    let post: Building | undefined;
+    for (const b of s.buildings.values()) if (b.type === 'trading_post') { post = b; break; }
+    const show = !!post && s.trade.board.some((c) => c) && art.has('ship:0');
+    if (!show) { if (this.ship) this.ship.visible = false; return; }
+    if (!this.ship) {
+      this.shipFrames = [0, 1, 2, 3].map((i) => art.img(`ship:${i}`));
+      this.ship = new Sprite();
+      this.ship.scale.set(1 / art.R);
+      this.objects.addChild(this.ship);
+    }
+    // float off the open side of the post
+    let d = 1;
+    for (const k of [1, 0, 3, 2]) if (!s.tiles.has(key(post!.x + DX[k], post!.y + DY[k]))) { d = k; break; }
+    const fx = post!.x + DX[d] * 3 - 0.5, fy = post!.y + DY[d] * 3 - 0.5;
+    const [wx, wy] = tileCenter(fx + 0.5, fy + 0.5);
+    setArt(this.ship, this.shipFrames[Math.floor(this.time * 3) % 4]);
+    this.ship.visible = true;
+    this.ship.position.set(wx, wy);
+    this.ship.zIndex = (fx + fy + 1) * 512 + fx + 256;
+  }
+
   private renderIsletArrival(s: GameState, _dt: number): void {
     const sm = s.islets.summon;
     if (!sm) { if (this.isletArrival) this.isletArrival.visible = false; return; }
     if (!this.isletArrival) {
-      const st = this.spr.get('tree')!;
-      void st;
-      const c = new PixelCanvas(48, 54);
-      c.ellipse(24, 12, 22, 7, (_x, y) => (y < 12 ? P.grass[4] : P.grass[3]));
-      for (let y = 12; y < 54; y++) { const half = 22 * (1 - (y - 12) / 42); for (let x = Math.round(24 - half); x <= 24 + half; x++) c.set(x, y, P.rock[2 + ((x + y) % 7 === 0 ? 1 : 0)]); }
-      c.outline(0.5);
-      const tex = Texture.from(c.toCanvas());
-      tex.source.scaleMode = 'nearest';
+      const im = art.img('islet:0');
+      const tex = im.tex;
       this.isletArrival = new Sprite(tex);
       this.isletArrival.anchor.set(0.5, 0.25);
       this.overlay.addChild(this.isletArrival);

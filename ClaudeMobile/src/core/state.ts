@@ -1,6 +1,7 @@
 import { BUILDINGS, type Floor } from './content/buildings';
 import { ITEM_IDS, type ItemId, type Stack } from './content/items';
 import { ATTUNE, BASE_CAPACITY } from './content/world';
+import type { Contract } from './content/trade';
 
 export type Dir = 0 | 1 | 2 | 3; // 0:+x 1:+y 2:-x 3:-y
 export const DX = [1, 0, -1, 0] as const;
@@ -46,6 +47,8 @@ export interface Building {
   /** Visual pulse counter incremented on each completed cycle. */
   cycles: number;
   claimed: number;
+  /** Upgrade level (1..5). */
+  level: number;
 }
 
 export interface Wisp {
@@ -72,7 +75,9 @@ export type SimEvent =
   | { type: 'forge_stage'; stage: number }
   | { type: 'resonance'; level: number }
   | { type: 'deliver'; id: number; item: ItemId }
-  | { type: 'spill'; id: number; item: ItemId };
+  | { type: 'spill'; id: number; item: ItemId }
+  | { type: 'contract'; item: ItemId; marks: number }
+  | { type: 'trade_level'; level: number };
 
 export interface FlowBucket {
   dt: number;
@@ -80,8 +85,24 @@ export interface FlowBucket {
   out: Stack;
 }
 
+export interface TradeState {
+  marks: number;
+  /** Marks ever earned (for the journal and pacing tests). */
+  earned: number;
+  rep: number;
+  level: number;
+  board: (Contract | null)[];
+  /** Seconds until an empty board slot gets a new contract. */
+  refresh: number[];
+  skipCd: number;
+  bought: Record<string, number>;
+  done: number;
+}
+
 export interface GameState {
   version: number;
+  /** World seed (weather and other per-world variety); constant. */
+  seed: number;
   rng: number;
   time: number;
   tiles: Map<number, Tile>;
@@ -104,6 +125,7 @@ export interface GameState {
   power: { gen: number; demand: number; ratio: number; wind: number; nextDemand: number };
   islets: { docked: number; summon: { beacon: number; t: number; index: number } | null };
   forge: { id: number; stage: number; progress: Stack; level: number; sparks: number; attune: Record<string, number>; request: Stack };
+  trade: TradeState;
   wisps: Wisp[];
   flow: { cur: FlowBucket; hist: FlowBucket[] };
   tuftTimer: number;
@@ -145,7 +167,7 @@ export function newBuilding(id: number, type: string, x: number, y: number, dir:
     id, type, x, y, dir,
     recipe: null, progress: 0, working: false,
     inBuf: {}, outBuf: {}, fuel: 0, stock: 0, timer: 0, pushTimer: 0,
-    items: [], hold: null, filter: null, rr: 0, status: 'idle', cycles: 0, claimed: 0,
+    items: [], hold: null, filter: null, rr: 0, status: 'idle', cycles: 0, claimed: 0, level: 1,
   };
 }
 
@@ -163,6 +185,7 @@ export function hashSeed(x: number, y: number): number {
 export function createState(seed = 1234567): GameState {
   const s: GameState = {
     version: SAVE_VERSION,
+    seed: seed >>> 0,
     rng: seed >>> 0,
     time: 0,
     tiles: new Map(),
@@ -176,6 +199,7 @@ export function createState(seed = 1234567): GameState {
     power: { gen: 0, demand: 0, ratio: 1, wind: 1, nextDemand: 0 },
     islets: { docked: 0, summon: null },
     forge: { id: 0, stage: -1, progress: {}, level: 0, sparks: 0, attune: {}, request: {} },
+    trade: emptyTrade(),
     wisps: [],
     flow: { cur: { dt: 0, inn: {}, out: {} }, hist: [] },
     tuftTimer: 0,
@@ -193,7 +217,11 @@ export function createState(seed = 1234567): GameState {
   return s;
 }
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
+
+export function emptyTrade(): TradeState {
+  return { marks: 0, earned: 0, rep: 0, level: 0, board: [null, null, null], refresh: [0, 0, 0], skipCd: 0, bought: {}, done: 0 };
+}
 
 export function addTile(s: GameState, x: number, y: number, floor: Floor, islet?: string): Tile {
   const t: Tile = { x, y, floor, seed: hashSeed(x, y), islet };
