@@ -219,7 +219,7 @@ export function thumb(type: string): string {
 
 /** Land tile thumbnail: a lone top piece of that floor. */
 export function landThumb(floor: 'grass' | 'stone' | 'sky'): string {
-  return art.url(`top:${floor}:15`);
+  return art.url(`top:${floor}:15:0`);
 }
 
 /** Painted interface icon (build, stash, journal …) from the art pack. */

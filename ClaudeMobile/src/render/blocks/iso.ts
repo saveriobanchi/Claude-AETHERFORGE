@@ -61,6 +61,9 @@ export class Canvas {
   ty = 0;
   at(x: number, y: number): this { this.tx = x; this.ty = y; return this; }
 
+  /** Pixels per block edge unit relative to the standard 64 px tile (0.5 for distant islets, mini icons). */
+  S = 1;
+
   constructor(readonly w: number, readonly h: number, readonly ox: number, readonly oy: number) {
     const n = w * h;
     this.col = new Uint8ClampedArray(n * 4);
@@ -72,7 +75,7 @@ export class Canvas {
   }
 
   proj(x: number, y: number, z: number): [number, number] {
-    return [this.ox + (x - y) * 32, this.oy + (x + y) * 16 - z * 32];
+    return [this.ox + (x - y) * 32 * this.S, this.oy + ((x + y) * 16 - z * 32) * this.S];
   }
 
   /** Textured parallelogram: origin p, edges eu (texture u) and ev (texture v). */
@@ -142,8 +145,9 @@ export class Canvas {
   }
 
   /** Upright sprite standing at p (its bottom centre), 2 px per texel, facing the camera. */
-  sprite(p0: V3, f: Face, id = 0, scale = 2, bias = 0.3): void {
+  sprite(p0: V3, f: Face, id = 0, scale0 = 2, bias = 0.3): void {
     const p: V3 = [p0[0] + this.tx, p0[1] + this.ty, p0[2]];
+    const scale = Math.max(1, Math.round(scale0 * this.S));
     const t = f.tex;
     const [u0, v0, u1, v1] = f.uv ?? [0, 0, t.w, t.h];
     const tw = Math.abs(u1 - u0), th = Math.abs(v1 - v0);
@@ -163,7 +167,7 @@ export class Canvas {
       const lift = 0.86 + 0.18 * (1 - y / (th * scale));
       this.dep[k] = depth;
       this.id[k] = id;
-      this.wx[k] = p[0]; this.wy[k] = p[1]; this.wz[k] = p[2] + (1 - y / (th * scale)) * (th * scale) / 32;
+      this.wx[k] = p[0]; this.wy[k] = p[1]; this.wz[k] = p[2] + (1 - y / (th * scale)) * (th * scale) / (32 * this.S);
       this.up[k] = 0;
       this.lit[k] = f.glow ? 1 : 0;
       this.col[k * 4] = t.data[ti] * tint[0] * (f.glow ? 1 : lift);
@@ -241,7 +245,7 @@ export class Canvas {
         col[k * 4] = r; col[k * 4 + 1] = g; col[k * 4 + 2] = b;
       } else if (o.ground && this.casters.length) {
         // virtual ground: translucent shadow pixels under objects
-        const X0 = (k % w) + 0.5 - this.ox, Y0 = Math.floor(k / w) + 0.5 - this.oy;
+        const X0 = ((k % w) + 0.5 - this.ox) / this.S, Y0 = (Math.floor(k / w) + 0.5 - this.oy) / this.S;
         const gx = (X0 / 32 + Y0 / 16) / 2, gy = (Y0 / 16 - X0 / 32) / 2;
         if (this.shadowed(gx, gy, 0.002)) {
           col[k * 4] = 34; col[k * 4 + 1] = 28; col[k * 4 + 2] = 58; col[k * 4 + 3] = 92;

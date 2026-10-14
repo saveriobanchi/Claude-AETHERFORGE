@@ -87,6 +87,8 @@ export class Game {
 
     const stage = document.getElementById('stage')!;
     await art.load();
+    // pixel frames for the interface come from the art pack
+    for (const k of ['panel', 'btn', 'btnp', 'btnd', 'slot', 'big']) document.documentElement.style.setProperty(`--tex-${k}`, `url(${art.url('uitex:' + k)})`);
     await this.view.init(stage);
     this.applySettings();
     this.view.bloom = (this.s.forge.attune.bloom ?? 0) > 0;
@@ -129,8 +131,9 @@ export class Game {
   }
 
   defaultZoom(): number {
-    const short = Math.min(window.innerWidth, window.innerHeight);
-    return Math.max(1.5, Math.min(3, Math.round((short / 220) * 4) / 4));
+    // about seven tiles across the short side, snapped so art pixels land on whole device pixels
+    const short = Math.min(window.innerWidth, window.innerHeight), dpr = window.devicePixelRatio || 1;
+    return Math.max(1, Math.min(3, Math.round((short / 440) * dpr) / dpr));
   }
 
   applySettings(): void {
@@ -281,19 +284,24 @@ export class Game {
       case 'move': return this.tryMove(this.mode.id, tx, ty, this.mode.dir);
       default: break;
     }
-    const b = buildingAt(this.s, tx, ty);
+    let b = buildingAt(this.s, tx, ty);
+    if (!b) {
+      // a tap on tall art (a tree crown, a tower) reaching over this tile
+      const id = this.view.pickAt(sx, sy);
+      b = id !== null ? this.s.buildings.get(id) : undefined;
+    }
     if (!b) {
       if (this.selected !== null) { this.select(null); audio.play('close'); }
       return;
     }
     const kind = BUILDINGS[b.type].kind;
     if (kind === 'tree' || kind === 'tuft') {
-      const r = A.harvestAt(this.s, tx, ty);
+      const r = A.harvestAt(this.s, b.x, b.y);
       if (r.ok) {
         audio.play(kind === 'tuft' ? 'fiber' : 'harvest');
         haptic(8, this.settings.haptics);
         this.view.pulse(b.id, 0.7);
-        this.s.events.push({ type: 'harvest', x: tx, y: ty, items: r.got ?? {} });
+        this.s.events.push({ type: 'harvest', x: b.x, y: b.y, items: r.got ?? {} });
         if (r.got) this.ui.floater(sx, sy, r.got);
         this.markDirty();
       } else {

@@ -189,6 +189,22 @@ export class WorldView {
     return [Math.floor(fx + 0.5), Math.floor(fy + 0.5)];
   }
 
+  /**
+   * The front-most building whose art covers a screen point (tall art such
+   * as tree crowns reaches over the tiles behind it). Bounding boxes only.
+   */
+  pickAt(sx: number, sy: number): number | null {
+    const [wx, wy] = this.screenToWorld(sx, sy);
+    let best: number | null = null, bz = -Infinity;
+    for (const v of this.views.values()) {
+      if (!v.root.visible || v.type === 'belt' || v.root.zIndex <= bz) continue;
+      const sp = v.sprite, f = sp.texture.frame;
+      const x0 = v.root.x + sp.x - sp.anchor.x * f.width * sp.scale.x, y0 = v.root.y + sp.y - sp.anchor.y * f.height * sp.scale.y;
+      if (wx >= x0 && wx < x0 + f.width * sp.scale.x && wy >= y0 && wy < y0 + f.height * sp.scale.y) { best = v.id; bz = v.root.zIndex; }
+    }
+    return best;
+  }
+
   tileToScreen(x: number, y: number): [number, number] {
     const [wx, wy] = tileCenter(x, y);
     return [(wx - this.cam.x) * this.cam.zoom + this.vw / 2, (wy - this.cam.y) * this.cam.zoom + this.vh / 2];
@@ -214,11 +230,12 @@ export class WorldView {
       const [wx, wy] = tileCenter(t.x, t.y);
       x0 = Math.min(x0, wx); x1 = Math.max(x1, wx); y0 = Math.min(y0, wy); y1 = Math.max(y1, wy);
       const dist = gapDist(has, t.x, t.y);
-      const want = Math.max(1, Math.min(7.5, 0.9 + dist * 1.5 + (hashTile(t.x, t.y) - 0.5) * 1.2));
+      const want = Math.max(1, Math.min(7, 1 + dist * 1.6 + (hashTile(t.x, t.y) - 0.5) * 1.4));
       const depth = art.depths.reduce((p, d) => (Math.abs(d - want) < Math.abs(p - want) ? d : p), art.depths[0]);
       const v = Math.floor(hashTile(t.y * 3 + 1, t.x * 7) * art.colVariants);
       const mask = (has(t.x + 1, t.y) ? 0 : 1) | (has(t.x, t.y + 1) ? 0 : 2) | (has(t.x - 1, t.y) ? 0 : 4) | (has(t.x, t.y - 1) ? 0 : 8);
-      for (const k of [`col:${depth}:${v}`, `top:${t.floor}:${mask}`]) {
+      const tv = Math.floor(hashTile(t.x * 5 + 2, t.y * 11) * art.topVariants);
+      for (const k of [`col:${depth}:${v}`, `top:${t.floor}:${mask}:${tv}`]) {
         const sp = new Sprite();
         setArt(sp, art.img(k));
         sp.scale.set(1 / art.R);
@@ -249,7 +266,7 @@ export class WorldView {
       if (t.floor !== 'grass' || busy.has(key(t.x, t.y))) continue;
       for (let q = 0; q < 3; q++) {
         const h = hashTile(t.x * 5 + q * 31, t.y * 3 - q * 17);
-        if (h > 0.55) continue;
+        if (h > 0.3) continue;
         const kind = art.decorKinds[Math.floor(hashTile(t.x + q * 13, t.y * 11 + q) * art.decorKinds.length)];
         const v = Math.floor(hashTile(t.y * 7 + q, t.x * 5 - q) * art.decorVariants);
         const ox = hashTile(t.x * 13 + q, t.y * 7) - 0.5, oy = hashTile(t.x * 3, t.y * 17 + q) - 0.5;

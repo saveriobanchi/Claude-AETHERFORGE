@@ -1,4 +1,4 @@
-import { type Canvas, type Face } from '../iso';
+import { type Canvas, type Face, type Tex } from '../iso';
 import { Paint, type TexLib } from '../tex';
 
 export type Floor = 'grass' | 'stone' | 'sky';
@@ -122,4 +122,107 @@ export function waterfall(c: Canvas, L: TexLib, x: number, y: number, len: numbe
   const foam = new Paint(16, 4);
   for (let i = 0; i < 16; i++) for (let j = 0; j < 4; j++) if (h(i, j, f) > 0.35 - j * 0.1) foam.set(i, j, j < 2 ? 0xffffff : 0xd8f0f8);
   c.quad([x + 0.16, y + 1.08, -0.16], [0.68, 0, 0], [0, 0, -0.18], { tex: foam }, [1, 1, 1], 8, 0.08);
+}
+
+const TOPS: Record<Floor, [string, string]> = {
+  grass: ['a/grass_top', 'a/grass_side'],
+  stone: ['a/limestone_bricks', 'a/limestone_bricks'],
+  sky: ['a/marble_bricks', 'a/marble_bricks2'],
+};
+
+/** Neighbour context id: drawn so lighting sees the surroundings, then cut away. */
+export const CONTEXT_ID = 99;
+
+/**
+ * In-game terrain top: the floor block of one tile (z ∈ [−1, 0]) with rim
+ * plants and vines on its open front edges. `mask` bits mark missing
+ * neighbours (1:+x 2:+y 4:−x 8:−y); present back neighbours are drawn as
+ * context so edge highlights only appear on real island edges.
+ */
+export function topPiece(c: Canvas, L: TexLib, floor: Floor, mask: number, v: number): void {
+  const [tt, ts] = TOPS[floor];
+  const f = (n: string): Face => ({ tex: L.get(n) });
+  const ctx = (x: number, y: number) => c.box([x, y, -1], [x + 1, y + 1, 0], f(tt), f(ts), f(ts), CONTEXT_ID);
+  if (!(mask & 4)) ctx(-1, 0);
+  if (!(mask & 8)) ctx(0, -1);
+  if (!(mask & 12)) ctx(-1, -1);
+  // seed by variant so neighbouring tiles differ
+  const sx = v * 3 + 1, sy = v * 5 + mask;
+  c.box([0, 0, -1], [1, 1, 0], f(tt), f(ts), f(ts), 1, v);
+  if (floor === 'grass') {
+    const tuftN = ['grass', 'grass2', 'grass3', 'fern2', 'sedge'];
+    for (let i = 0; i < 6; i++) {
+      const side = i % 2;
+      if (!(mask & (side === 0 ? 2 : 1))) continue;
+      if (h(sx, sy, i + 40) < 0.35) continue;
+      const t = 0.1 + h(sx, sy, i + 30) * 0.8;
+      const p: [number, number, number] = side === 0 ? [t, 0.97, 0] : [0.97, t, 0];
+      c.sprite(p, { tex: L.get('a/plants/' + tuftN[Math.floor(h(sx, sy, i + 50) * tuftN.length)]) }, 1, 2, 0.2);
+    }
+    for (let side = 0; side < 2; side++) {
+      if (!(mask & (side === 0 ? 2 : 1)) || h(sx + side, sy, 7) < 0.4) continue;
+      const vt = vineTex(L, Math.floor(h(sx, sy, side) * 6));
+      const len = 1 + Math.floor(h(sx, sy, side + 3) * 2.5);
+      if (side === 0) c.quad([0, 1.01, 0], [1, 0, 0], [0, 0, -len * 1.5], { tex: vt, uv: [0, 0, 16, 48] }, [0.86, 0.84, 0.86], 1, 0.01);
+      else c.quad([1.01, 1, 0], [0, -1, 0], [0, 0, -len * 1.5], { tex: vt, uv: [0, 0, 16, 48] }, [0.66, 0.66, 0.76], 1, 0.01);
+    }
+  }
+}
+
+/** In-game rock column under a tile top: `depth` blocks from z = −1 down. */
+export function columnPiece(c: Canvas, L: TexLib, depth: number, v: number): void {
+  const f = (n: string): Face => ({ tex: L.get(n) });
+  for (let k = 1; k <= depth; k++) {
+    const z = -1 - k;
+    const r = h(v * 7 + k, v * 3 + depth, 11);
+    const n = k === 1 ? 'a/dirt' : k === 2 ? (r > 0.5 ? 'b/old_dirt' : 'a/dirt') : k > 4 ? (r > 0.7 ? 'a/basalt' : 'a/slate') : r > 0.86 ? 'a/stone_generic_ore_nuggets' : r > 0.78 ? 'a/stone_generic_ore_crystalline' : r > 0.45 ? 'b/stone' : 'b/andesite';
+    // the bottom block tapers so columns end in a rough point, not a flat cut
+    const inset = k === depth && depth > 1 ? 0.125 + h(v, depth, 5) * 0.125 : 0;
+    c.box([inset, inset, z], [1 - inset, 1 - inset, z + 1], f(n), f(n), f(n), 1);
+  }
+}
+
+/** Decorations scattered on free grass. */
+export function decor(c: Canvas, L: TexLib, kind: string, v: number): void {
+  const p = (n: string, x: number, y: number, s = 2) => c.sprite([x, y, 0], { tex: L.get('a/plants/' + n) }, 2, s);
+  if (kind === 'tuft') { const n = ['grass', 'grass2', 'grass3', 'fern']; p(n[v], 0.45, 0.5); p(n[(v + 1) % 4], 0.6, 0.6); return; }
+  if (kind === 'flowers') { const n = ['aster', 'dandelion', 'forget_me_not', 'oxeye_daisy', 'lupine', 'pimpernel', 'orchid_ground', 'goldenrod']; p(n[v * 2], 0.4, 0.5); p(n[v * 2 + 1], 0.62, 0.6); return; }
+  c.castOn = true;
+  if (kind === 'bush') {
+    const w = (['oak', 'beech', 'maple', 'pine'] as const)[v];
+    const lv: Face = { tex: L.get(`a/${w}_leaves`) };
+    c.box([0.25, 0.25, 0], [0.75, 0.75, 0.5], lv, lv, lv, 3);
+    if (v % 2) c.box([0.35, 0.35, 0.5], [0.65, 0.65, 0.68], lv, lv, lv, 3);
+    if (v === 1) c.sprite([0.5, 0.76, 0.2], { tex: L.get('a/plants/mushroom_red') }, 4, 1);
+  } else {
+    const n = ['b/stone', 'a/cobblestone_mossy', 'b/andesite', 'a/granite'][v];
+    const fs: Face = { tex: L.get(n) };
+    c.box([0.3, 0.35, 0], [0.62, 0.65, 0.25], fs, fs, fs, 4);
+    c.box([0.55, 0.5, 0], [0.75, 0.7, 0.14], fs, fs, fs, 4);
+  }
+  c.castOn = false;
+}
+
+/** Waterfall strip texture for frame f: a translucent ribbon (10×96 texels) that frays into spray. */
+export function fallTex(f: number): Tex {
+  const W = 10, H = 96;
+  const p = { w: W, h: H, data: new Uint8ClampedArray(W * H * 4) };
+  const pal = [[44, 96, 160], [62, 128, 192], [92, 160, 214], [150, 206, 236], [232, 248, 255]];
+  const shift = Math.floor(f * 32);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    // narrows and breaks up toward the bottom
+    const fray = Math.max(0, (y - (H - 34)) / 34);
+    const edge = Math.floor(fray * 3);
+    if (x < edge || x >= W - edge) continue;
+    if (fray > 0 && h(x, (y + shift) >> 1, 13) < fray * 0.85) continue;
+    const yy = ((y - shift) % 32 + 32) % 32;
+    let i = x === edge || x === W - 1 - edge ? 0 : (x + (yy >> 3)) % 4 === 1 ? 2 : 1;
+    const n = h(x, yy, 3);
+    if (n > 0.84) i = 3;
+    if (n > 0.965) i = 4;
+    if (y < 2) i = 4; else if (y < 4) i = 3;
+    const a = y < 4 ? 255 : i >= 3 ? 235 : Math.round(205 - fray * 60);
+    p.data.set([...pal[i], a], (y * W + x) * 4);
+  }
+  return p;
 }

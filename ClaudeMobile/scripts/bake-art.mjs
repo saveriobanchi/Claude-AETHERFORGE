@@ -1,6 +1,6 @@
 // Bakes all game art (buildings, belts, terrain, decor, icons, sky islets)
-// with the offline renderer in src/render/hd into packed PNG sheets plus a
-// manifest in public/art. Skips work when the art sources are unchanged.
+// with the block renderer in src/render/blocks, textured from the CC0 packs
+// in art/cc0, into packed PNG sheets plus a manifest in public/art. Skips work when the art sources are unchanged.
 // Usage: node scripts/bake-art.mjs [--force]
 import { build } from 'esbuild';
 import { createHash } from 'node:crypto';
@@ -17,8 +17,9 @@ const force = process.argv.includes('--force');
 
 // cache key: every source file the art depends on
 const files = [];
-const walk = (d) => { for (const n of readdirSync(d)) { const p = join(d, n); if (statSync(p).isDirectory()) walk(p); else if (p.endsWith('.ts')) files.push(p); } };
-walk(join(root, 'src/render/hd'));
+const walk = (d) => { for (const n of readdirSync(d)) { const p = join(d, n); if (statSync(p).isDirectory()) walk(p); else if (p.endsWith('.ts') || p.endsWith('.png')) files.push(p); } };
+walk(join(root, 'src/render/blocks'));
+walk(join(root, 'art/cc0'));
 files.push(join(root, 'src/core/content/items.ts'), join(root, 'scripts/bake-art.mjs'));
 const hash = createHash('sha256');
 for (const f of files.sort()) hash.update(f.slice(root.length)).update(readFileSync(f));
@@ -31,27 +32,38 @@ if (!force && existsSync(manifestPath)) {
 const tmp = join(root, 'node_modules', '.cache', 'bake-art');
 mkdirSync(tmp, { recursive: true });
 const entry = join(tmp, 'catalog.mjs');
-await build({ entryPoints: [join(root, 'src/render/hd/catalog.ts')], bundle: true, format: 'esm', platform: 'node', outfile: entry, logLevel: 'warning' });
+await build({ entryPoints: [join(root, 'src/render/blocks/catalog.ts')], bundle: true, format: 'esm', platform: 'node', outfile: entry, logLevel: 'warning' });
 const url = pathToFileURL(entry).href + '?' + version;
 const cat = await import(url);
+const loaderSrc = `
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import pngjs from 'pngjs';
+export const load = (rel) => { const png = pngjs.PNG.sync.read(readFileSync(join(${JSON.stringify(root)}, 'art', 'cc0', rel))); return { w: png.width, h: png.height, data: new Uint8ClampedArray(png.data) }; };
+`;
+const loaderFile = join(tmp, 'loader.mjs');
+writeFileSync(loaderFile, loaderSrc);
 const jobs = Object.keys(cat.JOBS);
 // heaviest jobs first so workers finish together
-const weight = (k) => (k.startsWith('sprite:forge') || k.startsWith('sprite:windmill') || k.startsWith('sprite:tree') || k.startsWith('sprite:elder') ? 0 : k.startsWith('col') ? 1 : 2);
+const weight = (k) => (k.startsWith('sprite:forge') || k.startsWith('sprite:windmill') || k.startsWith('sprite:resonator') || k.startsWith('sprite:elder') ? 0 : k.startsWith('top') || k.startsWith('sprite') ? 1 : 2);
 jobs.sort((a, b) => weight(a) - weight(b));
 
 const wfile = join(tmp, 'worker.mjs');
 writeFileSync(wfile, `
 import { parentPort, workerData } from 'node:worker_threads';
-const { JOBS } = await import(workerData.url);
+const { JOBS, setLoader } = await import(workerData.url);
+const { load } = await import(workerData.loader);
+setLoader(load);
 parentPort.on('message', (k) => { const t = Date.now(); const r = JOBS[k](); parentPort.postMessage({ k, r, ms: Date.now() - t }); });
 `);
 const t0 = Date.now();
 const images = new Map();
+const metas = {};
 const queue = [...jobs];
 await Promise.all(Array.from({ length: Math.min(cpus().length, queue.length) }, () => new Promise((res, rej) => {
-  const w = new Worker(wfile, { workerData: { url } });
+  const w = new Worker(wfile, { workerData: { url, loader: pathToFileURL(loaderFile).href } });
   const next = () => { const k = queue.shift(); if (k) w.postMessage(k); else { w.terminate(); res(); } };
-  w.on('message', ({ k, r, ms }) => { for (const [name, img] of r) images.set(name, img); if (ms > 4000) console.log(`  ${k} ${ms} ms`); next(); });
+  w.on('message', ({ k, r, ms }) => { for (const [name, img] of r) { if (name.startsWith('meta:')) metas[name.slice(5)] = img.meta; else images.set(name, img); } if (ms > 4000) console.log(`  ${k} ${ms} ms`); next(); });
   w.on('error', rej);
   next();
 })));
@@ -76,8 +88,9 @@ for (const k of order) {
   cur.rowH = Math.max(cur.rowH, im.h);
 }
 
-rmSync(out, { recursive: true, force: true });
+// clear old sheets in place (dev servers keep watching the folder)
 mkdirSync(out, { recursive: true });
+for (const n of readdirSync(out)) if (/^sheet\d+\.png$|^manifest\.json$/.test(n)) rmSync(join(out, n));
 let bytes = 0;
 sheets.forEach((sh, i) => {
   const h = Math.min(SIZE, sh.y + sh.rowH);
@@ -96,10 +109,10 @@ for (const [type, sp] of Object.entries(cat.SPRITES)) {
   sprites[type] = {
     fps: sp.fps, main: sp.main ?? '_', lamp: !!sp.lamp,
     variants: sp.variants ?? { _: sp.frames },
-    lights: (sp.lights ?? []).map(cat.lightPx),
-    smoke: sp.smoke ? cat.lightPx([...sp.smoke, 0, 0]).slice(0, 2) : undefined,
+    lights: metas[type]?.lights ?? [],
+    smoke: metas[type]?.smoke,
   };
 }
-const manifest = { version, R: cat.ART_R, sheets: sheets.length, depths: cat.DEPTHS, colVariants: cat.COL_VARIANTS, decorKinds: cat.DECOR_KINDS, decorVariants: cat.DECOR_VARIANTS, sprites, rects };
+const manifest = { version, R: cat.ART_R, sheets: sheets.length, depths: cat.DEPTHS, colVariants: cat.COL_VARIANTS, topVariants: cat.TOP_VARIANTS, decorKinds: cat.DECOR_KINDS, decorVariants: cat.DECOR_VARIANTS, sprites, rects };
 writeFileSync(manifestPath, JSON.stringify(manifest));
 console.log(`baked ${images.size} images into ${sheets.length} sheet(s), ${(bytes / 1024).toFixed(0)} KB, ${((Date.now() - t0) / 1000).toFixed(1)} s`);

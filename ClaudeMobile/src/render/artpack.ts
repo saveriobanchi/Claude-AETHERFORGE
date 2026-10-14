@@ -26,6 +26,7 @@ interface Manifest {
   sheets: number;
   depths: number[];
   colVariants: number;
+  topVariants?: number;
   decorKinds: string[];
   decorVariants: number;
   sprites: Record<string, { fps: number; main: string; lamp: boolean; variants: Record<string, number>; lights: [number, number, number, number][]; smoke?: [number, number] }>;
@@ -37,6 +38,7 @@ class Art {
   R = 2;
   depths: number[] = [];
   colVariants = 1;
+  topVariants = 1;
   decorKinds: string[] = [];
   decorVariants = 1;
   sprites = new Map<string, ArtSprite>();
@@ -84,6 +86,7 @@ class Art {
     this.R = man.R;
     this.depths = man.depths;
     this.colVariants = man.colVariants;
+    this.topVariants = man.topVariants ?? 1;
     this.decorKinds = man.decorKinds;
     this.decorVariants = man.decorVariants;
     this.sheets = await Promise.all(Array.from({ length: man.sheets }, (_, i) => new Promise<HTMLImageElement>((ok, fail) => {

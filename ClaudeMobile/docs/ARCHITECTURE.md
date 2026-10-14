@@ -56,21 +56,32 @@ production is assumed to stop at that moment.
 
 ## Rendering & performance
 
-- All game art is modelled in code (src/render/hd) and baked by
-  `npm run art` (part of `npm run dev` and `npm run build`) into two PNG
-  sheets plus a manifest in `public/art/` (~1 MB, generated, not committed).
-  The bake renders each model with a sphere tracer in the game's exact
-  isometric projection, then snaps colours to hue-shifted pixel-art bands and
-  draws selective outlines, at 2 texels per world pixel. It runs on all CPU
-  cores (~80 s) and is skipped when the art sources are unchanged.
+- All game art is built from Minecraft-style blocks in code
+  (src/render/blocks) and textured with the vendored CC0 packs in `art/cc0/`
+  (see THIRD_PARTY_ASSETS.md). `npm run art` (part of `npm run dev` and
+  `npm run build`) bakes it into one PNG sheet plus a manifest in
+  `public/art/` (~0.8 MB, generated, not committed) in a few seconds, and
+  skips the work when the sources and textures are unchanged.
+- The block renderer rasterises textured faces in the game's exact
+  isometric projection (16×16 textures at 2×2 world pixels per texel) with a
+  z-buffer, then lights the picture: ray-traced sun shadows (objects also
+  bake a translucent ground shadow), screen-space ambient occlusion, a sun
+  rim on exposed top edges, warm point lights, depth haze under the island
+  and a 1 px hue-shifted outline. Machine faces (furnace mouths, gears,
+  saws, sails, belts…) are painted from pack textures; animation frames are
+  separate bakes.
 - Terrain is one rock-column sprite plus one top sprite per tile (chosen by
-  depth-from-edge and open-edge mask), drawn back to front; decor and
-  waterfalls are scattered deterministically per tile.
+  depth-from-edge and the open-edge mask), drawn back to front. Each top is
+  rendered with its back neighbours present (then cut away) so edge
+  highlights only appear on real island edges. Decor and waterfalls are
+  scattered deterministically per tile.
+- The interface frames (panels, buttons, slots) are baked from the same
+  textures and applied with CSS `border-image` at whole-pixel scales.
 - The world is drawn crisp at a whole number of device pixels per art pixel
   into an offscreen texture, then scaled smoothly to the exact zoom, so pixels
   stay even-sized and pans/zooms glide sub-pixel without shimmer. The sky is
   drawn with smooth filtering on its own.
-- Buildings, terrain, items and decor come from two baked sheets → heavily batched.
+- Buildings, terrain, items and decor come from one baked sheet → heavily batched.
 - Off-screen buildings are culled; sprites, items and particles are pooled.
 - Night lights are additive sprites, drawn only when it is dark.
 - Adaptive quality: if a device cannot hold ~40 fps it switches once to 1×
