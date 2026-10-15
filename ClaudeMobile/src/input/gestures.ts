@@ -18,6 +18,8 @@ export interface GestureHandlers {
   paintMove(x: number, y: number): void;
   paintEnd(x: number, y: number, cancelled: boolean): void;
   press(x: number, y: number): void;
+  /** The last finger lifted (after any tap or long press it made). */
+  release?(): void;
 }
 
 interface Ptr { id: number; x: number; y: number; sx: number; sy: number; t: number }
@@ -120,6 +122,7 @@ export function attachGestures(el: HTMLElement, h: GestureHandlers): () => void 
       const idle = performance.now() - vel.t > 80;
       h.panEnd(idle ? 0 : vel.x, idle ? 0 : vel.y);
     } else if (mode === 'paint') h.paintEnd(p.x, p.y, e.type === 'pointercancel');
+    if (ptrs.size === 0) h.release?.();
     if (ptrs.size === 1 && mode === 'pinch') {
       // continue as a pan with the remaining finger, without a jump
       mode = 'pan';
