@@ -16,7 +16,7 @@ import { ATTUNEMENTS, FORGE_STAGES, ISLETS, LANDS, landCost, summonCost } from '
 import type { OfflineReport } from '../core/offline';
 import { flowRates } from '../core/offline';
 import { buildingUnlocked, landUnlocked, recipeUnlocked, teasers } from '../core/progression';
-import { biomeAt, bufCap, crafterRate, currentRecipe, forgeNeeds, machineSpeed, weatherNow } from '../core/sim';
+import { biomeAt, bufCap, crafterRate, currentRecipe, forgeNeeds, luckyChance, machineSpeed, rareChance, tuftYield, weatherNow } from '../core/sim';
 import { type Building, type Dir, capacity, dayFraction, isNight, stackTotal } from '../core/state';
 import type { Game } from '../game';
 import { audio } from '../platform/audio';
@@ -46,6 +46,12 @@ const PATH_ICON = Object.fromEntries(PATHS.map((p) => [p.id, p.icon])) as Record
 function starText(n: number, empty = false): string {
   const shown = Math.min(n, MASTERY_STARS);
   return '★'.repeat(shown) + (empty ? '☆'.repeat(MASTERY_STARS - shown) : '') + (n > MASTERY_STARS ? ` +${n - MASTERY_STARS}` : '');
+}
+
+/** A probability as a short percentage: 35%, 4%, 0.2%. */
+function pct(p: number): string {
+  const v = p * 100;
+  return (v >= 10 ? Math.round(v) : v >= 1 ? Math.round(v * 10) / 10 : Math.round(v * 100) / 100) + '%';
 }
 
 function rewardText(r: Reward): string {
@@ -523,7 +529,8 @@ export class UI {
       };
       grid.append(h('div', { class: 'recipe' },
         h('div', { class: 'out' }, img(itemIcon(out)), h('span', { class: 'num muted', style: 'font-size:0.72rem', text: `×${r.outputs[out]}` })),
-        h('div', { class: 't' }, h('div', { class: 'nm', text: r.name }), this.costEl(r.inputs), h('div', { class: 'muted', style: 'font-size:0.7rem', text: `have ${fmt(s.stash[out])}` })),
+        h('div', { class: 't' }, h('div', { class: 'nm', text: r.name }), this.costEl(r.inputs), h('div', { class: 'muted', style: 'font-size:0.7rem', text: `have ${fmt(s.stash[out])}` }),
+          r.chance ? h('div', { class: 'flow sometimes' }, h('span', { class: 'caps', text: 'Sometimes' }), ...Object.keys(r.chance).map((k) => this.chanceSlot(k as ItemId, rareChance(s, k as ItemId, r.chance![k as ItemId] ?? 0), 'per craft'))) : null),
         h('div', { class: 'btns' },
           h('button', { class: 'btn' + (max < 1 ? ' off' : ''), onclick: () => doCraft(1) }, '1'),
           h('button', { class: 'btn' + (max < 5 ? ' off' : ''), onclick: () => doCraft(5) }, '5'),
@@ -554,6 +561,15 @@ export class UI {
     if (def.kind === 'sapling') return b.progress / TREE.saplingGrowTime;
     if (def.kind === 'beacon' && this.g.s.islets.summon) return 1 - this.g.s.islets.summon.t / 45;
     return 0;
+  }
+
+  /** An islet heart's finds with their odds. */
+  private nodeOdds(type: string): HTMLElement {
+    const y = NODE_YIELD[type];
+    const total = y.table.reduce((a, e) => a + e.weight, 0);
+    const row = h('div', { class: 'flow' });
+    for (const e of y.table) row.append(this.chanceSlot(e.item, e.weight / total, 'per find'));
+    return row;
   }
 
   private nodeOf(b: Building): Building | undefined {
@@ -625,6 +641,41 @@ export class UI {
     return h('div', { class: 'sect' }, h('div', { class: 'sect-h' }, h('span', { text: title }), right ? h('span', { class: 'r', text: right }) : null), ...children);
   }
 
+  /** A chance output: its icon with how likely it is (per cycle, harvest or tap). */
+  private chanceSlot(item: ItemId, p: number, per = 'each cycle'): HTMLElement {
+    const el = this.slot(item, pct(p));
+    el.classList.add('chance');
+    el.title = `${ITEMS[item].name}: ${pct(p)} chance ${per}`;
+    return el;
+  }
+
+  /** What one gather of a tree gives: fixed yields and chance extras. */
+  private treeYields(t: Building): { fixed: Stack; chance: [ItemId, number, string?][] } {
+    const s = this.g.s;
+    const fruit = FRUIT_BY_TREE[t.type];
+    if (fruit) {
+      const fixed: Stack = { ...fruit.yield };
+      const hive = [-1, 0, 1].some((dy) => [-1, 0, 1].some((dx) => (dx || dy) && [...s.buildings.values()].some((o) => o.x === t.x + dx && o.y === t.y + dy && BUILDINGS[o.type].kind === 'hive')));
+      if (hive) fixed[fruit.fruit] = (fixed[fruit.fruit] ?? 0) + 1;
+      return { fixed, chance: [[fruit.seed, fruit.saplingChance]] };
+    }
+    if (t.type === 'elder_tree') return { fixed: { ...TREE.elderYield }, chance: [['amber', TREE.amberChance]] };
+    const bio = biomeAt(s, t.x, t.y) ?? BIOMES.meadow;
+    return { fixed: { ...bio.tree }, chance: [['fiber', bio.treeFiber], ['sapling', TREE.saplingChance, `, and always one within ${TREE.saplingPity} gathers`]] };
+  }
+
+  /** Icons for a fixed yield and its chance extras, in one row. */
+  private yieldRow(fixed: Stack, chance: [ItemId, number, string?][], per: string): HTMLElement {
+    const row = h('div', { class: 'flow' });
+    for (const k in fixed) row.append(this.slot(k as ItemId, `×${fixed[k as ItemId]}`));
+    for (const [item, p, note] of chance) {
+      const el = this.chanceSlot(item, p, per);
+      if (note) el.title += note;
+      row.append(el);
+    }
+    return row;
+  }
+
   private slot(item: ItemId, text: string, lack = false): HTMLElement {
     return h('span', { class: 'slot' + (lack ? ' lack' : ''), title: ITEMS[item].name }, img(itemIcon(item)), h('span', { class: 'num', text }));
   }
@@ -646,6 +697,8 @@ export class UI {
       case 'tree': {
         const max = b.type === 'elder_tree' ? TREE.elderMaxStock : FRUIT_BY_TREE[b.type] ? FRUIT_BY_TREE[b.type].maxStock : TREE.maxStock;
         body.append(h('div', { class: 'caps', text: 'Ready to gather' }), h('div', { class: 'num', style: 'font-size:1.1rem', text: `${Math.floor(b.stock)} / ${max}` }), this.bar());
+        const ty = this.treeYields(b);
+        body.append(this.section('Each gather', 'chance drops show their odds', this.yieldRow(ty.fixed, ty.chance, 'per gather')));
         body.append(h('div', { class: 'muted', style: 'font-size:0.82rem', text: 'Tap the tree in the world to gather. Treewrights beside it can do this for you.' }));
         actions.append(h('button', { class: 'btn primary', onclick: () => { const r = A.harvestAt(s, b.x, b.y); if (r.ok) { audio.play('harvest'); g.markDirty(); this.floaterCenter(r.got ?? {}); } else g.fail(r.reason || 'Regrowing'); } }, img(glyph('hand')), 'Gather'));
         if (b.type === 'tree' || FRUIT_BY_TREE[b.type]) actions.append(h('button', { class: 'btn', onclick: () => g.tryRemove(b.x, b.y) }, img(glyph('trash')), 'Fell'));
@@ -687,6 +740,7 @@ export class UI {
           for (const k in rr.inputs) prod.append(this.slot(k as ItemId, `${rr.inputs[k as ItemId]}`, (b.inBuf[k as ItemId] ?? 0) < (rr.inputs[k as ItemId] ?? 0)));
           prod.append(h('span', { class: 'arrow', text: '→' }));
           for (const k in rr.outputs) prod.append(this.slot(k as ItemId, `${rr.outputs[k as ItemId]}`));
+          if (rr.chance) for (const k in rr.chance) prod.append(this.chanceSlot(k as ItemId, rareChance(s, k as ItemId, rr.chance[k as ItemId] ?? 0)));
           const boost = (g.s.cache.boost.get(b.id) ?? 1);
           const speed = crafterRate(s, b, rr);
           const outItem = Object.keys(rr.outputs)[0] as ItemId;
@@ -697,7 +751,9 @@ export class UI {
           const cap = bufCap(def, b);
           for (const k in rr.inputs) inv.append(this.slot(k as ItemId, `${fmt(b.inBuf[k as ItemId] ?? 0)}/${Math.max(cap, (rr.inputs[k as ItemId] ?? 0) * 2)}`));
           for (const k in rr.outputs) inv.append(this.slot(k as ItemId, `${fmt(b.outBuf[k as ItemId] ?? 0)}/${cap}`));
-          const info: string[] = [];
+          // chance outputs (and anything left from an earlier recipe) waiting inside
+          for (const k in b.outBuf) if (!(k in rr.outputs) && (b.outBuf[k as ItemId] ?? 0) > 0) inv.append(this.slot(k as ItemId, fmt(b.outBuf[k as ItemId] ?? 0)));
+          const info: string[] = [`lucky ×2: ${pct(luckyChance(s))}`];
           if (rr.fuel) info.push(`fuel ${Math.floor(b.fuel)}`);
           if (boost > 1) info.push('resonating ×1.5');
           if (def.power) info.push(`uses ${def.power} breeze`);
@@ -725,6 +781,24 @@ export class UI {
         if (!outs.length) flow.append(h('span', { class: 'muted', style: 'font-size:0.8rem', text: def.kind === 'drill' ? (this.nodeOf(b) ? 'Drilling…' : 'Not beside an islet heart') : 'Basket empty' }));
         for (const k of outs) flow.append(this.slot(k, fmt(b.outBuf[k] ?? 0)));
         body.append(flow, this.bar());
+        if (def.kind === 'harvester') {
+          // everything the trees and grass around it can give
+          const fixed: Stack = {}, chance = new Map<ItemId, number>();
+          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+            const t = (dx || dy) ? [...s.buildings.values()].find((o) => o.x === b.x + dx && o.y === b.y + dy) : undefined;
+            if (!t) continue;
+            if (t.type === 'tuft') fixed.fiber = Math.max(fixed.fiber ?? 0, tuftYield(s, t.x, t.y));
+            else if (BUILDINGS[t.type].kind === 'tree') {
+              const ty = this.treeYields(t);
+              for (const k in ty.fixed) fixed[k as ItemId] = Math.max(fixed[k as ItemId] ?? 0, ty.fixed[k as ItemId] ?? 0);
+              for (const [item, p] of ty.chance) if (!(item in fixed)) chance.set(item, Math.max(chance.get(item) ?? 0, p));
+            }
+          }
+          if (Object.keys(fixed).length) body.append(this.section('Can gather', 'per harvest', this.yieldRow(fixed, [...chance], 'per harvest')));
+        } else {
+          const n = this.nodeOf(b);
+          if (n) body.append(this.section('Can dig up', 'each find', this.nodeOdds(n.type)));
+        }
         body.append(h('div', { class: 'muted', style: 'font-size:0.78rem', text: def.kind === 'harvester' ? 'Gathers from trees and tall grass on the eight tiles around it, then sends it out its front.' : 'Pulls from the heart beside it.' }));
         actions.append(h('button', { class: 'btn' + (outs.length ? ' primary' : ''), onclick: () => { const res = g.act(() => A.collect(s, b.id), 'collect'); if (res.ok && res.got) this.floaterCenter(res.got); } }, 'Collect'));
         addCommon();
@@ -805,10 +879,7 @@ export class UI {
       }
       case 'forge': this.fillForge(body, actions); break;
       case 'node': {
-        const y = NODE_YIELD[b.type];
-        const flow = h('div', { class: 'flow' });
-        for (const e of y.table) flow.append(this.slot(e.item, ''));
-        body.append(h('div', { class: 'muted', style: 'font-size:0.82rem', text: def.desc }), flow);
+        body.append(h('div', { class: 'muted', style: 'font-size:0.82rem', text: def.desc }), this.section('A drill digs up', 'each find', this.nodeOdds(b.type)));
         if (!s.known.has('drill')) body.append(h('div', { class: 'muted', style: 'font-size:0.78rem', text: 'You will need a way to tap it.' }));
         break;
       }
@@ -1139,11 +1210,7 @@ export class UI {
       const item = k as ItemId;
       flow.append(this.slot(item, fromStash ? `×${r.outputs[item]}` : fmt(b.outBuf[item] ?? 0)));
     }
-    if (r.chance) for (const k in r.chance) {
-      const item = k as ItemId;
-      const known = (s.stats.obtained[item] ?? 0) > 0;
-      flow.append(known ? this.slot(item, fromStash ? '?' : fmt(b.outBuf[item] ?? 0)) : h('span', { class: 'slot', title: 'Something else, sometimes' }, h('span', { class: 'title', style: 'font-size:1.2rem;color:var(--dim)', text: '?' })));
-    }
+    if (r.chance) for (const k in r.chance) flow.append(this.chanceSlot(k as ItemId, rareChance(s, k as ItemId, r.chance[k as ItemId] ?? 0), 'per sift'));
     return flow;
   }
 
