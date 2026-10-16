@@ -33,6 +33,58 @@ export interface ViewOptions {
   reduced: boolean;
   bubbles: boolean;
   range: { x: number; y: number; r: number; size: number } | null;
+  /** Building under the finger right now (lit while pressing, before the tap lands). */
+  preview?: number | null;
+}
+
+/**
+ * A selection outline: the sprite's silhouette, tinted, drawn four times a
+ * pixel out on each side just behind it — plus a soft brightening on top.
+ */
+class Highlight {
+  private copies: Sprite[] = [];
+  private shine = Object.assign(new Sprite(), { blendMode: 'add' as const });
+  private root: Container | null = null;
+
+  constructor(color: number) {
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) this.copies.push(Object.assign(new Sprite(), { label: `${dx},${dy}`, tint: color }));
+    this.shine.tint = color;
+  }
+
+  attach(root: Container, sp: Sprite, alpha: number): void {
+    if (this.root !== root) {
+      this.detach(this.root);
+      for (const c of this.copies) root.addChildAt(c, 0);
+      root.addChild(this.shine);
+      this.root = root;
+    }
+    const sil = art.silhouette(sp.texture);
+    for (const c of this.copies) {
+      const [dx, dy] = c.label.split(',').map(Number);
+      c.texture = sil;
+      c.anchor.copyFrom(sp.anchor);
+      c.scale.copyFrom(sp.scale);
+      c.position.set(sp.x + dx * 1.25, sp.y + dy * 1.25);
+      c.alpha = alpha;
+      c.visible = true;
+    }
+    this.shine.texture = sp.texture;
+    this.shine.anchor.copyFrom(sp.anchor);
+    this.shine.position.copyFrom(sp.position);
+    this.shine.scale.copyFrom(sp.scale);
+    this.shine.alpha = 0.2 * alpha;
+    this.shine.visible = true;
+  }
+
+  hide(): void { for (const c of this.copies) c.visible = false; this.shine.visible = false; }
+
+  detach(root: Container | null): void {
+    if (!root || this.root !== root) return;
+    for (const c of this.copies) root.removeChild(c);
+    root.removeChild(this.shine);
+    this.root = null;
+    this.hide();
+  }
 }
 
 interface SpriteTex {
@@ -198,19 +250,41 @@ export class WorldView {
   }
 
   /**
-   * The front-most building whose art covers a screen point (tall art such
-   * as tree crowns reaches over the tiles behind it). Bounding boxes only.
+   * The front-most building whose drawn pixels are under a screen point —
+   * what the player sees is what they get, even where tall art overlaps the
+   * tiles behind it. Flat conveyors only win where nothing stands on top.
    */
   pickAt(sx: number, sy: number): number | null {
     const [wx, wy] = this.screenToWorld(sx, sy);
+    // a few texels of slack so thin parts (poles, saplings) are still easy to hit
+    const slack = 3 / Math.max(0.5, this.cam.zoom);
     let best: number | null = null, bz = -Infinity;
     for (const v of this.views.values()) {
-      if (!v.root.visible || v.type === 'belt' || v.root.zIndex <= bz) continue;
-      const sp = v.sprite, f = sp.texture.frame;
-      const x0 = v.root.x + sp.x - sp.anchor.x * f.width * sp.scale.x, y0 = v.root.y + sp.y - sp.anchor.y * f.height * sp.scale.y;
-      if (wx >= x0 && wx < x0 + f.width * sp.scale.x && wy >= y0 && wy < y0 + f.height * sp.scale.y) { best = v.id; bz = v.root.zIndex; }
+      if (!v.root.visible) continue;
+      const z = v.type === 'belt' || v.type === 'express' ? v.root.zIndex - 1e7 : v.root.zIndex;
+      if (z <= bz) continue;
+      const sp = v.sprite, f = sp.texture.frame, kx = sp.scale.x, ky = sp.scale.y;
+      const x0 = v.root.x + sp.x - sp.anchor.x * f.width * kx, y0 = v.root.y + sp.y - sp.anchor.y * f.height * ky;
+      if (wx < x0 - slack || wx >= x0 + f.width * kx + slack || wy < y0 - slack || wy >= y0 + f.height * ky + slack) continue;
+      let hit = false;
+      for (const [ox, oy] of [[0, 0], [slack, 0], [-slack, 0], [0, slack], [0, -slack]]) {
+        const lx = (wx + ox - x0) / kx, ly = (wy + oy - y0) / ky;
+        if (lx < 0 || ly < 0 || lx >= f.width || ly >= f.height) continue;
+        if (art.alphaAt(sp.texture, f.x + lx, f.y + ly) > 60) { hit = true; break; }
+      }
+      if (hit) { best = v.id; bz = z; }
     }
     return best;
+  }
+
+  private glowSel = new Highlight(0xffd34a);
+  private glowPress = new Highlight(0xffffff);
+
+  /** Outline a building's silhouette (and brighten it) so a tap target is never in doubt. */
+  private glowOn(g: Highlight, id: number | null | undefined, alpha: number): void {
+    const v = id != null ? this.views.get(id) : undefined;
+    if (!v || !v.root.visible) { g.hide(); return; }
+    g.attach(v.root, v.sprite, alpha);
   }
 
   tileToScreen(x: number, y: number): [number, number] {
@@ -417,6 +491,7 @@ export class WorldView {
   }
 
   private destroyView(v: BView): void {
+    for (const g of [this.glowSel, this.glowPress]) g.detach(v.root);
     v.root.destroy({ children: true });
     v.shadow?.destroy();
     v.arrow?.destroy();
@@ -605,6 +680,9 @@ export class WorldView {
 
     this.renderWisps(s, alpha);
     this.renderOverlay(s, o);
+    // the selected building glows softly; the one under a pressing finger glows bright
+    this.glowOn(this.glowSel, o.selected, 0.75 + 0.25 * Math.sin(this.time * 5));
+    this.glowOn(this.glowPress, o.preview !== o.selected ? o.preview : null, 1);
     this.renderIsletArrival(s, dt);
     this.renderShip(s);
     // hide unused item sprites

@@ -61,6 +61,8 @@ export class Game {
   private paint: { sx: number; sy: number; cells: { x: number; y: number; dir: number; ok: boolean }[] } | null = null;
   private hover: [number, number] | null = null;
   private press: [number, number] | null = null;
+  /** Building that a tap here would pick (lit while the finger is down). */
+  private pressPick: number | null = null;
   private saveTimer = 0;
   private backupTimer = 0;
   private dirty = false;
@@ -104,10 +106,11 @@ export class Game {
     attachGestures(this.view.app.canvas, {
       tap: (x, y) => this.onTap(x, y),
       longPress: (x, y) => this.onLongPress(x, y),
-      press: (x, y) => { this.press = this.view.screenToTile(x, y); audio.unlock(); this.lastInteraction = performance.now(); },
-      pan: (dx, dy) => { this.view.cam.panBy(dx, dy); this.press = null; },
+      press: (x, y) => { this.press = this.view.screenToTile(x, y); this.pressPick = this.mode.kind === 'play' || this.mode.kind === 'remove' ? this.pickBuilding(x, y)?.id ?? null : null; audio.unlock(); this.lastInteraction = performance.now(); },
+      release: () => { this.pressPick = null; },
+      pan: (dx, dy) => { this.view.cam.panBy(dx, dy); this.press = null; this.pressPick = null; },
       panEnd: (vx, vy) => { if (!this.settings.reduced) this.view.cam.fling(vx, vy); },
-      pinch: (sc, cx, cy, dx, dy) => { this.view.cam.panBy(dx, dy); this.view.cam.zoomAt(sc, cx, cy, this.view.vw, this.view.vh); this.press = null; },
+      pinch: (sc, cx, cy, dx, dy) => { this.view.cam.panBy(dx, dy); this.view.cam.zoomAt(sc, cx, cy, this.view.vw, this.view.vh); this.press = null; this.pressPick = null; },
       wheel: (f, x, y) => this.view.cam.zoomAt(f, x, y, this.view.vw, this.view.vh, false),
       hover: (x, y) => { this.hover = x < 0 ? null : this.view.screenToTile(x, y); },
       paintActive: () => this.mode.kind === 'land' || this.mode.kind === 'remove' || (this.mode.kind === 'build' && !!BUILDINGS[this.mode.type].draggable),
@@ -185,6 +188,7 @@ export class Game {
       reduced: this.settings.reduced,
       bubbles: this.settings.bubbles,
       range: this.rangeOverlay(),
+      preview: this.pressPick,
     });
     audio.night = this.view.night;
     audio.update(dt, this.s.power.wind, this.view.stats().items / 40, this.observe);
@@ -340,19 +344,15 @@ export class Game {
     if (this.observe) { this.ui.wakeObserve(); return; }
     const [tx, ty] = this.view.screenToTile(sx, sy);
     this.press = null;
+    this.pressPick = null;
     switch (this.mode.kind) {
       case 'build': return this.tryPlace(this.mode.type, tx, ty, this.mode.dir, sx, sy);
       case 'land': return this.tryExpand(this.mode.land, tx, ty, sx, sy);
-      case 'remove': return this.tryRemove(tx, ty);
+      case 'remove': { const p = this.pickBuilding(sx, sy); return this.tryRemove(p ? p.x : tx, p ? p.y : ty); }
       case 'move': return this.tryMove(this.mode.id, tx, ty, this.mode.dir);
       default: break;
     }
-    let b = buildingAt(this.s, tx, ty);
-    if (!b) {
-      // a tap on tall art (a tree crown, a tower) reaching over this tile
-      const id = this.view.pickAt(sx, sy);
-      b = id !== null ? this.s.buildings.get(id) : undefined;
-    }
+    const b = this.pickBuilding(sx, sy);
     if (!b) {
       if (this.selected !== null) { this.select(null); audio.play('close'); }
       return;
@@ -399,10 +399,22 @@ export class Game {
     this.select(b.id);
   }
 
+  /**
+   * What a tap at a screen point means: the building whose drawn pixels are
+   * under the finger (front-most first), else whatever stands on the ground
+   * tile there.
+   */
+  private pickBuilding(sx: number, sy: number) {
+    const id = this.view.pickAt(sx, sy);
+    if (id !== null) return this.s.buildings.get(id);
+    const [tx, ty] = this.view.screenToTile(sx, sy);
+    return buildingAt(this.s, tx, ty);
+  }
+
   private onLongPress(sx: number, sy: number): void {
     if (this.mode.kind !== 'play') return;
-    const [tx, ty] = this.view.screenToTile(sx, sy);
-    const b = buildingAt(this.s, tx, ty);
+    this.pressPick = null;
+    const b = this.pickBuilding(sx, sy);
     if (b) { this.select(b.id); haptic(12, this.settings.haptics); }
   }
 

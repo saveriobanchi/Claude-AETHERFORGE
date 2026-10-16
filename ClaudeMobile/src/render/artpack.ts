@@ -73,6 +73,55 @@ class Art {
     return a;
   }
 
+  private alpha = new Map<unknown, { data: Uint8ClampedArray; w: number }>();
+
+  /** Opacity (0–255) of a texel of a sheet texture, for pixel-precise taps. */
+  alphaAt(tex: Texture, x: number, y: number): number {
+    const src = tex.source;
+    let a = this.alpha.get(src);
+    if (!a) {
+      const i = this.textures.findIndex((t) => t.source === src);
+      const im = this.sheets[i];
+      if (!im) return 255;
+      const c = document.createElement('canvas');
+      c.width = im.width; c.height = im.height;
+      const g = c.getContext('2d', { willReadFrequently: true })!;
+      g.drawImage(im as CanvasImageSource, 0, 0);
+      // keep only the opacity channel (a quarter of the memory)
+      const rgba = g.getImageData(0, 0, c.width, c.height).data;
+      const data = new Uint8ClampedArray(c.width * c.height);
+      for (let i = 0; i < data.length; i++) data[i] = rgba[i * 4 + 3];
+      a = { data, w: c.width };
+      this.alpha.set(src, a);
+    }
+    const px = Math.floor(x), py = Math.floor(y);
+    if (px < 0 || py < 0 || px >= a.w) return 0;
+    return a.data[py * a.w + px] ?? 0;
+  }
+
+  private silhouettes = new Map<string, Texture>();
+
+  /** A white, fully opaque copy of a frame's shape (tinted to draw outlines). */
+  silhouette(tex: Texture): Texture {
+    const f = tex.frame;
+    const k = `${this.textures.findIndex((t) => t.source === tex.source)}:${f.x},${f.y},${f.width},${f.height}`;
+    let t = this.silhouettes.get(k);
+    if (t) return t;
+    const w = Math.max(1, Math.round(f.width)), hh = Math.max(1, Math.round(f.height));
+    const c = document.createElement('canvas');
+    c.width = w; c.height = hh;
+    const g = c.getContext('2d')!;
+    const im = g.createImageData(w, hh);
+    for (let y = 0; y < hh; y++) for (let x = 0; x < w; x++) {
+      if (this.alphaAt(tex, f.x + x, f.y + y) > 60) { const i = (y * w + x) * 4; im.data[i] = im.data[i + 1] = im.data[i + 2] = im.data[i + 3] = 255; }
+    }
+    g.putImageData(im, 0, 0);
+    t = Texture.from(c);
+    t.source.scaleMode = 'nearest';
+    this.silhouettes.set(k, t);
+    return t;
+  }
+
   /** PNG data URL of an image (for the DOM interface). */
   url(key: string): string {
     let u = this.urls.get(key);
