@@ -608,7 +608,7 @@ export class UI {
     const r = currentRecipe(b);
     if (b.status === 'noinput' && r) {
       const miss = Object.keys(r.inputs).find((k) => (b.inBuf[k as ItemId] ?? 0) < (r.inputs[k as ItemId] ?? 0));
-      statusText = miss ? `Needs ${ITEMS[miss as ItemId].name}` : r.fuel && b.fuel < (r.fuel ?? 0) ? 'Needs fuel' : statusText;
+      statusText = miss ? `Needs ${ITEMS[miss as ItemId].name}` : r.fuel && b.fuel < (r.fuel ?? 0) ? 'Needs fuel: no charcoal or wood' : statusText;
     }
     if (def.kind === 'harvester' && b.status === 'noinput') statusText = 'No trees ready nearby';
     if (def.kind === 'hive' && b.status === 'noinput') statusText = 'Needs trees within reach';
@@ -754,7 +754,7 @@ export class UI {
           // chance outputs (and anything left from an earlier recipe) waiting inside
           for (const k in b.outBuf) if (!(k in rr.outputs) && (b.outBuf[k as ItemId] ?? 0) > 0) inv.append(this.slot(k as ItemId, fmt(b.outBuf[k as ItemId] ?? 0)));
           const info: string[] = [`lucky ×2: ${pct(luckyChance(s))}`];
-          if (rr.fuel) info.push(`fuel ${Math.floor(b.fuel)}`);
+          if (rr.fuel) info.push(`fuel ${Math.floor(b.fuel)} · tops up from stash`);
           if (boost > 1) info.push('resonating ×1.5');
           if (def.power) info.push(`uses ${def.power} breeze`);
           body.append(this.section('Inventory', info.join(' · '), inv));

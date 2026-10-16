@@ -138,6 +138,7 @@ describe('machines', () => {
     A.setRecipe(s, id!, 'brick');
     s.buildings.get(id!)!.inBuf = { clay: 4 };
     s.stash.clay = 0;
+    s.stash.wood = 0; s.stash.charcoal = 0; // no fuel anywhere (a dry kiln tops up from the stash)
     run(s, 10);
     expect(stackTotal(s.buildings.get(id!)!.outBuf)).toBe(0);
     expect(s.buildings.get(id!)!.status).toBe('noinput');
