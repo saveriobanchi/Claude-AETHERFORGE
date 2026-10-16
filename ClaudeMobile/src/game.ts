@@ -189,7 +189,7 @@ export class Game {
       bubbles: this.settings.bubbles,
       range: this.rangeOverlay(),
       preview: this.pressPick,
-      xray: this.mode.kind === 'land',
+      xray: this.mode.kind === 'land' ? 0.16 : this.mode.kind === 'build' || this.mode.kind === 'move' ? 0.32 : 1,
     });
     audio.night = this.view.night;
     audio.update(dt, this.s.power.wind, this.view.stats().items / 40, this.observe);

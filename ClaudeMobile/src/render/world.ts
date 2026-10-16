@@ -35,8 +35,12 @@ export interface ViewOptions {
   range: { x: number; y: number; r: number; size: number } | null;
   /** Building under the finger right now (lit while pressing, before the tap lands). */
   preview?: number | null;
-  /** See-through mode (placing land): buildings and trees fade so the ground behind them shows. */
-  xray?: boolean;
+  /**
+   * See-through while placing: how opaque everything standing on the island
+   * is drawn (1 = normal). Placing land fades it almost away; placing a
+   * building fades it enough to see past while taken tiles stay readable.
+   */
+  xray?: number;
 }
 
 /**
@@ -637,10 +641,10 @@ export class WorldView {
     const tint = ((Math.min(255, ((sky.tint >> 16) & 255) * grade[0]) << 16) | (Math.min(255, ((sky.tint >> 8) & 255) * grade[1]) << 8) | Math.min(255, (sky.tint & 255) * grade[2])) >>> 0;
     for (const layer of [this.terrain, this.shadows, this.floor, this.items, this.objects, this.fx.layer]) layer.tint = tint;
     // see-through while placing land: everything standing on the island fades quickly
-    const see = o.xray ? 0.16 : 1;
+    const see = o.xray ?? 1;
     const fade = Math.min(1, dt * 10);
     this.objects.alpha += (see - this.objects.alpha) * fade;
-    this.items.alpha += ((o.xray ? 0.3 : 1) - this.items.alpha) * fade;
+    this.items.alpha += (Math.min(1, see + 0.15) - this.items.alpha) * fade;
     if (Math.abs(this.objects.alpha - see) < 0.01) this.objects.alpha = see;
 
     // visible world rect
