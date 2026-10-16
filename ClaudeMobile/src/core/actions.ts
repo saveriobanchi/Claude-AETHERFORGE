@@ -347,6 +347,15 @@ export function setFilter(s: GameState, id: number, item: ItemId | null): Result
   const b = s.buildings.get(id);
   if (!b) return fail('');
   b.filter = item;
+  if (b.filter2 === item) b.filter2 = null;
+  return OK;
+}
+
+/** A dispatcher's second item (null clears it). Sorters keep a single filter. */
+export function setFilter2(s: GameState, id: number, item: ItemId | null): Result {
+  const b = s.buildings.get(id);
+  if (!b || BUILDINGS[b.type].kind !== 'dispatcher') return fail('');
+  b.filter2 = item === b.filter ? null : item;
   return OK;
 }
 

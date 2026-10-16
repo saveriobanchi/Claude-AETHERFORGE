@@ -896,3 +896,6 @@ body.sheet-open .hud-bottom .main-btn.on:not(.big) { border-image: var(--tex-pan
 .flow.sometimes { gap: 2px; align-items: center; margin-top: 2px; }
 .flow.sometimes .caps { margin-right: 4px; font-size: 0.6rem; }
 .flow.sometimes .slot { transform: scale(0.8); transform-origin: left center; margin-right: -10px; }
+.rchip.slotpick { gap: 6px; padding: 0 8px; }
+.rchip.slotpick .caps { font-size: 0.62rem; }
+.rchip.slotpick:disabled { opacity: 0.45; }

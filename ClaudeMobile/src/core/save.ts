@@ -42,7 +42,7 @@ export interface SaveData {
 
 type SavedBuilding = [
   id: number, type: string, x: number, y: number, dir: number,
-  extra: Partial<Pick<Building, 'recipe' | 'progress' | 'working' | 'inBuf' | 'outBuf' | 'fuel' | 'stock' | 'timer' | 'hold' | 'filter' | 'rr' | 'level'>> & { items?: [ItemId, number][] },
+  extra: Partial<Pick<Building, 'recipe' | 'progress' | 'working' | 'inBuf' | 'outBuf' | 'fuel' | 'stock' | 'timer' | 'hold' | 'filter' | 'filter2' | 'rr' | 'level'>> & { items?: [ItemId, number][] },
 ];
 
 function cleanStack(st: Stack | undefined): Stack {
@@ -69,6 +69,7 @@ export function serialize(s: GameState, view?: SaveData['view']): SaveData {
     if (b.timer) e.timer = b.timer;
     if (b.hold) e.hold = b.hold;
     if (b.filter) e.filter = b.filter;
+    if (b.filter2) e.filter2 = b.filter2;
     if (b.rr) e.rr = b.rr;
     if (b.level > 1) e.level = b.level;
     if (b.items.length) e.items = b.items.map((i) => [i.item, i.pos]);
@@ -180,6 +181,7 @@ export function deserialize(raw: unknown): { state: GameState; view?: SaveData['
     b.timer = e.timer ?? 0;
     b.hold = e.hold && isItemId(e.hold) ? e.hold : null;
     b.filter = e.filter && isItemId(e.filter) ? e.filter : null;
+    b.filter2 = e.filter2 && isItemId(e.filter2) ? e.filter2 : null;
     b.rr = e.rr ?? 0;
     b.level = Math.max(1, Math.min(5, Math.floor(e.level ?? 1)));
     b.items = (e.items ?? []).filter(([it]) => isItemId(it)).map(([item, pos]) => ({ item, pos, prev: pos }));
