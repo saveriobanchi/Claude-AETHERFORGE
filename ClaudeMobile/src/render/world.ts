@@ -35,6 +35,8 @@ export interface ViewOptions {
   range: { x: number; y: number; r: number; size: number } | null;
   /** Building under the finger right now (lit while pressing, before the tap lands). */
   preview?: number | null;
+  /** See-through mode (placing land): buildings and trees fade so the ground behind them shows. */
+  xray?: boolean;
 }
 
 /**
@@ -634,6 +636,12 @@ export class WorldView {
     const grade = SEASON_GRADE[this.sky.season] ?? [1, 1, 1];
     const tint = ((Math.min(255, ((sky.tint >> 16) & 255) * grade[0]) << 16) | (Math.min(255, ((sky.tint >> 8) & 255) * grade[1]) << 8) | Math.min(255, (sky.tint & 255) * grade[2])) >>> 0;
     for (const layer of [this.terrain, this.shadows, this.floor, this.items, this.objects, this.fx.layer]) layer.tint = tint;
+    // see-through while placing land: everything standing on the island fades quickly
+    const see = o.xray ? 0.16 : 1;
+    const fade = Math.min(1, dt * 10);
+    this.objects.alpha += (see - this.objects.alpha) * fade;
+    this.items.alpha += ((o.xray ? 0.3 : 1) - this.items.alpha) * fade;
+    if (Math.abs(this.objects.alpha - see) < 0.01) this.objects.alpha = see;
 
     // visible world rect
     const margin = 140;
