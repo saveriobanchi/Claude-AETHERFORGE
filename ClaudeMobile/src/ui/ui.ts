@@ -82,6 +82,8 @@ export class UI {
   private weatherId = '';
   private questIcon!: HTMLImageElement;
   private questTip = false;
+  /** Which dispatcher slot the item grid edits. */
+  private dispSlot: 1 | 2 = 1;
   private btnBuild!: HTMLButtonElement;
   private btnCraft!: HTMLButtonElement;
   private btnStash!: HTMLButtonElement;
@@ -590,7 +592,7 @@ export class UI {
       return;
     }
     const def = BUILDINGS[b.type];
-    const sig = [b.id, b.type, b.status, b.recipe, b.filter, b.dir, JSON.stringify(b.inBuf), JSON.stringify(b.outBuf), Math.floor(b.fuel), Math.floor(b.stock),
+    const sig = [b.id, b.type, b.status, b.recipe, b.filter, b.filter2, b.dir, JSON.stringify(b.inBuf), JSON.stringify(b.outBuf), Math.floor(b.fuel), Math.floor(b.stock),
       def.kind === 'forge' || def.kind === 'beacon' ? JSON.stringify(s.forge) + JSON.stringify(s.islets) + ITEM_IDS.map((i) => s.stash[i]).join() : '',
       def.kind === 'windmill' || def.kind === 'engine' ? Math.round(s.power.gen) + '/' + s.power.demand : '',
       def.kind === 'dispatcher' || def.kind === 'sorter' ? Object.keys(s.stats.obtained).length : '',
@@ -806,13 +808,27 @@ export class UI {
       }
       case 'dispatcher':
       case 'sorter': {
-        body.append(h('div', { class: 'caps', text: def.kind === 'dispatcher' ? 'Send out' : 'Let through' }));
-        const chips = h('div', { class: 'chips' });
         const obtained = ITEM_IDS.filter((i) => (s.stats.obtained[i] ?? 0) > 0);
-        chips.append(h('button', { class: 'rchip' + (!b.filter ? ' on' : ''), onclick: () => g.act(() => A.setFilter(s, b.id, null), 'select') }, 'None'));
-        for (const it of obtained) chips.append(h('button', { class: 'rchip' + (b.filter === it ? ' on' : ''), title: ITEMS[it].name, onclick: () => g.act(() => A.setFilter(s, b.id, it), 'select') }, img(itemIcon(it))));
-        body.append(chips);
-        body.append(h('div', { class: 'muted', style: 'font-size:0.78rem', text: def.kind === 'dispatcher' ? 'Pulls the chosen item from your stash and pushes it out the front, about 2½ per second.' : 'The chosen item goes straight on; everything else turns left or right.' }));
+        const picker = (cur: ItemId | null, set: (it: ItemId | null) => A.Result, skip: ItemId | null) => {
+          const chips = h('div', { class: 'chips' });
+          chips.append(h('button', { class: 'rchip' + (!cur ? ' on' : ''), onclick: () => g.act(() => set(null), 'select') }, 'None'));
+          for (const it of obtained) if (it !== skip) chips.append(h('button', { class: 'rchip' + (cur === it ? ' on' : ''), title: ITEMS[it].name, onclick: () => g.act(() => set(it), 'select') }, img(itemIcon(it))));
+          return chips;
+        };
+        if (def.kind === 'dispatcher') {
+          // two slots; one item grid edits the slot that is picked
+          const slot = b.filter ? this.dispSlot : 1;
+          const slotBtn = (n: 1 | 2, item: ItemId | null) => h('button', { class: 'rchip slotpick' + (slot === n ? ' on' : ''), disabled: n === 2 && !b.filter, onclick: () => { this.dispSlot = n; this.panelSig = ''; } },
+            h('span', { class: 'caps', text: n === 1 ? 'Item' : 'Second' }), item ? img(itemIcon(item)) : h('span', { class: 'muted', text: n === 1 ? 'none' : '+' }));
+          body.append(h('div', { class: 'chips' }, slotBtn(1, b.filter), slotBtn(2, b.filter2)));
+          body.append(slot === 1 ? picker(b.filter, (it) => A.setFilter(s, b.id, it), null) : picker(b.filter2, (it) => A.setFilter2(s, b.id, it), b.filter));
+          body.append(h('div', { class: 'muted', style: 'font-size:0.78rem', text: b.filter2
+            ? 'Two items: it looks down its line to the machine it feeds and sends whichever that machine needs more — never more than it can hold. Fuel (charcoal, wood) counts too.'
+            : 'Pulls the chosen item from your stash and pushes it out the front, about 2½ per second. Add a second item to feed a two-input machine (or its fuel) from one dispatcher.' }));
+        } else {
+          body.append(h('div', { class: 'caps', text: 'Let through' }), picker(b.filter, (it) => A.setFilter(s, b.id, it), null));
+          body.append(h('div', { class: 'muted', style: 'font-size:0.78rem', text: 'The chosen item goes straight on; everything else turns left or right.' }));
+        }
         addCommon();
         break;
       }

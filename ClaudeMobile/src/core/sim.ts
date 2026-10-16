@@ -517,19 +517,75 @@ function tickDrill(s: GameState, b: Building, dt: number): void {
   }
 }
 
+/**
+ * Where a dispatcher's line ends: follow conveyors from its front to the first
+ * building that is not a conveyor, counting what is already on the way.
+ */
+function feedTarget(s: GameState, b: Building): { dest: Building | undefined; transit: Stack } {
+  const transit: Stack = {};
+  let cur = frontOf(s, b);
+  const seen = new Set<number>();
+  for (let i = 0; i < 48 && cur && BUILDINGS[cur.type].kind === 'belt' && !seen.has(cur.id); i++) {
+    seen.add(cur.id);
+    for (const it of cur.items) addTo(transit, it.item, 1);
+    cur = buildingAt(s, cur.x + DX[cur.dir], cur.y + DY[cur.dir]);
+  }
+  return { dest: cur && BUILDINGS[cur.type].kind !== 'belt' ? cur : undefined, transit };
+}
+
+/**
+ * How badly a machine wants an item (lower = send first); Infinity when it
+ * has enough already (or does not take it) — so a two-item dispatcher never
+ * overfills one input while the other runs dry.
+ */
+function wantScore(dest: Building, item: ItemId, transit: Stack): number {
+  const def = BUILDINGS[dest.type];
+  if (def.kind !== 'crafter') return 0.5; // depots, the forge, posts…: just alternate
+  const r = currentRecipe(dest);
+  if (!r) return Infinity;
+  const coming = transit[item] ?? 0;
+  const need = r.inputs[item];
+  if (need !== undefined) {
+    const have = (dest.inBuf[item] ?? 0) + coming;
+    return have >= Math.max(bufCap(def, dest), need * 2) ? Infinity : have / need;
+  }
+  if (r.fuel && FUEL_VALUE[item] !== undefined) {
+    const fuel = dest.fuel + coming * (FUEL_VALUE[item] ?? 0);
+    return fuel >= 12 ? Infinity : fuel / (r.fuel * 4);
+  }
+  return Infinity;
+}
+
 function tickDispatcher(s: GameState, b: Building, dt: number): void {
-  if (!b.filter) { b.status = 'idle'; return; }
+  const items = [b.filter, b.filter2].filter((x, i, a): x is ItemId => !!x && a.indexOf(x) === i);
+  if (!items.length) { b.status = 'idle'; return; }
   b.timer -= dt;
   if (b.timer > 0) return;
   b.timer = DISPATCH_INTERVAL;
-  if (s.stash[b.filter] < 1) { b.status = 'noinput'; return; }
+  const stocked = items.filter((it) => s.stash[it] >= 1);
+  if (!stocked.length) { b.status = 'noinput'; return; }
   const t = frontOf(s, b);
-  if (t && offer(s, t, b.filter, b.dir)) {
-    s.stash[b.filter]--;
-    addTo(s.flow.cur.out, b.filter, 1);
-    b.status = 'working';
-    b.cycles++;
-  } else b.status = 'blocked';
+  let order = stocked;
+  if (stocked.length > 1) {
+    // two items: send what the machine at the end of the line needs most
+    const { dest, transit } = feedTarget(s, b);
+    if (dest) {
+      const scored = stocked.map((it, i) => ({ it, w: wantScore(dest, it, transit) + (i === b.rr % 2 ? 0 : 1e-6) }));
+      order = scored.filter((x) => x.w < Infinity).sort((p, q) => p.w - q.w).map((x) => x.it);
+      if (!order.length) { b.status = 'blocked'; return; }
+    } else order = b.rr % 2 ? [stocked[1], stocked[0]] : stocked;
+  }
+  for (const item of order) {
+    if (t && offer(s, t, item, b.dir)) {
+      s.stash[item]--;
+      addTo(s.flow.cur.out, item, 1);
+      b.status = 'working';
+      b.cycles++;
+      b.rr = (b.rr + 1) % 2;
+      return;
+    }
+  }
+  b.status = 'blocked';
 }
 
 function tickRouter(s: GameState, b: Building): void {

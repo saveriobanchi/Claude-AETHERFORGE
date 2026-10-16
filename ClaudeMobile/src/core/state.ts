@@ -46,6 +46,8 @@ export interface Building {
   items: BeltItem[];
   hold: ItemId | null;
   filter: ItemId | null;
+  /** A dispatcher's optional second item (it sends whichever the machine it feeds needs more). */
+  filter2: ItemId | null;
   rr: number;
   status: Status;
   /** Visual pulse counter incremented on each completed cycle. */
@@ -216,7 +218,7 @@ export function newBuilding(id: number, type: string, x: number, y: number, dir:
     id, type, x, y, dir,
     recipe: null, progress: 0, working: false,
     inBuf: {}, outBuf: {}, fuel: 0, stock: 0, timer: 0, pushTimer: 0,
-    items: [], hold: null, filter: null, rr: 0, status: 'idle', cycles: 0, claimed: 0, level: 1,
+    items: [], hold: null, filter: null, filter2: null, rr: 0, status: 'idle', cycles: 0, claimed: 0, level: 1,
   };
 }
 
