@@ -338,6 +338,23 @@ export function crafterRate(s: GameState, b: Building, r: RecipeDef): number {
   return rate;
 }
 
+/**
+ * A fire-burning machine that runs dry takes fuel from the stash by itself —
+ * charcoal first, then wood — never the fuel its own recipe needs as an input.
+ * Conveyors can still feed it fuel directly.
+ */
+function refuelFromStash(s: GameState, b: Building, r: RecipeDef): void {
+  for (const f of ['charcoal', 'wood'] as ItemId[]) {
+    if (r.inputs[f] !== undefined) continue;
+    while (b.fuel < (r.fuel ?? 0) && s.stash[f] > 0) {
+      s.stash[f]--;
+      addTo(s.flow.cur.out, f, 1);
+      b.fuel += FUEL_VALUE[f] ?? 0;
+    }
+    if (b.fuel >= (r.fuel ?? 0)) return;
+  }
+}
+
 function tickCrafter(s: GameState, b: Building, dt: number): void {
   const def = BUILDINGS[b.type];
   const r = currentRecipe(b);
@@ -345,6 +362,7 @@ function tickCrafter(s: GameState, b: Building, dt: number): void {
   if (!b.working) {
     if (!outputsFit(def, b, r)) { b.status = 'blocked'; return; }
     if (!hasInputs(b, r)) { b.status = stackTotal(b.outBuf) > 0 ? 'ready' : 'noinput'; return; }
+    if (r.fuel && b.fuel < r.fuel) refuelFromStash(s, b, r);
     if (r.fuel && b.fuel < r.fuel) { b.status = 'noinput'; return; }
     for (const k in r.inputs) addTo(b.inBuf, k as ItemId, -(r.inputs[k as ItemId] ?? 0));
     if (r.fuel) b.fuel -= r.fuel;

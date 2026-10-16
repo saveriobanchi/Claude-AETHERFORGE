@@ -53,3 +53,31 @@ describe('review fixes', () => {
     expect(d.ambitions.has('land_7')).toBe(true);
   });
 });
+
+describe('fuel', () => {
+  it('a kiln fed only copper flakes keeps smelting, taking fuel from the stash', () => {
+    const s = sandbox(10);
+    give(s, { clay: 50, copper_grit: 400, charcoal: 20, plank: 200, stone: 200, gear: 50, copper: 50, twine: 50, brick: 50 });
+    const k = A.place(s, 'kiln', 4, 4, 0).id!;
+    A.setRecipe(s, k, 'smelt_copper');
+    A.place(s, 'depot', 5, 4, 0);
+    A.setFilter(s, A.place(s, 'dispatcher', 3, 4, 0).id!, 'copper_grit');
+    const copper = s.stash.copper;
+    run(s, 300);
+    expect(s.stash.copper - copper).toBeGreaterThan(40);
+    expect(s.stash.charcoal).toBeLessThan(20);
+  });
+
+  it('stops (and says so) when the stash has no charcoal or wood left', () => {
+    const s = sandbox(10);
+    give(s, { clay: 50, wood: 9, plank: 200, stone: 200, brick: 50 });
+    const k = A.place(s, 'kiln', 4, 4, 0).id!;
+    A.setRecipe(s, k, 'smelt_copper');
+    s.stash.copper_grit = 4;
+    A.load(s, k);
+    s.buildings.get(k)!.fuel = 0;
+    s.stash.wood = 0; s.stash.charcoal = 0;
+    run(s, 30);
+    expect(s.buildings.get(k)!.status).toBe('noinput');
+  });
+});

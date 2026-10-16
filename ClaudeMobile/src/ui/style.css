@@ -889,3 +889,10 @@ body.sheet-open .hud-bottom .main-btn.on:not(.big) { border-image: var(--tex-pan
 .clock[data-season='summer'] { border-bottom-color: #ffc24a; }
 .clock[data-season='autumn'] { border-bottom-color: #e07a3a; }
 .clock[data-season='winter'] { border-bottom-color: #c8e4ff; }
+
+/* chance outputs: dashed frame, odds in place of a count */
+.slot.chance { outline: 1px dashed rgba(255, 211, 90, 0.7); outline-offset: -3px; }
+.slot.chance .num { color: #ffd35a; font-size: 0.95rem; }
+.flow.sometimes { gap: 2px; align-items: center; margin-top: 2px; }
+.flow.sometimes .caps { margin-right: 4px; font-size: 0.6rem; }
+.flow.sometimes .slot { transform: scale(0.8); transform-origin: left center; margin-right: -10px; }
