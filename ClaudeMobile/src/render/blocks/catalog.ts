@@ -1,5 +1,6 @@
 import { CONTEXT_ID, DECOR_SETS, columnPiece, decor, fallTex, topPiece, type TopKind } from './models/terrain';
 import { FRUITS } from '../../core/content/biomes';
+import { BUILDINGS } from '../../core/content/buildings';
 import * as B from './models/buildings';
 import * as N from './models/nature';
 import { Canvas, type Tex } from './iso';
@@ -27,6 +28,8 @@ export interface SpriteSpec {
   lamp?: boolean;
   /** Smoke source in block units on the footprint (x, y, z). */
   smoke?: [number, number, number];
+  /** Quarter turns added to a d0…d3 variant's direction when baked. */
+  turnOffset?: number;
 }
 
 const sway = (f: number) => Math.sin(f * Math.PI * 2);
@@ -116,6 +119,24 @@ for (const fr of FRUITS) {
 
 const SIZE: Record<string, number> = { forge: 3 };
 
+/**
+ * Rotatable buildings are baked facing all four ways (d0…d3), the model
+ * turned a quarter at a time. Belts and fields draw their own directions.
+ */
+const OWN_DIRS = new Set(['belt', 'express', 'field']);
+for (const [type, sp] of Object.entries(SPRITES)) {
+  if (!BUILDINGS[type]?.rotatable || OWN_DIRS.has(type)) continue;
+  const hadDirs = !!sp.variants?.d0;
+  if (sp.variants && !hadDirs) continue;
+  const base = sp.make, n = sp.frames;
+  sp.variants = { d0: n, d1: n, d2: n, d3: n };
+  sp.main = 'd0';
+  // machines face their output: the model's front (+y) turned to +x for direction 0
+  const offset = BUILDINGS[type].kind === 'decor' ? 0 : 3;
+  sp.turnOffset = offset;
+  sp.make = (c, L, f, v) => { c.turn = (Number(v.slice(1)) + offset) % 4; base(c, L, f, hadDirs ? 'd0' : '_'); };
+}
+
 // ───────────────────────── rendering ─────────────────────────
 
 let lib: TexLib | null = null;
@@ -132,6 +153,7 @@ function canvas(o: Frame = {}): { c: Canvas; ax: number; ay: number } {
   const ox = Math.round(W / 2 - 16 * above * S * 0.5), oy = Math.round((32 * above + 48) * S);
   const c = new Canvas(W, H, ox, oy);
   c.S = S;
+  c.tsize = size;
   const [ax, ay] = c.proj(size / 2, size / 2, 0);
   return { c, ax, ay };
 }
@@ -167,7 +189,7 @@ function object(draw: (c: Canvas) => void, o: Frame = {}): { img: Image; c: Canv
 }
 
 export type JobOut = [string, Image][];
-export interface Meta { lights: [number, number, number, number][]; smoke?: [number, number] }
+export interface Meta { lights: [number, number, number, number][]; smoke?: [number, number]; smoke4?: [number, number][]; lights4?: [number, number][][] }
 export const META: Record<string, Meta> = {};
 
 /** Offset in world px of a block-space point from the footprint centre. */
@@ -194,16 +216,19 @@ for (const [type, sp] of Object.entries(SPRITES)) {
     const sets = sp.variants ?? { _: sp.frames };
     const keys: string[] = [], imgs: Image[] = [];
     let lights: Meta['lights'] = [];
+    const lights4: Meta['lights'][] = [];
     for (const [v, n] of Object.entries(sets)) for (let i = 0; i < n; i++) {
       const r = object((c) => sp.make(c, L(), i / n, v), { size });
       if (v === (sp.main ?? '_') && i === 0) lights = lightsOf(r.c, size);
+      if (/^d[0-3]$/.test(v) && i === 0) lights4[Number(v[1])] = lightsOf(r.c, size);
       // the last forge stage glows brightest; prefer the richest light set
       if (r.c.lights.length > lights.length) lights = lightsOf(r.c, size);
       keys.push(`${type}:${v}:${i}`);
       imgs.push(r.img);
     }
     const out = cropSet(imgs);
-    META[type] = { lights, smoke: sp.smoke ? px(size, sp.smoke) : undefined };
+    const turned = (d: number) => { const c = new Canvas(1, 1, 0, 0); c.tsize = size; c.turn = (d + (sp.turnOffset ?? 0)) % 4; return px(size, c.rp(sp.smoke!)); };
+    META[type] = { lights, smoke: sp.smoke ? px(size, sp.smoke) : undefined, smoke4: sp.smoke && sp.variants?.d3 ? [0, 1, 2, 3].map(turned) : undefined, lights4: lights4.length === 4 && lights.length ? lights4.map((l) => l.map(([x, y]) => [x, y] as [number, number])) : undefined };
     return [...keys.map((k, i) => [k, out[i]] as [string, Image]), [`meta:${type}`, { w: 1, h: 1, data: new Uint8ClampedArray(4), ax: 0, ay: 0, meta: META[type] } as Image]];
   };
 }

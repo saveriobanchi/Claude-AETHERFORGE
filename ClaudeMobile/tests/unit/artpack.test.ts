@@ -8,3 +8,9 @@ it.skipIf(!existsSync('public/art/manifest.json'))('the baked art pack covers ev
   const lacking = (ITEM_IDS as string[]).filter((id) => !man.rects[`icon:${id}`]).concat(Object.keys(BUILDINGS).filter((id) => BUILDINGS[id].kind !== 'belt' && !man.sprites[id] && !man.sprites[id + '_meadow']));
   expect(lacking).toEqual([]);
 });
+
+it.skipIf(!existsSync('public/art/manifest.json'))('every rotatable building is baked facing all four ways', () => {
+  const man = JSON.parse(readFileSync('public/art/manifest.json', 'utf8'));
+  const flat = Object.keys(BUILDINGS).filter((id) => BUILDINGS[id].rotatable && !['belt', 'express', 'field'].includes(id) && !['d0', 'd1', 'd2', 'd3'].every((d) => man.sprites[id]?.variants?.[d]));
+  expect(flat).toEqual([]);
+});

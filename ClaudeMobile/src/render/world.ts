@@ -764,8 +764,8 @@ export class WorldView {
       frames = vars[(b.recipe === 'grow_carrot' ? 'c' : 'w') + stage] ?? frames;
     } else if (kind === 'forge') {
       frames = vars['st' + Math.max(0, Math.min(3, s.forge.stage))] ?? frames;
-    } else if (vars['d' + (b.dir % 2)]) {
-      frames = vars['d' + (b.dir % 2)];
+    } else if (vars['d' + b.dir]) {
+      frames = vars['d' + b.dir];
     }
     const animated = b.status === 'working' || ['home', 'tree', 'tuft', 'node', 'pylon', 'beacon', 'sapling', 'forge', 'elder', 'post', 'decor'].includes(kind) || b.type === 'elder_tree';
     const raw = animated && frames.length > 1 ? Math.floor((t + v.phase) * st.def.fps) % frames.length : 0;
@@ -813,7 +813,7 @@ export class WorldView {
       const flick = 0.85 + 0.15 * Math.sin(t * 7 + v.phase);
       for (let li = 0; li < v.lights.length; li++) {
         const l = v.lights[li];
-        const off = v.lightOff[li];
+        const off = st.def.lights4?.[b.dir]?.[li] ?? v.lightOff[li];
         l.position.set(v.root.x + off[0], v.root.y + off[1]);
         const target = this.night * (on ? 0.8 * flick : 0.18);
         l.alpha += (target - l.alpha) * Math.min(1, dt * 4);
@@ -821,7 +821,7 @@ export class WorldView {
     }
     // smoke and steam while working
     if (st.def.smoke && status === 'working' && !o.reduced && Math.random() < dt * 3) {
-      const [sx, sy] = st.def.smoke;
+      const [sx, sy] = st.def.smoke4?.[b.dir] ?? st.def.smoke;
       this.fx.emit(b.type === 'composter' ? 'steam' : 'smoke', v.root.x + sx, v.root.y + sy, 1, { vx: 4, up: 14, spread: 2, life: 2.4, drag: 0.7, grow: 1.2 });
     }
     // splitter/sorter held item
@@ -958,7 +958,8 @@ export class WorldView {
         if (def.kind === 'belt') {
           setArt(sp, (gh.type === 'express' ? this.express : this.belt)[c.dir][0]);
         } else {
-          setArt(sp, this.spr.get(gh.type)!.def.frames[0]);
+          const gdef = this.spr.get(gh.type)!.def;
+          setArt(sp, (gdef.variants['d' + c.dir] ?? gdef.frames)[0]);
         }
         sp.scale.set(1 / art.R);
         sp.position.set(wx, wy + (def.size - 1) * 16);

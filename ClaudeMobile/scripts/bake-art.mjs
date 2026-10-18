@@ -111,6 +111,8 @@ for (const [type, sp] of Object.entries(cat.SPRITES)) {
     variants: sp.variants ?? { _: sp.frames },
     lights: metas[type]?.lights ?? [],
     smoke: metas[type]?.smoke,
+    smoke4: metas[type]?.smoke4,
+    lights4: metas[type]?.lights4,
   };
 }
 const manifest = { version, R: cat.ART_R, sheets: sheets.length, depths: cat.DEPTHS, colVariants: cat.COL_VARIANTS, topVariants: cat.TOP_VARIANTS, decorKinds: cat.DECOR_KINDS, decorSets: cat.DECOR_SETS, decorVariants: cat.DECOR_VARIANTS, sprites, rects };
