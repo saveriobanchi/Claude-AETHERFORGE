@@ -150,7 +150,7 @@ const LEGACY: Record<PathId, { title: string; intro: string; goals: (L: number) 
   nature: { title: 'Evergreen', intro: 'Orchards without end.', goals: (L) => [{ t: 'built', type: '*fruit', n: 8 + 2 * L, label: `Grow ${8 + 2 * L} fruit trees` }, { t: 'made', item: 'honey', n: 20 * 2 ** L }] },
   settlement: { title: 'Sky City', intro: 'More homes, more neighbours, more pies.', goals: (L) => [{ t: 'settlers', n: 12 + 4 * L }, { t: 'made', item: 'pie', n: 10 * 2 ** L }] },
   aether: { title: 'Endless Song', intro: 'The Aetherforge can always sing higher.', goals: (L) => [{ t: 'resonance', n: 3 + 2 * L }] },
-  invention: { title: 'Perfectionist', intro: 'Every machine at its very best.', goals: (L) => [{ t: 'maxed', n: 2 * L }] },
+  invention: { title: 'Perfectionist', intro: 'Every machine at its very best.', goals: (L) => [{ t: 'maxed', n: 3 * L * L }] },
 };
 
 export function legacyAmbition(path: PathId, rung: number): AmbitionDef {
