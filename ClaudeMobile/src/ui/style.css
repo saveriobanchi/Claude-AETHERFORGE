@@ -1044,3 +1044,59 @@ body.sheet-open .hud-bottom .main-btn.on:not(.big) { border-image: var(--tex-pan
 .mk-row .mb i { display: block; height: 100%; background: linear-gradient(90deg, #b8862a, #e9c25a); }
 .mk-row .mv { font-family: var(--font-num); font-size: 1rem; text-align: right; color: var(--ink); }
 @media (prefers-reduced-motion: reduce) { .node.ready .medallion { animation: none; } }
+
+/* storage fill meters */
+.fill-meters { display: flex; flex-direction: column; gap: 5px; }
+.fm { display: grid; grid-template-columns: 22px 1fr 52px; gap: 8px; align-items: center; }
+.fm img { width: 22px; height: 22px; }
+.fmb { height: 6px; background: #16151c; box-shadow: inset 0 0 0 1px #000; }
+.fmb i { display: block; height: 100%; background: linear-gradient(180deg, #9cf0a8, #3eb873); }
+.fm.full .fmb i { background: linear-gradient(180deg, #ffb08a, #d8603a); }
+.fm .num { text-align: right; font-size: 1rem; }
+
+/* ───────── live machine view: inputs flow in, the machine works, goods flow out ───────── */
+.stage {
+  position: relative; display: grid; grid-template-columns: minmax(44px, auto) 1fr 92px 1fr minmax(44px, auto); grid-template-rows: auto auto; align-items: center; gap: 0 4px;
+  padding: 10px 8px 6px; margin-top: 2px;
+  background:
+    radial-gradient(60% 80% at 50% 45%, rgba(255, 196, 110, 0.10), transparent 70%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.025) 0 8px, transparent 8px 16px),
+    linear-gradient(180deg, #121118, #1c1a22);
+  box-shadow: inset 0 0 0 2px #000, inset 0 2px 0 3px rgba(0, 0, 0, 0.35), inset 0 -1px 0 3px rgba(255, 220, 160, 0.05);
+}
+.stage .st-ins, .stage .st-outs { display: flex; flex-direction: column; gap: 4px; align-items: center; z-index: 1; }
+.stage .mini { position: relative; display: grid; place-items: center; width: 44px; height: 40px; background: #24222b; box-shadow: inset 0 0 0 1px #000, inset 0 2px 0 rgba(255, 255, 255, 0.06); }
+.stage .mini img { width: 26px; height: 26px; }
+.stage .mini .num { position: absolute; right: 2px; bottom: 0; font-size: 0.9rem; line-height: 1; color: #f2e6c8; text-shadow: 0 1px 0 #000; }
+.stage .mini.lack { box-shadow: inset 0 0 0 1px #000, inset 0 0 0 2px rgba(255, 120, 90, 0.7); }
+.stage .mini.lack img { opacity: 0.45; }
+.stage .mini.chance { outline: 1px dashed rgba(255, 211, 90, 0.7); outline-offset: -3px; }
+.stage .mini.chance .num { color: #ffd35a; font-size: 0.8rem; }
+.stage .st-none { color: #6f7368; font-size: 1.4rem; justify-self: center; }
+.stage .lane { position: relative; height: 26px; overflow: hidden; }
+.stage .lane::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 4px; margin-top: -2px;
+  background: repeating-linear-gradient(90deg, #3a3542 0 6px, #2a2630 6px 12px); box-shadow: 0 1px 0 #000, 0 -1px 0 rgba(255, 255, 255, 0.05); }
+.stage.run .lane::before { animation: st-belt 0.6s linear infinite; }
+.stage .tok { position: absolute; top: 3px; left: 0; width: 20px; height: 20px; opacity: 0; animation: st-tok var(--dur, 2s) linear infinite; animation-play-state: paused; }
+.stage .tok img { width: 20px; height: 20px; filter: drop-shadow(0 1px 0 #000); }
+.stage.run .tok { animation-play-state: running; }
+.stage .st-core { position: relative; display: grid; place-items: center; height: 92px; }
+.stage .st-glow { position: absolute; inset: 6px; background: radial-gradient(closest-side, rgba(255, 190, 90, 0.35), transparent); opacity: 0; transition: opacity 400ms; }
+.stage.run .st-glow { opacity: 1; animation: st-glow 1.6s ease-in-out infinite; }
+.stage .st-mach { position: relative; max-width: 84px; max-height: 80px; object-fit: contain; image-rendering: pixelated; filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.5)); }
+.stage.run .st-mach { animation: st-bob 0.9s ease-in-out infinite; }
+.stage:not(.run) .st-mach { filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.5)) saturate(0.7) brightness(0.85); }
+.stage .st-fill { position: absolute; left: 8px; right: 8px; bottom: 0; height: 5px; background: #0c0b10; box-shadow: inset 0 0 0 1px #000; }
+.stage .st-fill i { display: block; height: 100%; width: 0; background: linear-gradient(180deg, #ffe08a, #d8a03a); box-shadow: 0 0 6px rgba(255, 200, 90, 0.6); }
+.stage.s-noinput .st-fill i, .stage.s-blocked .st-fill i { background: linear-gradient(180deg, #ffb08a, #c8603a); box-shadow: none; }
+.stage .st-foot { grid-column: 1 / -1; margin-top: 6px; text-align: center; font-size: 0.74rem; color: #b8b09a; letter-spacing: 0.02em; }
+.stage .st-outs.pop .mini:first-child { animation: st-pop 420ms var(--ease); }
+.stage .st-plus { position: absolute; right: 18px; top: 4px; font-family: var(--font-num); font-size: 1.2rem; color: #ffe08a; text-shadow: 0 1px 0 #000; pointer-events: none; animation: st-plus 900ms ease-out forwards; }
+@keyframes st-tok { 0% { transform: translateX(-20px); opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { transform: translateX(calc(100% + 60px)); opacity: 0; } }
+@keyframes st-belt { to { background-position: 12px 0; } }
+@keyframes st-bob { 50% { transform: translateY(-2px); } }
+@keyframes st-glow { 50% { opacity: 0.55; } }
+@keyframes st-pop { 0% { transform: scale(1); } 40% { transform: scale(1.22); box-shadow: inset 0 0 0 1px #000, 0 0 12px rgba(255, 220, 120, 0.8); } 100% { transform: scale(1); } }
+@keyframes st-plus { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-22px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .stage .tok, .stage.run .st-mach, .stage.run .st-glow, .stage.run .lane::before { animation: none; } .stage.run .tok { opacity: 0.8; } }
+.stage .st-src { width: 44px; height: 44px; object-fit: contain; image-rendering: pixelated; opacity: 0.9; }

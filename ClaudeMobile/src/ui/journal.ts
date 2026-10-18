@@ -61,6 +61,7 @@ function goalIcon(s: GameState, g: AchGoal): string | null {
     case 'renown': return uiIcon('island');
     case 'perks': case 'level': case 'maxed': return uiIcon('upgrade');
     case 'charm': return uiIcon('charm');
+    case 'tended': return uiIcon('leaf');
     case 'years': return uiIcon('compass');
     case 'stat': return g.key === 'harvests' ? itemIcon('wood') : g.key === 'bestCombo' ? uiIcon('leaf') : g.key === 'crafted' ? uiIcon('craft') : g.key === 'delivered' ? thumb('belt') : g.key === 'playSeconds' ? uiIcon('w_clear') : null;
     default: return null;

@@ -18,7 +18,8 @@ export type AchGoal =
   | { t: 'kind'; kind: string; n: number; label: string }
   | { t: 'years'; n: number }
   | { t: 'paved'; n: number }
-  | { t: 'perks'; n: number };
+  | { t: 'perks'; n: number }
+  | { t: 'tended'; n: number };
 
 export type BranchId = 'hands' | 'land' | 'craft' | 'industry' | 'nature' | 'trade' | 'settlement' | 'aether' | 'knowledge' | 'charm';
 
@@ -74,6 +75,8 @@ add('hands', 'h_wood2k', 'h_wood100', 'silver', 'Timberland', 'Two thousand logs
 add('hands', 'h_wood20k', 'h_wood2k', 'gold', 'Forest Lord', 'The trees grow back. Mostly.', made('wood', 20000));
 add('hands', 'h_leaf500', 'h_wood100', 'bronze', 'Leaf Pile', 'Soft enough to jump in.', made('leaf', 500));
 add('hands', 'h_fiber300', 'h_leaf500', 'silver', 'Tuft Hunter', 'Every tuft, combed.', made('fiber', 300));
+add('hands', 'h_tend1', 'h_leaf500', 'bronze', 'Green Fingers', 'A tree tended with care.', { t: 'tended', n: 1 });
+add('hands', 'h_tend12', 'h_tend1', 'silver', 'Arborist', 'Twelve trees fully tended.', { t: 'tended', n: 12 });
 add('hands', 'h_pebble500', 'h_first', 'bronze', 'Pebble Picker', 'Small stones, big plans.', made('pebble', 500));
 
 // ── Landshaper ──

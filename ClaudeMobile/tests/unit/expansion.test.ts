@@ -146,10 +146,10 @@ describe('market', () => {
 });
 
 describe('upgrades', () => {
-  it('costs double each level, needs Marks for IV–V and master tools beyond III', () => {
+  it('costs grow with each level (×2, ×3, ×4, ×5), needs Marks for IV–V and master tools beyond III', () => {
     const def = BUILDINGS.kiln;
     expect(upgradeCost(def, 2).items.stone).toBe(16);
-    expect(upgradeCost(def, 3).items.stone).toBe(32);
+    expect(upgradeCost(def, 3).items.stone).toBe(24);
     expect(upgradeCost(def, 4).marks).toBe(15);
     const s = sandbox(4);
     s.known.delete('master');

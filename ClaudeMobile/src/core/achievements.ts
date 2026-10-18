@@ -20,6 +20,7 @@ export function achValue(s: GameState, g: AchGoal): number {
     case 'years': return yearFor(s.time);
     case 'paved': { let n = 0; for (const t of s.tiles.values()) if (t.floor !== 'grass') n++; return n; }
     case 'perks': { let n = 0; for (const k in s.renown.perks) n += s.renown.perks[k] ?? 0; return n; }
+    case 'tended': { let n = 0; for (const b of s.buildings.values()) if (BUILDINGS[b.type].kind === 'tree' && b.level >= (g.n > 1 ? 3 : 2)) n++; return n; }
     default: return goalValue(s, g);
   }
 }
@@ -41,6 +42,7 @@ export function achText(s: GameState, g: AchGoal): string {
     case 'years': return `See year ${g.n} begin`;
     case 'paved': return `Pave ${g.n} tiles`;
     case 'perks': return `Take ${g.n} perk ranks`;
+    case 'tended': return g.n > 1 ? `Tend ${g.n} trees to III` : 'Tend a tree';
     case 'made': return (s.stats.obtained[g.item] ?? 0) > 0 ? goalText(g) : `Make ${g.n.toLocaleString('en')} of something not yet found`;
     default: return goalText(g);
   }

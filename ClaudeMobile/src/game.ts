@@ -5,6 +5,7 @@ import { BUILDINGS } from './core/content/buildings';
 import { DISCOVERIES } from './core/content/discoveries';
 import type { ItemId, Stack } from './core/content/items';
 import { LAND, landCost } from './core/content/world';
+import { harvesterReach } from './core/content/trade';
 import { applyOffline, type OfflineReport } from './core/offline';
 import { deserialize, exportText, importText, serialize } from './core/save';
 import { TICK, rebuildCache, tick } from './core/sim';
@@ -376,7 +377,7 @@ export class Game {
         this.markDirty();
       } else {
         this.view.pulse(b.id, 0.25);
-        this.ui.hint('The tree is regrowing.', false, 900);
+        this.ui.hint(this.s.known.has('compost') && b.level < 3 ? 'Regrowing. Hold a tree to tend it for more leaves.' : 'The tree is regrowing.', false, 1600);
       }
       return;
     }
@@ -692,11 +693,11 @@ export class Game {
 
   private rangeOverlay(): { x: number; y: number; r: number; size: number } | null {
     const id = this.selected ?? (this.mode.kind === 'build' ? null : null);
-    let type: string | null = null, x = 0, y = 0;
-    if (id !== null) { const b = this.s.buildings.get(id); if (b) { type = b.type; x = b.x; y = b.y; } }
+    let type: string | null = null, x = 0, y = 0, level = 1;
+    if (id !== null) { const b = this.s.buildings.get(id); if (b) { type = b.type; x = b.x; y = b.y; level = b.level; } }
     else if (this.mode.kind === 'build' && (this.hover ?? this.press)) { type = this.mode.type; [x, y] = (this.hover ?? this.press)!; }
     if (!type) return null;
-    const r = BUILDINGS[type].radius;
+    const r = BUILDINGS[type].kind === 'harvester' ? harvesterReach(level) : BUILDINGS[type].radius;
     return r ? { x, y, r, size: BUILDINGS[type].size } : null;
   }
 

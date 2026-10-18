@@ -52,11 +52,11 @@ export interface FruitDef {
 
 export const FRUITS: FruitDef[] = [
   { id: 'apple', tree: 'fruit_tree', sapling: 'fruit_sapling', seed: 'fruit_sapling', fruit: 'apple', home: 'meadow', maxStock: 4, regrow: 8, yield: { apple: 1, leaf: 1 }, saplingChance: 0.03 },
-  { id: 'cherry', tree: 'cherry_tree', sapling: 'cherry_sapling', seed: 'cherry_sapling', fruit: 'cherry', home: 'meadow', maxStock: 3, regrow: 10, yield: { cherry: 2 }, saplingChance: 0.03 },
+  { id: 'cherry', tree: 'cherry_tree', sapling: 'cherry_sapling', seed: 'cherry_sapling', fruit: 'cherry', home: 'meadow', maxStock: 3, regrow: 10, yield: { cherry: 2, leaf: 1 }, saplingChance: 0.03 },
   { id: 'orange', tree: 'orange_tree', sapling: 'orange_sapling', seed: 'orange_sapling', fruit: 'orange', home: 'dunes', maxStock: 4, regrow: 9, yield: { orange: 1, leaf: 1 }, saplingChance: 0.03 },
-  { id: 'date', tree: 'date_palm', sapling: 'date_sapling', seed: 'date_sapling', fruit: 'date', home: 'dunes', maxStock: 3, regrow: 12, yield: { date: 2 }, saplingChance: 0.03 },
+  { id: 'date', tree: 'date_palm', sapling: 'date_sapling', seed: 'date_sapling', fruit: 'date', home: 'dunes', maxStock: 3, regrow: 12, yield: { date: 2, leaf: 1 }, saplingChance: 0.03 },
   { id: 'pear', tree: 'pear_tree', sapling: 'pear_sapling', seed: 'pear_sapling', fruit: 'pear', home: 'marsh', maxStock: 4, regrow: 9, yield: { pear: 1, leaf: 1 }, saplingChance: 0.03 },
-  { id: 'plum', tree: 'plum_tree', sapling: 'plum_sapling', seed: 'plum_sapling', fruit: 'plum', home: 'frost', maxStock: 3, regrow: 11, yield: { plum: 2 }, saplingChance: 0.03 },
+  { id: 'plum', tree: 'plum_tree', sapling: 'plum_sapling', seed: 'plum_sapling', fruit: 'plum', home: 'frost', maxStock: 3, regrow: 11, yield: { plum: 2, leaf: 1 }, saplingChance: 0.03 },
 ];
 export const FRUIT_BY_TREE: Record<string, FruitDef> = Object.fromEntries(FRUITS.map((f) => [f.tree, f]));
 
