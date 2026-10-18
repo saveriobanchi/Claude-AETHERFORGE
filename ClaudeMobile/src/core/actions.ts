@@ -10,7 +10,7 @@ import { ATTUNE, ISLETS, LAND, START_TILES, SUMMON_TIME, clearRefund, landCost, 
 import { buildingUnlocked, checkDiscoveries, landUnlocked, recipeUnlocked } from './progression';
 import { bufCap, completeContract, rareChance, tuftYield, currentRecipe, defaultRecipe, fillBoard, forgeAccept, forgeNeeds, harvestTree, rebuildCache, salvage } from './sim';
 import { LUCK, PERK, RESPEC_PER_POINT } from './content/renown';
-import { BASIC_MAX_LEVEL, MARKET_BY_ID, MAX_LEVEL, SKIP_COOLDOWN, marketPrice, upgradable, upgradeCost } from './content/trade';
+import { BASIC_MAX_LEVEL, MARKET_BY_ID, MAX_LEVEL, SKIP_COOLDOWN, marketPrice, maxLevelFor, upgradable, upgradeCost, upgradeNeeds } from './content/trade';
 import {
   type Building, type Dir, type GameState, DX, DY, addBuilding, addTile, addTo, buildingAt, canAfford, key,
   pay, refund, room, stashAdd, tileAt, isEdgeTile, stackTotal, removeBuildingRaw, rand, made, perkRank,
@@ -600,9 +600,9 @@ export function canUpgrade(s: GameState, id: number): Result {
   const b = s.buildings.get(id);
   if (!b) return fail('');
   const def = BUILDINGS[b.type];
-  if (!upgradable(def) || !s.known.has('tinker')) return fail('Cannot be upgraded');
-  if (b.level >= MAX_LEVEL) return fail('Fully upgraded');
-  if (b.level >= maxLevel(s)) return fail('Needs master tools');
+  if (!upgradable(def) || !s.known.has(upgradeNeeds(def))) return fail('Cannot be upgraded');
+  if (b.level >= maxLevelFor(def)) return fail(def.kind === 'tree' ? 'Fully tended' : 'Fully upgraded');
+  if (def.kind !== 'tree' && b.level >= maxLevel(s)) return fail('Needs master tools');
   const c = upgradeCost(def, b.level + 1);
   if (s.trade.marks < c.marks) return fail(`Need ${c.marks - s.trade.marks} more Marks`);
   if (!canAfford(s, c.items)) return fail(missing(s, c.items));

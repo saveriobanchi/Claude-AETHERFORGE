@@ -37,12 +37,13 @@ export const IDLE_BONUS = 0.01;
 export interface DesignDef { id: string; needs: string[]; cost: Stack; desc: string }
 export const DESIGNS: DesignDef[] = [
   { id: 'bp_twin_saw', needs: ['wind', 'assembler'], cost: { plank: 80, gear: 10, iron: 10 }, desc: 'A second blade: the sawmill wastes no wood.' },
-  { id: 'bp_clamp', needs: ['kiln'], cost: { brick: 40, charcoal: 30, clay: 20 }, desc: 'Bank the kiln with loam: more charcoal from less wood.' },
+  { id: 'bp_clamp', needs: ['kiln'], cost: { brick: 40, charcoal: 30, clay: 20 }, desc: 'Bank the kiln with leaves: twice the charcoal from the wood.' },
   { id: 'bp_ore_wash', needs: ['wind', 'iron'], cost: { gear: 20, glass: 10, iron: 20 }, desc: 'Wash gravel with dew in the wind sifter for iron grit.' },
   { id: 'bp_gears', needs: ['assembler'], cost: { copper: 60, mechanism: 4 }, desc: 'Stamp three gears from two copper.' },
-  { id: 'bp_sky_loom', needs: ['weaving'], cost: { cloth: 20, plank: 60, gear: 10 }, desc: 'Card fiber into the wool: cloth from less fleece.' },
+  { id: 'bp_sky_loom', needs: ['weaving'], cost: { cloth: 20, plank: 60, gear: 10 }, desc: 'Twist twine into the warp: two cloth from two fleece.' },
   { id: 'bp_quick_bread', needs: ['baking'], cost: { bread: 30, brick: 20, flour: 20 }, desc: 'Flat bread straight from wheat — no millstone.' },
   { id: 'bp_still', needs: ['distill'], cost: { glass: 30, aether: 10, copper: 20 }, desc: 'A charcoal-fired still: more aether from less mist.' },
+  { id: 'bp_fine_mesh', needs: ['wind', 'sieve'], cost: { gear: 12, twine: 20, copper: 10 }, desc: 'A finer mesh for the wind sifter: twice the copper flakes from loam.' },
   { id: 'bp_lattice', needs: ['resonance', 'skystone'], cost: { crystal: 6, glass: 20, skystone: 20 }, desc: 'Grow crystal on a glass lattice — no stardust.' },
 ];
 export const DESIGN: Record<string, DesignDef> = Object.fromEntries(DESIGNS.map((d) => [d.id, d]));

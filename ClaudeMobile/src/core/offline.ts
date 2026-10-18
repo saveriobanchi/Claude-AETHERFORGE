@@ -1,8 +1,7 @@
 import { BUILDINGS, TREE } from './content/buildings';
-import { FRUIT_BY_TREE } from './content/biomes';
 import { ITEM_IDS, type ItemId, type Stack } from './content/items';
 import { OFFLINE } from './content/world';
-import { run } from './sim';
+import { run, treeMaxStock } from './sim';
 import { type GameState, attuneRank, capacity, perkRank, stashAdd } from './state';
 
 export interface OfflineReport {
@@ -71,7 +70,7 @@ export function applyOffline(s: GameState, seconds: number): OfflineReport | nul
   // The world keeps living: trees regrow, saplings mature, the sky turns.
   for (const b of s.buildings.values()) {
     const def = BUILDINGS[b.type];
-    if (def.kind === 'tree') b.stock = b.type === 'elder_tree' ? TREE.elderMaxStock : FRUIT_BY_TREE[b.type]?.maxStock ?? TREE.maxStock;
+    if (def.kind === 'tree') b.stock = treeMaxStock(b);
     if (def.kind === 'sapling') b.progress = Math.min(TREE.saplingGrowTime - 0.1, b.progress + seconds);
   }
   if (s.islets.summon) s.islets.summon.t = Math.min(s.islets.summon.t, 1);

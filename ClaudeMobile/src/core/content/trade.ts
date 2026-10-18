@@ -103,7 +103,7 @@ export function marketPrice(m: MarketDef, bought: number): number {
 
 // ───────────────────────── upgrades ─────────────────────────
 
-export const UPGRADE_KINDS = new Set(['crafter', 'generator', 'harvester', 'drill', 'windmill', 'hive', 'roost']);
+export const UPGRADE_KINDS = new Set(['crafter', 'generator', 'harvester', 'drill', 'windmill', 'hive', 'roost', 'storage', 'tree']);
 export const MAX_LEVEL = 5;
 export const BASIC_MAX_LEVEL = 3;
 
@@ -111,10 +111,24 @@ export function upgradable(def: BuildingDef): boolean {
   return UPGRADE_KINDS.has(def.kind);
 }
 
+/** Trees are tended rather than upgraded: three levels, open as soon as you compost. */
+export const TREE_LEVELS = 3;
+const TEND_COST: Record<number, Stack> = { 2: { loam: 8, twine: 3 }, 3: { loam: 24, twine: 8, clay: 6 } };
+/** Per tending level above I: one more leaf a gather, one more stock, regrow this much faster. */
+export const TEND = { leaf: 1, stock: 1, regrow: 0.2 };
+export const maxLevelFor = (def: BuildingDef) => (def.kind === 'tree' ? TREE_LEVELS : MAX_LEVEL);
+/** The discovery that opens upgrades for this kind of building. */
+export const upgradeNeeds = (def: BuildingDef) => (def.kind === 'tree' ? 'compost' : 'tinker');
+/** Storage holds half again as much per level. */
+export const storageLevel = (level: number) => 1 + 0.5 * (Math.max(1, level) - 1);
+/** Treewright reach: one tile around it, two from level III. */
+export const harvesterReach = (level: number) => (level >= 3 ? 2 : 1);
+
 /** Materials and Marks to raise a machine to `level` (2..5). */
 export function upgradeCost(def: BuildingDef, level: number): { items: Stack; marks: number } {
+  if (def.kind === 'tree') return { items: { ...(TEND_COST[level] ?? {}) }, marks: 0 };
   const items: Stack = {};
-  const m = Math.pow(2, level - 1);
+  const m = level; // ×2, ×3, ×4, ×5 the build cost: each level stays worth taking
   for (const k in def.cost) items[k as ItemId] = Math.ceil((def.cost[k as ItemId] ?? 0) * m);
   return { items, marks: level >= 4 ? 15 * (level - 3) : 0 };
 }

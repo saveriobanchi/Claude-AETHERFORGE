@@ -34,7 +34,8 @@ export const START_TILES = 9;
 export function plotCost(tiles: number): Stack {
   const k = Math.max(0, tiles - START_TILES);
   return {
-    loam: Math.ceil(3 + 0.4 * k + 0.0015 * k * k),
+    // gentle curve, then straight past a hundred extra tiles so big islands stay affordable
+    loam: Math.ceil(3 + 0.4 * k + 0.0015 * Math.min(k, 100) ** 2 + 0.3 * Math.max(0, k - 100)),
     wood: 1 + Math.floor(k / 6),
   };
 }

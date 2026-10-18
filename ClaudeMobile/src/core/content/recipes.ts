@@ -80,13 +80,17 @@ const R: RecipeDef[] = [
 
   // ── Designs (drafted at the Drafting Table; alternatives the player opts into) ──
   { id: 'bp_twin_saw', name: 'Twin Saw', inputs: { wood: 2 }, outputs: { plank: 2 }, time: 3, stations: ['sawmill'], unlock: 'bp_twin_saw' },
-  { id: 'bp_clamp', name: 'Charcoal Clamp', inputs: { wood: 2, loam: 1 }, outputs: { charcoal: 1 }, time: 6, stations: ['kiln'], unlock: 'bp_clamp' },
+  { id: 'bp_clamp', name: 'Charcoal Clamp', inputs: { wood: 3, leaf: 1 }, outputs: { charcoal: 2 }, time: 6, stations: ['kiln'], unlock: 'bp_clamp' },
   { id: 'bp_ore_wash', name: 'Ore Wash', inputs: { gravel: 1, dew: 1 }, outputs: { iron_grit: 1 }, chance: { copper_grit: 0.3 }, time: 3, stations: ['wind_sifter'], unlock: 'bp_ore_wash' },
   { id: 'bp_still', name: 'Aether Still', inputs: { mist: 2, charcoal: 1 }, outputs: { aether: 1 }, time: 6, stations: ['distiller'], unlock: 'bp_still' },
   { id: 'bp_gears', name: 'Compact Gears', inputs: { copper: 2 }, outputs: { gear: 3 }, time: 3, stations: ['assembler'], unlock: 'bp_gears' },
-  { id: 'bp_sky_loom', name: 'Sky Loom', inputs: { wool: 2, fiber: 2 }, outputs: { cloth: 1 }, time: 5, stations: ['loom'], unlock: 'bp_sky_loom' },
+  { id: 'bp_sky_loom', name: 'Sky Loom', inputs: { wool: 2, twine: 1 }, outputs: { cloth: 2 }, time: 5, stations: ['loom'], unlock: 'bp_sky_loom' },
   { id: 'bp_quick_bread', name: 'Quick Bread', inputs: { wheat: 3 }, outputs: { bread: 2 }, time: 8, fuel: 1, stations: ['oven'], unlock: 'bp_quick_bread' },
+  { id: 'bp_fine_mesh', name: 'Fine Mesh', inputs: { loam: 1 }, outputs: { pebble: 2 }, chance: { copper_grit: 0.7, sapling: 0.04 }, time: 2.5, stations: ['wind_sifter'], unlock: 'bp_fine_mesh' },
   { id: 'bp_lattice', name: 'Crystal Lattice', inputs: { aether: 3, glass: 1 }, outputs: { crystal: 1 }, time: 14, stations: ['resonator'], unlock: 'bp_lattice' },
+  // second roots for loam: farm and orchard surplus rot down too
+  { id: 'mulch', name: 'Straw Mulch', inputs: { wheat: 3 }, outputs: { loam: 2 }, time: 8, stations: ['composter'], unlock: 'farming' },
+  { id: 'pulp', name: 'Fruit Pulp', inputs: { apple: 2 }, outputs: { loam: 2 }, time: 8, stations: ['composter'], unlock: 'orchard' },
 ];
 
 export const RECIPES: Record<string, RecipeDef> = Object.fromEntries(R.map((r) => [r.id, r]));

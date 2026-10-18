@@ -1,13 +1,13 @@
 import { BUILDINGS, HARVESTER_INTERVAL, DISPATCH_INTERVAL, HIVE, NODE_YIELD, TREE, TUFT, type BuildingDef } from './content/buildings';
 import { BIOMES, type BiomeDef, FRUIT_BY_TREE, OFF_HOME } from './content/biomes';
-import { BOARD_SIZE, CONTRACT_REFRESH, contractPool, levelBuffer, levelSpeed, makeContract, repForLevel } from './content/trade';
+import { BOARD_SIZE, CONTRACT_REFRESH, TEND, contractPool, harvesterReach, levelBuffer, levelSpeed, makeContract, repForLevel } from './content/trade';
 import { type WeatherDef, dayIndex, weatherFor } from './content/weather';
 import type { ItemId, Stack } from './content/items';
 import { FUEL_VALUE, RECIPES, recipesFor, type RecipeDef } from './content/recipes';
 import { ISLETS, FORGE_STAGES, resonanceRequest, summonCost } from './content/world';
 import {
   type Building, type Dir, type Wisp, type GameState, DX, DY, key, buildingAt, addTo, stackTotal, stashAdd,
-  rand, isNight, isEdgeTile, computeCapacity, attuneRank, addBuilding, addTile, tileAt, removeBuildingRaw, addXp, made, perkRank, refund,
+  rand, isNight, dayFraction, isEdgeTile, computeCapacity, attuneRank, addBuilding, addTile, tileAt, removeBuildingRaw, addXp, made, perkRank, refund,
 } from './state';
 import { checkDiscoveries } from './progression';
 import { checkAchievements } from './achievements';
@@ -387,7 +387,8 @@ function tickCrafter(s: GameState, b: Building, dt: number): void {
 function tickGenerator(s: GameState, b: Building, dt: number): void {
   const def = BUILDINGS[b.type];
   const p = def.produces!;
-  if (p.nightOnly && !isNight(s)) { b.status = 'night'; return; }
+  // a star net at level III and up also catches in the dusk and dawn either side of night
+  if (p.nightOnly && !isNight(s) && !(b.level >= 3 && isTwilight(s))) { b.status = 'night'; return; }
   if ((b.outBuf[p.item] ?? 0) >= bufCap(def, b, 10)) { b.status = 'blocked'; return; }
   let rate = machineSpeed(s, b);
   const w = weatherNow(s);
@@ -427,26 +428,24 @@ export function harvestTree(s: GameState, t: Building, sink: (item: ItemId, n: n
 function harvestTreeRaw(s: GameState, t: Building, sink: (item: ItemId, n: number) => number): Stack {
   const elder = t.type === 'elder_tree';
   const got: Stack = {};
+  // a tended tree carries a fuller canopy (added after the main yield, which comes first)
+  const tended = TEND.leaf * (Math.max(1, t.level) - 1);
+  const add = (k: ItemId, n: number) => { if (n) got[k] = (got[k] ?? 0) + n; };
   const fruit = FRUIT_BY_TREE[t.type];
   if (fruit) {
     const y: Stack = { ...fruit.yield };
     // bees nearby pollinate: one more fruit
     if (hivesNear(s, t) > 0) y[fruit.fruit] = (y[fruit.fruit] ?? 0) + 1;
-    for (const k in y) {
-      const n = sink(k as ItemId, y[k as ItemId] ?? 0);
-      if (n) got[k as ItemId] = n;
-    }
+    for (const k in y) add(k as ItemId, sink(k as ItemId, y[k as ItemId] ?? 0));
+    if (tended) add('leaf', sink('leaf', tended));
     s.stats.harvests++;
     if (rand(s) < fruit.saplingChance && sink(fruit.seed, 1)) got[fruit.seed] = 1;
     return got;
   }
   const bio = biomeAt(s, t.x, t.y) ?? BIOMES.meadow;
   const y = elder ? TREE.elderYield : bio.tree;
-  for (const k in y) {
-    const item = k as ItemId;
-    const n = sink(item, y[item] ?? 0);
-    if (n) got[item] = n;
-  }
+  for (const k in y) add(k as ItemId, sink(k as ItemId, y[k as ItemId] ?? 0));
+  if (tended) add('leaf', sink('leaf', tended));
   s.stats.harvests++;
   s.stats.sincePity++;
   if (!elder) {
@@ -468,7 +467,8 @@ function tickHarvester(s: GameState, b: Building, dt: number): void {
   b.timer += dt * machineSpeed(s, b);
   const ready: Building[] = [];
   let any = false;
-  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+  const reach = harvesterReach(b.level);
+  for (let dy = -reach; dy <= reach; dy++) for (let dx = -reach; dx <= reach; dx++) {
     if (!dx && !dy) continue;
     const t = buildingAt(s, b.x + dx, b.y + dy);
     if (!t) continue;
@@ -805,17 +805,29 @@ function findWispJob(s: GameState, w: Wisp, roost: Building): boolean {
   return true;
 }
 
+function isTwilight(s: GameState): boolean {
+  const f = dayFraction(s);
+  return (f >= 0.6 && f < 0.68) || f >= 0.98 || f < 0.05;
+}
+
 // ───────────────────────────────── nature ─────────────────────────────────
+
+/** How many gathers a tree holds when fully grown back (tending adds more). */
+export function treeMaxStock(b: Building): number {
+  const fruit = FRUIT_BY_TREE[b.type];
+  const base = b.type === 'elder_tree' ? TREE.elderMaxStock : fruit ? fruit.maxStock : TREE.maxStock;
+  return base + TEND.stock * (Math.max(1, b.level) - 1);
+}
 
 function tickNature(s: GameState, b: Building, dt: number): void {
   const def = BUILDINGS[b.type];
   if (def.kind === 'tree') {
     const elder = b.type === 'elder_tree', fruit = FRUIT_BY_TREE[b.type];
-    const max = elder ? TREE.elderMaxStock : fruit ? fruit.maxStock : TREE.maxStock;
+    const max = treeMaxStock(b);
     if (b.stock < max) {
       const bio = biomeAt(s, b.x, b.y) ?? BIOMES.meadow;
       const home = !fruit || fruit.home === bio.id ? 1 : OFF_HOME;
-      b.timer += dt * weatherNow(s).regrow * seasonFor(s.time).regrow * bio.regrow * home * (1 + 0.1 * perkRank(s, 'green_thumb') + 0.03 * perkRank(s, 'evergreen'));
+      b.timer += dt * weatherNow(s).regrow * seasonFor(s.time).regrow * bio.regrow * home * (1 + 0.1 * perkRank(s, 'green_thumb') + 0.03 * perkRank(s, 'evergreen')) * (1 + TEND.regrow * (b.level - 1));
       const per = elder ? TREE.elderRegrow : fruit ? fruit.regrow : TREE.regrow;
       if (b.timer >= per) { b.timer -= per; b.stock++; }
       b.status = 'working';
@@ -932,18 +944,22 @@ function spawnTufts(s: GameState, dt: number): void {
   s.tuftTimer += dt;
   if (s.tuftTimer < TUFT.every) return;
   s.tuftTimer = 0;
-  let tufts = 0;
+  // bigger islands grow more tall grass: one more tuft per 25 grass tiles each time
+  let tufts = 0, grass = 0;
   const free: number[] = [];
   for (const [k, t] of s.tiles) {
     if (t.floor !== 'grass') continue;
+    grass++;
     const id = s.occ.get(k);
     if (id === undefined) free.push(k);
     else if (s.buildings.get(id)!.type === 'tuft') tufts++;
   }
-  if (tufts >= Math.max(1, Math.floor((free.length + tufts) / 5)) || !free.length) return;
-  const k = free[Math.floor(rand(s) * free.length)];
-  const t = s.tiles.get(k)!;
-  addBuilding(s, 'tuft', t.x, t.y, 0);
+  const cap = Math.max(1, Math.floor((free.length + tufts) / 5));
+  for (let n = Math.max(1, Math.floor(grass / 25)); n > 0 && tufts < cap && free.length; n--, tufts++) {
+    const k = free.splice(Math.floor(rand(s) * free.length), 1)[0];
+    const t = s.tiles.get(k)!;
+    addBuilding(s, 'tuft', t.x, t.y, 0);
+  }
 }
 
 // ───────────────────────────────── islets ─────────────────────────────────

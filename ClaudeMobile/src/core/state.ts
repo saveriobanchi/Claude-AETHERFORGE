@@ -1,7 +1,7 @@
 import { BUILDINGS, type Floor } from './content/buildings';
 import { ITEM_IDS, type ItemId, type Stack } from './content/items';
 import { ATTUNE, BASE_CAPACITY } from './content/world';
-import type { Contract } from './content/trade';
+import { type Contract, storageLevel } from './content/trade';
 import type { BiomeId } from './content/biomes';
 import { XP, masteryStar, xpForLevel } from './content/renown';
 
@@ -372,7 +372,7 @@ export function attuneRank(s: GameState, id: string): number {
 
 export function computeCapacity(s: GameState): number {
   let cap = BASE_CAPACITY;
-  for (const b of s.buildings.values()) cap += BUILDINGS[b.type].capacity ?? 0;
+  for (const b of s.buildings.values()) cap += (BUILDINGS[b.type].capacity ?? 0) * storageLevel(b.level);
   return Math.floor(cap * (1 + 0.25 * attuneRank(s, 'stores')) * (1 + 0.1 * perkRank(s, 'deep_cellars'))) + s.extraCapacity;
 }
 
