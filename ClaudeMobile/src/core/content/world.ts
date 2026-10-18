@@ -104,7 +104,8 @@ export function resonanceRequest(level: number): Stack {
     h = h >>> 0;
     picked.add(h % RESONANCE_POOL.length);
   }
-  const scale = Math.pow(1.35, level);
+  // steep for the first eight levels, then a long straight climb: always reachable, never quick
+  const scale = Math.pow(1.35, Math.min(level, 8)) * (1 + 0.15 * Math.max(0, level - 8));
   for (const i of picked) {
     const p = RESONANCE_POOL[i];
     out[p.item] = Math.ceil((p.base * scale) / 5) * 5;
@@ -120,11 +121,11 @@ export interface AttunementDef {
   cost: (rank: number) => number;
 }
 export const ATTUNEMENTS: AttunementDef[] = [
-  { id: 'swift', name: 'Swift Hands', desc: 'Every machine works 10% faster.', max: 10, cost: (r) => 1 + r },
-  { id: 'stores', name: 'Deep Stores', desc: 'Your stash holds 25% more.', max: 10, cost: (r) => 1 + r },
-  { id: 'tailwind', name: 'Tailwind', desc: 'Breeze output rises 15%.', max: 10, cost: (r) => 1 + r },
-  { id: 'dreams', name: 'Long Dreams', desc: 'Offline time counts longer and better.', max: 5, cost: (r) => 2 + r },
-  { id: 'wispsong', name: 'Wisp Song', desc: 'Wisps fly 20% faster.', max: 5, cost: (r) => 1 + r },
+  { id: 'swift', name: 'Swift Hands', desc: 'Every machine works 10% faster.', max: 10, cost: (r) => 1 + Math.floor(r / 4) },
+  { id: 'stores', name: 'Deep Stores', desc: 'Your stash holds 25% more.', max: 10, cost: (r) => 1 + Math.floor(r / 4) },
+  { id: 'tailwind', name: 'Tailwind', desc: 'Breeze output rises 15%.', max: 10, cost: (r) => 1 + Math.floor(r / 4) },
+  { id: 'dreams', name: 'Long Dreams', desc: 'Offline time counts longer and better.', max: 5, cost: (r) => 2 + Math.floor(r / 2) },
+  { id: 'wispsong', name: 'Wisp Song', desc: 'Wisps fly 20% faster.', max: 5, cost: (r) => 1 + Math.floor(r / 2) },
   { id: 'aurora', name: 'Aurora', desc: 'The night sky remembers you.', max: 1, cost: () => 2 },
   { id: 'lanterns', name: 'Lanterns', desc: 'Lanterns rise from the island at dusk.', max: 1, cost: () => 2 },
   { id: 'bloom', name: 'Bloom', desc: 'Flowers find every corner.', max: 1, cost: () => 1 },

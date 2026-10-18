@@ -39,7 +39,7 @@ export function goalValue(s: GameState, g: Goal): number {
     case 'tiles': return s.tiles.size;
     case 'contracts': return s.trade.done;
     case 'charm': return charm(s);
-    case 'level': { let m = 0; for (const b of s.buildings.values()) m = Math.max(m, b.level); return m; }
+    case 'level': { let m = 0; for (const b of s.buildings.values()) if (BUILDINGS[b.type].kind !== 'tree') m = Math.max(m, b.level); return m; }
     case 'biomes': { const set = new Set<string>(); for (const t of s.tiles.values()) if (t.floor === 'grass' && t.biome) set.add(t.biome); return set.size; }
     case 'islets': return s.islets.docked;
     case 'forge': return Math.max(0, s.forge.stage);

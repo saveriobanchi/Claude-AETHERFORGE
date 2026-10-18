@@ -132,7 +132,8 @@ export function remove(s: GameState, id: number): Result {
   if (def.removable === false) return fail('It will not move');
   if (b.type === 'tuft') return harvestAt(s, b.x, b.y);
   salvage(s, b);
-  if (def.kind === 'tree') refund(s, { [FRUIT_BY_TREE[b.type]?.seed ?? 'sapling']: 1 }); // the sapling back, nothing more
+  // the sapling back, nothing more — counted as found, so felling the very first tree can't lock the game
+  if (def.kind === 'tree') { const seed = FRUIT_BY_TREE[b.type]?.seed ?? 'sapling'; if (!stashAdd(s, seed, 1)) refund(s, { [seed]: 1 }); }
   else refund(s, def.cost);
   // half of what went into upgrades comes back too
   if (b.level > 1) {

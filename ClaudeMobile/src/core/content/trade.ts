@@ -1,5 +1,6 @@
 import type { BuildingDef } from './buildings';
 import { ITEMS, type ItemId, type Stack } from './items';
+import { GEMS } from './renown';
 
 /**
  * Sky traders, the market and machine upgrades. Numbers here are the
@@ -56,7 +57,8 @@ export function makeContract(pool: ItemId[], level: number, r1: number, r2: numb
   let t = r1 * w.reduce((a, b) => a + b, 0), k = 0;
   while (k < list.length - 1 && t >= w[k]) { t -= w[k]; k++; }
   const item = list[k];
-  const n = Math.max(1, Math.round((BASE_AMOUNT[item] ?? 10) * (1 + 0.3 * level) * (0.8 + r2 * 0.4)));
+  // rare gems are always asked for singly (the pay still grows with trade level)
+  const n = GEMS.includes(item) ? 1 : Math.max(1, Math.round((BASE_AMOUNT[item] ?? 10) * (1 + 0.3 * level) * (0.8 + r2 * 0.4)));
   const marks = Math.max(1, Math.round(n * (TRADE_VALUE[item] ?? 1) * (1 + 0.1 * level)));
   return { item, n, got: 0, marks };
 }
