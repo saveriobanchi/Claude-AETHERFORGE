@@ -15,7 +15,7 @@ import { RECIPE_LIST, RECIPES, recipesFor } from '../core/content/recipes';
 import { ATTUNEMENTS, FORGE_STAGES, ISLETS, LANDS, landCost, summonCost } from '../core/content/world';
 import type { OfflineReport } from '../core/offline';
 import { flowRates } from '../core/offline';
-import { buildingUnlocked, landUnlocked, recipeUnlocked, teasers } from '../core/progression';
+import { buildingUnlocked, landUnlocked, recipeUnlocked } from '../core/progression';
 import { biomeAt, bufCap, crafterRate, currentRecipe, forgeNeeds, luckyChance, machineSpeed, rareChance, tuftYield, weatherNow } from '../core/sim';
 import { type Building, type Dir, capacity, dayFraction, isNight, stackTotal } from '../core/state';
 import type { Game } from '../game';
@@ -23,6 +23,8 @@ import { audio } from '../platform/audio';
 import { clear, duration, fmt, h, img, setOnly } from './dom';
 import { glyph, itemIcon, landThumb, thumb, uiIcon } from './glyphs';
 import { guideNote } from './guide';
+import { type JournalTab, achIcon, buildJournal } from './journal';
+import { ACH, ACHIEVEMENTS, ACH_BRANCHES, type BranchId } from '../core/content/achievements';
 
 const CATS: { id: BuildCategory | 'land'; name: string }[] = [
   { id: 'land', name: 'Land' },
@@ -316,7 +318,7 @@ export class UI {
     document.body.classList.toggle('sheet-open', this.buildOpen || this.craftOpen || this.g.mode.kind !== 'play');
     const newRecipes = RECIPE_LIST.some((r) => r.stations.includes('hand') && recipeUnlocked(s, r.id) && !s.flags.has('seen:r:' + r.id));
     this.setDot(this.btnCraft, newRecipes && !this.craftOpen);
-    this.setDot(this.btnJournal, !s.flags.has('seen:journal:' + s.known.size));
+    this.setDot(this.btnJournal, !s.flags.has('seen:journal:' + s.known.size) || !s.flags.has('seen:feats:' + s.achieved.size));
   }
 
   private setDot(el: HTMLElement, on: boolean): void {
@@ -404,7 +406,8 @@ export class UI {
         const isNew = !s.flags.has('seen:b:' + l.id);
         cards.append(h('button', { class: 'card' + (afford ? '' : ' poor'), onclick: () => this.pickLand(l.id) },
           isNew ? h('span', { class: 'new', text: 'NEW' }) : null,
-          h('div', { class: 'pic' }, img(landThumb(l.biome && l.biome !== 'meadow' ? l.biome : l.floor))), h('div', { class: 'nm', text: l.name }), this.costEl(cost)));
+          h('div', { class: 'pic' }, l.mode === 'clear' ? img(glyph('trash'), 'px') : img(landThumb(l.biome && l.biome !== 'meadow' ? l.biome : l.floor))), h('div', { class: 'nm', text: l.name }),
+          l.mode === 'clear' ? h('div', { class: 'cost muted', text: 'Half back' }) : this.costEl(cost)));
       }
     } else {
       for (const b of BUILDING_LIST) {
@@ -458,10 +461,10 @@ export class UI {
       if (rot) hint += ' · ⟳ sets its output';
     } else if (m.kind === 'land') {
       const l = LANDS.find((x) => x.id === m.land)!;
-      pic = landThumb(l.biome && l.biome !== 'meadow' ? l.biome : l.floor); name = l.name; cost = landCost(m.land, s.tiles.size);
-      hint = l.mode === 'new' ? 'Tap beside the edge · drag to lay several' : 'Tap grass to pave it · drag for more';
+      pic = l.mode === 'clear' ? glyph('trash') : landThumb(l.biome && l.biome !== 'meadow' ? l.biome : l.floor); name = l.name; cost = landCost(m.land, s.tiles.size);
+      hint = l.mode === 'new' ? 'Tap beside the edge · drag to lay several' : l.mode === 'clear' ? 'Tap an empty tile to take it away · drag for more' : 'Tap grass to pave it · drag for more';
     } else if (m.kind === 'remove') {
-      pic = glyph('trash'); name = 'Remove'; hint = 'Tap a building to take it back (full refund) · drag for many';
+      pic = glyph('trash'); name = 'Remove'; hint = 'Tap a building to take it back (full refund, half of any upgrades) · drag for many';
     } else if (m.kind === 'move') {
       const b = s.buildings.get(m.id);
       pic = b ? thumb(b.type) : ''; name = 'Move ' + (b ? BUILDINGS[b.type].name : ''); hint = 'Tap the new spot'; rot = !!(b && BUILDINGS[b.type].rotatable);
@@ -865,8 +868,15 @@ export class UI {
         break;
       case 'roost': {
         const n = (s.cache.roostTargets.get(b.id) ?? []).length;
-        body.append(h('div', { class: 'muted', style: 'font-size:0.82rem', text: 'Its wisps carry finished goods home and bring machines what they lack — within five tiles.' }));
-        body.append(h('div', { class: 'stats' }, h('span', { text: 'Machines in reach' }), h('span', { class: 'num', text: String(n) })));
+        const mine = s.wisps.filter((w) => w.roost === b.id);
+        const busy = mine.filter((w) => w.phase !== 'rest').length;
+        body.append(h('div', { class: 'muted', style: 'font-size:0.82rem', text: `Each trip a wisp brings a machine what it lacks from your stash, then carries its finished goods home. Reach: ${def.radius ?? 5} tiles. Needs power.` }));
+        body.append(h('div', { class: 'stats' },
+          h('span', { text: 'Machines in reach' }), h('span', { class: 'num', text: String(n) }),
+          h('span', { text: 'Wisps' }), h('span', { class: 'num', text: `${busy} busy / ${mine.length}` }),
+          h('span', { text: 'Load per trip' }), h('span', { class: 'num', text: String(8 + 2 * (b.level - 1)) })));
+        if (!n) body.append(h('div', { class: 'muted', style: 'font-size:0.74rem', text: 'No machines in reach yet. Build within the glowing square.' }));
+        else if (s.power.ratio <= 0) body.append(h('div', { class: 'muted', style: 'font-size:0.74rem', text: 'No power: the wisps are resting. Build a windmill.' }));
         addCommon();
         break;
       }
@@ -941,7 +951,7 @@ export class UI {
       row.append(pips, b.level >= max ? h('span', { class: 'muted', style: 'font-size:0.72rem', text: 'Master tools from the market unlock IV–V' }) : cost,
         h('button', { class: 'btn small' + (can.ok ? ' primary' : ''), disabled: b.level >= max, onclick: () => { const r = g.act(() => A.upgrade(s, b.id), 'craft'); if (r.ok) { g.view.pulse(b.id, 0.8); this.hint(`${def.name} is now level ${ROMAN[b.level]}.`); } } }, img(uiIcon('upgrade')), ROMAN[b.level + 1]));
     }
-    return this.section('Upgrade', `+25% speed per level`, row);
+    return this.section('Upgrade', def.kind === 'roost' ? '+2 wisps, +2 load, +25% flight speed per level' : '+25% speed per level', row);
   }
 
   private fillPost(body: HTMLElement, actions: HTMLElement): void {
@@ -994,7 +1004,7 @@ export class UI {
         h('button', { class: 'btn small' + (free > 0 ? ' primary' : ''), 'aria-label': 'More', onclick: () => g.act(() => A.assignRole(s, r.id, 1), 'tap') }, '+')));
     }
     body.append(this.section('Roles', free > 0 ? `${free} without a role` : '', roles));
-    body.append(h('div', { class: 'muted', style: 'font-size:0.72rem', text: `Each specialist speeds their machines by ${Math.round(SPECIALIST_BONUS * 100)}% × contentment (merchants: contract pay). Varied meals make settlers content.` }));
+    body.append(h('div', { class: 'muted', style: 'font-size:0.72rem', text: `Each specialist speeds their machines by ${Math.round(SPECIALIST_BONUS * 100)}% × contentment (merchants: contract pay), a little less for each one after the first few. Varied meals make settlers content.` }));
   }
 
   private fillDrafting(body: HTMLElement): void {
@@ -1290,12 +1300,13 @@ export class UI {
 
   // ───────────────────────── modals ─────────────────────────
 
-  private openModal(content: HTMLElement, wide = false): void {
+  private openModal(content: HTMLElement, wide = false, cls = ''): void {
+    const again = this.modalWrap.classList.contains('open') && !!cls && this.modal.classList.contains(cls);
     clear(this.modal);
-    this.modal.className = 'modal panel' + (wide ? ' wide' : '');
+    this.modal.className = 'modal panel' + (wide ? ' wide' : '') + (cls ? ' ' + cls : '');
     this.modal.append(content);
     this.modalWrap.classList.add('open');
-    audio.play('open');
+    if (!again) audio.play('open');
   }
 
   closeModal(): void {
@@ -1333,48 +1344,35 @@ export class UI {
     this.openModal(content, true);
   }
 
-  openJournal(): void {
+  private journalTab: JournalTab = 'chronicle';
+  private journalBranch: BranchId = 'hands';
+  private journalSel: string | null = null;
+
+  openJournal(tab?: JournalTab): void {
     const s = this.g.s;
+    if (tab) this.journalTab = tab;
     s.flags.add('seen:journal:' + s.known.size);
+    s.flags.add('seen:feats:' + s.achieved.size);
     this.refreshHud();
-    const entries = h('div', { class: 'entries scroll' });
-    {
-      const legacy = s.ambitions.size > AMBITIONS.length || AMBITIONS.every((a) => s.ambitions.has(a.id));
-      entries.append(h('button', { class: 'entry chapter link', onclick: () => this.openAmbitions() },
-        h('div', { class: 'caps', text: `Ambitions · ${s.ambitions.size} achieved` }), h('div', { class: 'h', text: 'Choose your next ambition ›' }),
-        h('p', { text: legacy ? 'Legacy ambitions never run out: every path goes on, a little harder each time.' : 'Seven paths, all open at once. Grow in the order you like.' })));
-    }
-    const riddles = teasers(s);
-    if (riddles.length) {
-      const box = h('div', { class: 'entry' }, h('div', { class: 'caps', text: 'Unanswered' }));
-      for (const r of riddles) box.append(h('div', { class: 'riddle' }, h('span', { style: 'flex:1', text: r.hint }), h('div', { class: 'bar' }, h('i', { style: `width:${Math.round(r.progress * 100)}%` }))));
-      entries.append(box);
-    }
-    for (const bp of BLUEPRINTS) {
-      const r = RECIPE_LIST.find((x) => x.unlock === bp);
-      if (!r || !s.known.has(bp)) continue;
-      const fmtStack = (st: Stack) => Object.keys(st).map((k) => `${st[k as ItemId]} ${ITEMS[k as ItemId].name}`).join(' + ');
-      entries.append(h('div', { class: 'entry' }, h('div', { class: 'h', text: `Blueprint: ${r.name}` }), h('p', { text: `${fmtStack(r.inputs)} → ${fmtStack(r.outputs)} in the ${r.stations.map((x) => BUILDINGS[x]?.name ?? x).join(' or ')}. Choose it on the machine.` })));
-    }
-    const known = DISCOVERY_LIST.filter((d) => s.known.has(d.id)).reverse();
-    for (const d of known) entries.append(h('div', { class: 'entry' }, h('div', { class: 'h', text: d.title }), h('p', { text: d.text })));
-    const st = s.stats;
-    const count = (pred: (b: Building) => boolean) => [...s.buildings.values()].filter(pred).length;
-    entries.append(h('div', { class: 'entry' }, h('div', { class: 'caps', text: 'Records' }), h('div', { class: 'stats' },
-      h('span', { text: 'Time in this world' }), h('span', { class: 'num', text: duration(st.playSeconds) }),
-      h('span', { text: 'Ground' }), h('span', { class: 'num', text: `${s.tiles.size} tiles` }),
-      h('span', { text: 'Charm' }), h('span', { class: 'num', text: String(s.cache.charm) }),
-      h('span', { text: 'Ambitions' }), h('span', { class: 'num', text: String(s.ambitions.size) }),
-      h('span', { text: 'Year' }), h('span', { class: 'num', text: `${yearFor(s.time)} · ${seasonFor(s.time).name}` }),
-      s.people.count ? h('span', { text: 'Settlers' }) : null, s.people.count ? h('span', { class: 'num', text: String(s.people.count) }) : null,
-      h('span', { text: 'Structures' }), h('span', { class: 'num', text: String(count((b) => !['tree', 'tuft', 'sapling', 'elder_tree'].includes(b.type) && BUILDINGS[b.type].kind !== 'node')) }),
-      h('span', { text: 'Trees' }), h('span', { class: 'num', text: String(count((b) => b.type === 'tree')) }),
-      h('span', { text: 'Gathered by hand' }), h('span', { class: 'num', text: fmt(st.harvests) }),
-      h('span', { text: 'Delivered by machine' }), h('span', { class: 'num', text: fmt(st.delivered) }),
-      h('span', { text: 'Discoveries' }), h('span', { class: 'num', text: `${DISCOVERY_LIST.filter((d) => s.known.has(d.id)).length - 1}` }),
-      s.islets.docked ? h('span', { text: 'Drifters home' }) : null, s.islets.docked ? h('span', { class: 'num', text: String(s.islets.docked) }) : null,
-      s.forge.stage >= 3 ? h('span', { text: 'Resonance' }) : null, s.forge.stage >= 3 ? h('span', { class: 'num', text: String(s.forge.level) }) : null)));
-    this.openModal(h('div', { style: 'display:flex;flex-direction:column;min-height:0;max-height:inherit' }, this.modalHead('Journal', 'What you have learned', glyph('journal')), entries));
+    const prev = this.modal.querySelector('.book .page') as HTMLElement | null;
+    const keepScroll = prev && this.modal.querySelector('.book') ? prev.scrollTop : 0;
+    const book = buildJournal({
+      s, tab: this.journalTab, branch: this.journalBranch, selected: this.journalSel,
+      onTab: (t) => { audio.play('tap'); this.journalSel = null; this.openJournal(t); },
+      onBranch: (b) => { audio.play('tap'); this.journalBranch = b; this.journalSel = null; this.openJournal(); },
+      onSelect: (id) => { audio.play('select'); this.journalSel = id; this.openJournal(); (this.modal.querySelector('.ach-detail') as HTMLElement | null)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); },
+      openAmbitions: () => this.openAmbitions(),
+    });
+    const sub = this.journalTab === 'achievements' ? `${s.achieved.size} of ${ACHIEVEMENTS.length} feats` : this.journalTab === 'records' ? 'Your island in numbers' : this.journalTab === 'designs' ? 'Designs you have drafted' : 'What you have learned';
+    this.openModal(h('div', { style: 'display:flex;flex-direction:column;min-height:0;max-height:inherit' }, this.modalHead('Journal', sub, glyph('journal')), book), false, 'journal');
+    if (keepScroll && this.journalSel) (this.modal.querySelector('.book .page') as HTMLElement).scrollTop = keepScroll;
+  }
+
+  achievementEarned(id: string): void {
+    const a = ACH[id];
+    if (!a) return;
+    const br = ACH_BRANCHES.find((b) => b.id === a.branch)!;
+    this.toast(`Feat: ${a.name}`, `${br.name} · ${a.flavor}`, achIcon(this.g.s, a), a.medal === 'gold' || a.medal === 'star' ? 'big' : '');
   }
 
   openSettings(): void {

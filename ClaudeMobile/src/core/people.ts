@@ -42,17 +42,25 @@ export function idle(s: GameState): number {
 const ROLE_OF: Record<string, Role> = {};
 for (const r of ROLES) for (const t of r.types) ROLE_OF[t] = r.id;
 
+/**
+ * Specialists help less and less as a role fills up: ten count as about
+ * six, a hundred as about twelve. Keeps big towns strong but finite.
+ */
+export const effectiveSpecialists = (n: number) => n / (1 + n / 15);
+/** Idle hands help a little, up to +15%. */
+const idleBonus = (n: number) => Math.min(0.15, IDLE_BONUS * n);
+
 /** Speed multiplier settlers give a machine. */
 export function settlerBonus(s: GameState, b: Building): number {
   const c = contentment(s);
   if (!c) return 1;
   const role = ROLE_OF[b.type];
-  return 1 + IDLE_BONUS * idle(s) + (role ? SPECIALIST_BONUS * specialists(s, role) * c : 0);
+  return 1 + idleBonus(idle(s)) + (role ? SPECIALIST_BONUS * effectiveSpecialists(specialists(s, role)) * c : 0);
 }
 
 /** Merchants raise contract pay. */
 export function merchantBonus(s: GameState): number {
-  return SPECIALIST_BONUS * specialists(s, 'merchant') * contentment(s);
+  return SPECIALIST_BONUS * effectiveSpecialists(specialists(s, 'merchant')) * contentment(s);
 }
 
 export function assign(s: GameState, role: Role, delta: number): boolean {

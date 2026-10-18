@@ -8,8 +8,8 @@ export interface LandDef {
   name: string;
   desc: string;
   floor: Floor;
-  /** 'new' extends the island into the sky; 'convert' repaves existing grass. */
-  mode: 'new' | 'convert';
+  /** 'new' extends the island into the sky; 'convert' repaves existing grass; 'clear' takes an empty tile away. */
+  mode: 'new' | 'convert' | 'clear';
   unlock: string;
   /** Biome conversions: grass stays grass, its biome changes. */
   biome?: BiomeId;
@@ -23,6 +23,7 @@ export const LANDS: LandDef[] = [
   { id: 'marsh', name: 'Marsh', desc: 'Soaks grass into marsh. Trees and buildings stay.', floor: 'grass', mode: 'convert', biome: 'marsh', unlock: 'marsh', cost: { dew: 3, loam: 2 } },
   { id: 'dunes', name: 'Dunes', desc: 'Spreads warm sand over grass. Trees and buildings stay.', floor: 'grass', mode: 'convert', biome: 'dunes', unlock: 'dunes', cost: { sand: 4 } },
   { id: 'frost', name: 'Frost', desc: 'Freezes grass into snowy ground. Trees and buildings stay.', floor: 'grass', mode: 'convert', biome: 'frost', unlock: 'frost', cost: { mist: 2, pebble: 4 } },
+  { id: 'clear', name: 'Clear Ground', desc: 'Takes an empty tile away and gives back half of what it cost. The island must stay in one piece.', floor: 'grass', mode: 'clear', unlock: 'land' },
   { id: 'meadow', name: 'Meadow', desc: 'Turns any biome back into meadow.', floor: 'grass', mode: 'convert', biome: 'meadow', unlock: 'marsh', cost: { loam: 2 } },
 ];
 export const LAND: Record<string, LandDef> = Object.fromEntries(LANDS.map((l) => [l.id, l]));
@@ -37,9 +38,19 @@ export function plotCost(tiles: number): Stack {
     wood: 1 + Math.floor(k / 6),
   };
 }
+/** What clearing a tile gives back: half of what laying it (and paving it) cost. */
+export function clearRefund(floor: Floor, tiles: number): Stack {
+  const paid: Stack = floor === 'sky' ? { skystone: 3 } : { ...plotCost(tiles - 1) };
+  if (floor === 'stone') paid.stone = (paid.stone ?? 0) + 2;
+  const out: Stack = {};
+  for (const k in paid) { const n = Math.floor((paid[k as ItemId] ?? 0) / 2); if (n > 0) out[k as ItemId] = n; }
+  return out;
+}
+
 export function landCost(id: string, tiles: number): Stack {
   if (id === 'plot') return plotCost(tiles);
   if (id === 'flagstone') return { stone: 2 };
+  if (id === 'clear') return {};
   if (LAND[id]?.cost) return LAND[id].cost!;
   return { skystone: 3 };
 }

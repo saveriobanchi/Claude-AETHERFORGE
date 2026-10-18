@@ -6,7 +6,7 @@ import { BUILDINGS } from './content/buildings';
 import { FRUIT_BY_TREE } from './content/biomes';
 import { ITEMS, type ItemId, type Stack } from './content/items';
 import { FUEL_VALUE, RECIPES } from './content/recipes';
-import { ATTUNE, ISLETS, LAND, SUMMON_TIME, landCost, summonCost } from './content/world';
+import { ATTUNE, ISLETS, LAND, START_TILES, SUMMON_TIME, clearRefund, landCost, summonCost } from './content/world';
 import { buildingUnlocked, checkDiscoveries, landUnlocked, recipeUnlocked } from './progression';
 import { bufCap, completeContract, rareChance, tuftYield, currentRecipe, defaultRecipe, fillBoard, forgeAccept, forgeNeeds, harvestTree, rebuildCache, salvage } from './sim';
 import { LUCK, PERK, RESPEC_PER_POINT } from './content/renown';
@@ -132,8 +132,17 @@ export function remove(s: GameState, id: number): Result {
   if (def.removable === false) return fail('It will not move');
   if (b.type === 'tuft') return harvestAt(s, b.x, b.y);
   salvage(s, b);
-  if (def.kind === 'tree') refund(s, { wood: 2, [FRUIT_BY_TREE[b.type]?.seed ?? 'sapling']: 1 });
+  if (def.kind === 'tree') refund(s, { [FRUIT_BY_TREE[b.type]?.seed ?? 'sapling']: 1 }); // the sapling back, nothing more
   else refund(s, def.cost);
+  // half of what went into upgrades comes back too
+  if (b.level > 1) {
+    const back: Stack = {};
+    for (let lv = 2; lv <= b.level; lv++) {
+      const c = upgradeCost(def, lv).items;
+      for (const k in c) back[k as ItemId] = (back[k as ItemId] ?? 0) + Math.floor((c[k as ItemId] ?? 0) / 2);
+    }
+    refund(s, back);
+  }
   sync(s);
   return OK;
 }
@@ -168,10 +177,36 @@ export function rotate(s: GameState, id: number): Result {
 
 // ───────────────────────── land ─────────────────────────
 
+/** Would the island still be one piece without the tile at (x, y)? */
+function staysWhole(s: GameState, x: number, y: number): boolean {
+  const gone = key(x, y);
+  let start: number | null = null;
+  for (let d = 0; d < 4 && start === null; d++) { const k = key(x + DX[d], y + DY[d]); if (s.tiles.has(k)) start = k; }
+  if (start === null) return s.tiles.size <= 1;
+  const seen = new Set<number>([gone, start]);
+  const stack = [start];
+  while (stack.length) {
+    const t = s.tiles.get(stack.pop()!)!;
+    for (let d = 0; d < 4; d++) {
+      const k = key(t.x + DX[d], t.y + DY[d]);
+      if (!seen.has(k) && s.tiles.has(k)) { seen.add(k); stack.push(k); }
+    }
+  }
+  return seen.size === s.tiles.size;
+}
+
 export function canExpand(s: GameState, land: string, x: number, y: number, checkCost = true): Result {
   const def = LAND[land];
   if (!def || !landUnlocked(s, land)) return fail('Not discovered');
   const t = tileAt(s, x, y);
+  if (def.mode === 'clear') {
+    if (!t) return fail('No ground here');
+    const o = buildingAt(s, x, y);
+    if (o && o.type !== 'tuft') return fail('Clear it first');
+    if (s.tiles.size <= START_TILES) return fail('The island cannot get smaller');
+    if (!staysWhole(s, x, y)) return fail('The island must stay in one piece');
+    return OK;
+  }
   if (def.mode === 'new') {
     if (t) return fail('Already ground');
     let adj = false;
@@ -197,7 +232,15 @@ export function expand(s: GameState, land: string, x: number, y: number): Result
   if (!r.ok) return r;
   const def = LAND[land];
   pay(s, landCost(land, s.tiles.size));
-  if (def.mode === 'new') addTile(s, x, y, def.floor);
+  if (def.mode === 'clear') {
+    const t = tileAt(s, x, y)!;
+    const o = buildingAt(s, x, y);
+    if (o) { stashAdd(s, 'fiber', tuftYield(s, o.x, o.y)); removeBuildingRaw(s, o); }
+    refund(s, clearRefund(t.floor, s.tiles.size));
+    s.tiles.delete(key(x, y));
+    s.topoDirty = true;
+    s.tileRev++;
+  } else if (def.mode === 'new') addTile(s, x, y, def.floor);
   else if (def.biome) {
     const t = tileAt(s, x, y)!;
     if (def.biome === 'meadow') delete t.biome; else t.biome = def.biome;
@@ -235,6 +278,7 @@ export function harvestAt(s: GameState, x: number, y: number): Result {
   // gathering combo: quick taps chain; every 5th gives one more of the main item
   const c = s.combo;
   c.n = s.time - c.t <= LUCK.comboWindow ? c.n + 1 : 1;
+  if (c.n > (s.stats.bestCombo ?? 0)) s.stats.bestCombo = c.n;
   c.t = s.time;
   const main = Object.keys(got).find((k) => k !== 'sapling' && k !== 'fiber' && !k.endsWith('_sapling')) as ItemId | undefined;
   let crit = false;
@@ -367,7 +411,7 @@ export function load(s: GameState, id: number): Result {
   let moved = 0;
   if (def.kind === 'engine') {
     const n = Math.min(s.stash.aether, (def.bufferCap ?? 10) - (b.inBuf.aether ?? 0));
-    if (n > 0) { s.stash.aether -= n; addTo(b.inBuf, 'aether', n); moved += n; }
+    if (n > 0) { s.stash.aether -= n; addTo(b.inBuf, 'aether', n); addTo(s.flow.cur.out, 'aether', n); moved += n; }
     return moved ? OK : fail('Need Aether');
   }
   const r = currentRecipe(b);
@@ -377,12 +421,12 @@ export function load(s: GameState, id: number): Result {
     const item = k as ItemId;
     const want = Math.max(cap, (r.inputs[item] ?? 0) * 2) - (b.inBuf[item] ?? 0);
     const n = Math.max(0, Math.min(want, s.stash[item]));
-    if (n > 0) { s.stash[item] -= n; addTo(b.inBuf, item, n); moved += n; }
+    if (n > 0) { s.stash[item] -= n; addTo(b.inBuf, item, n); addTo(s.flow.cur.out, item, n); moved += n; } // counted so time away doesn't replay hand-fed output for free
   }
   if (r.fuel) {
     for (const f of ['charcoal', 'wood'] as ItemId[]) {
       if (r.inputs[f]) continue;
-      while (b.fuel < 12 && s.stash[f] > 0) { s.stash[f]--; b.fuel += FUEL_VALUE[f] ?? 0; moved++; }
+      while (b.fuel < 12 && s.stash[f] > 0) { s.stash[f]--; addTo(s.flow.cur.out, f, 1); b.fuel += FUEL_VALUE[f] ?? 0; moved++; }
     }
   }
   return moved ? OK : fail(missing(s, r.inputs) || 'Already full');
@@ -476,7 +520,7 @@ export function skipContract(s: GameState, slot: number): Result {
   tr.board[slot] = null;
   tr.refresh[slot] = 0;
   tr.skipCd = SKIP_COOLDOWN;
-  fillBoard(s, true, [c.item]);
+  fillBoard(s, true, [c.item], slot);
   return OK;
 }
 
@@ -573,6 +617,7 @@ export function upgrade(s: GameState, id: number): Result {
   pay(s, c.items);
   s.trade.marks -= c.marks;
   b.level++;
+  s.topoDirty = true; // a roost upgrade brings more wisps
   return OK;
 }
 

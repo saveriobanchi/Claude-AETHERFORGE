@@ -156,8 +156,16 @@ const LEGACY: Record<PathId, { title: string; intro: string; goals: (L: number) 
 export function legacyAmbition(path: PathId, rung: number): AmbitionDef {
   const L = rung - LADDER_RUNGS, d = LEGACY[path];
   return { id: `${path}_${rung}`, path, rung, title: `${d.title} ${roman(L)}`, intro: d.intro, goals: d.goals(L),
-    reward: { marks: Math.round(150 * Math.pow(1.5, L - 1)), points: 1 } };
+    reward: { marks: legacyMarks(L), points: 1 } };
 }
+
+/**
+ * Marks for legacy rung L. Grows gently: goals such as contracts or tiles
+ * only grow linearly, so a compounding reward would run away into billions.
+ */
+export const legacyMarks = (L: number) => 200 + 50 * (Math.max(1, L) - 1);
+/** What legacy rung L paid before the fix (used once to repair inflated saves). */
+export const oldLegacyMarks = (L: number) => Math.round(150 * Math.pow(1.5, Math.max(1, L) - 1));
 
 /** Any ambition by id, hand-written or legacy. */
 export function ambitionById(id: string): AmbitionDef | null {
