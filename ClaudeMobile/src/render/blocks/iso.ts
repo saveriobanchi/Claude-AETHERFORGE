@@ -55,11 +55,37 @@ export class Canvas {
   castOn = false;
   /** Warm point lights (lamps, fire): world position, colour, radius in blocks. */
   lights: { p: V3; c: RGB; r: number }[] = [];
-  light(p: V3, c: RGB, r: number): void { this.lights.push({ p: [p[0] + this.tx, p[1] + this.ty, p[2]], c, r }); }
+  light(p0: V3, c: RGB, r: number): void { const p = this.turn ? this.rp(p0) : p0; this.lights.push({ p: [p[0] + this.tx, p[1] + this.ty, p[2]], c, r }); }
   /** Translation applied to everything drawn (block units). */
   tx = 0;
   ty = 0;
   at(x: number, y: number): this { this.tx = x; this.ty = y; return this; }
+
+  /**
+   * Quarter turns applied to everything drawn, about the centre of a
+   * `tsize`-block footprint: the same model, facing another way.
+   */
+  turn = 0;
+  tsize = 1;
+  private inBox = false;
+  /** A point turned with the model. */
+  rp(p: V3): V3 {
+    const s = this.tsize;
+    switch (this.turn & 3) {
+      case 1: return [s - p[1], p[0], p[2]];
+      case 2: return [s - p[0], s - p[1], p[2]];
+      case 3: return [p[1], s - p[0], p[2]];
+      default: return p;
+    }
+  }
+  private rv(v: V3): V3 {
+    switch (this.turn & 3) {
+      case 1: return [-v[1], v[0], v[2]];
+      case 2: return [-v[0], -v[1], v[2]];
+      case 3: return [v[1], -v[0], v[2]];
+      default: return v;
+    }
+  }
 
   /** Pixels per block edge unit relative to the standard 64 px tile (0.5 for distant islets, mini icons). */
   S = 1;
@@ -80,6 +106,7 @@ export class Canvas {
 
   /** Textured parallelogram: origin p, edges eu (texture u) and ev (texture v). */
   quad(p0: V3, eu: V3, ev: V3, f: Face, shade: RGB, id = 0, bias = 0, isUp = false): void {
+    if (this.turn && !this.inBox) { p0 = this.rp(p0); eu = this.rv(eu); ev = this.rv(ev); }
     const p: V3 = [p0[0] + this.tx, p0[1] + this.ty, p0[2]];
     const [ox, oy] = this.proj(p[0], p[1], p[2]);
     const [ax, ay] = this.proj(p[0] + eu[0], p[1] + eu[1], p[2] + eu[2]);
@@ -126,6 +153,21 @@ export class Canvas {
    * `rot` turns the top texture by quarter turns (breaks up repetition).
    */
   box(a: V3, b: V3, top: Face, left: Face = top, right: Face = left, id = 0, rot = 0): void {
+    if (this.turn && !this.inBox) {
+      const p = this.rp(a), q = this.rp(b);
+      a = [Math.min(p[0], q[0]), Math.min(p[1], q[1]), Math.min(p[2], q[2])];
+      b = [Math.max(p[0], q[0]), Math.max(p[1], q[1]), Math.max(p[2], q[2])];
+      // Models put a box's front (if it has one) on the +y face and a plain side on +x.
+      // The faces a turn brings into view are plain, except the front where it lands.
+      const front = left, plain = right;
+      const t = this.turn & 3;
+      left = plain;
+      right = t === 3 ? front : plain;
+      rot += this.turn;
+      this.inBox = true;
+      try { this.box(a, b, top, left, right, id, rot); } finally { this.inBox = false; }
+      return;
+    }
     const [x0, y0, z0] = a, [x1, y1, z1] = b;
     const T = 16;
     const auto = (f: Face, uv: UV): Face => (f.uv ? f : { ...f, uv });
@@ -146,6 +188,7 @@ export class Canvas {
 
   /** Upright sprite standing at p (its bottom centre), 2 px per texel, facing the camera. */
   sprite(p0: V3, f: Face, id = 0, scale0 = 2, bias = 0.3): void {
+    if (this.turn && !this.inBox) p0 = this.rp(p0);
     const p: V3 = [p0[0] + this.tx, p0[1] + this.ty, p0[2]];
     const scale = Math.max(1, Math.round(scale0 * this.S));
     const t = f.tex;

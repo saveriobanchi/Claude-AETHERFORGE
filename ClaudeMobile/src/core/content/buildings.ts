@@ -104,7 +104,7 @@ const B: BuildingDef[] = [
   { id: 'dispatcher', name: 'Dispatcher', desc: 'Sends one chosen item out of your stash.', kind: 'dispatcher', category: 'logistics', size: 1, cost: { gear: 4, plank: 4, stone: 4 }, unlock: 'dispatch', rotatable: true },
   { id: 'splitter', name: 'Splitter', desc: 'Shares items between left, front and right.', kind: 'splitter', category: 'logistics', size: 1, cost: { plank: 2, gear: 2 }, unlock: 'routing', rotatable: true },
   { id: 'sorter', name: 'Sorter', desc: 'One chosen item goes straight on; the rest turn aside.', kind: 'sorter', category: 'logistics', size: 1, cost: { plank: 2, gear: 2, wire: 4 }, unlock: 'routing', rotatable: true },
-  { id: 'roost', name: 'Wisp Roost', desc: 'Wisps ferry items between your stash and nearby machines.', kind: 'roost', category: 'logistics', size: 1, cost: { coil: 2, skystone: 8, plate: 6 }, unlock: 'wisps', power: 4, radius: 5 },
+  { id: 'roost', name: 'Wisp Roost', desc: 'Wisps bring nearby machines what they lack and carry their goods home. Upgrade for more wisps.', kind: 'roost', category: 'logistics', size: 1, cost: { coil: 2, skystone: 8, plate: 6 }, unlock: 'wisps', power: 4, radius: 5 },
 
   { id: 'trading_post', name: 'Trading Post', desc: 'Sky traders dock here. Must touch the edge.', kind: 'post', category: 'logistics', size: 1, cost: { plank: 12, stone: 6, twine: 4 }, edge: true, unlock: 'trade', bufferCap: 999 },
   { id: 'lantern', name: 'Trade Lantern', desc: 'A gift from the traders. Glows at night.', kind: 'decor', category: 'decor', size: 1, cost: { plank: 2, candle: 2 }, unlock: 'tradelights', charm: 4 },

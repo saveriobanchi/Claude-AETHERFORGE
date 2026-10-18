@@ -68,6 +68,8 @@ export interface Wisp {
   job: 'collect' | 'deliver' | null;
   carry: ItemId | null;
   n: number;
+  /** Seconds before an idle wisp looks for work again. */
+  wait: number;
 }
 
 export type SimEvent =
@@ -80,6 +82,7 @@ export type SimEvent =
   | { type: 'islet_docked'; name: string; x: number; y: number }
   | { type: 'forge_stage'; stage: number }
   | { type: 'resonance'; level: number }
+  | { type: 'achievement'; id: string }
   | { type: 'deliver'; id: number; item: ItemId }
   | { type: 'spill'; id: number; item: ItemId }
   | { type: 'contract'; item: ItemId; marks: number }
@@ -160,6 +163,8 @@ export interface GameState {
     built: number;
     playSeconds: number;
     spilled: number;
+    /** Longest hand-gathering combo. */
+    bestCombo?: number;
   };
   known: Set<string>;
   flags: Set<string>;
@@ -169,6 +174,8 @@ export interface GameState {
   forge: { id: number; stage: number; progress: Stack; level: number; sparks: number; attune: Record<string, number>; request: Stack };
   trade: TradeState;
   renown: RenownState;
+  /** Achievements earned: id → sim time when earned. */
+  achieved: Map<string, number>;
   /** Ambitions achieved (`<path>_<rung>`). */
   ambitions: Set<string>;
   /** Ambition pinned to the quest card. */
@@ -252,6 +259,7 @@ export function createState(seed = 1234567): GameState {
     forge: { id: 0, stage: -1, progress: {}, level: 0, sparks: 0, attune: {}, request: {} },
     trade: emptyTrade(),
     renown: emptyRenown(),
+    achieved: new Map(),
     ambitions: new Set(),
     pinned: null,
     people: emptyPeople(),
@@ -273,7 +281,7 @@ export function createState(seed = 1234567): GameState {
   return s;
 }
 
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 
 export function emptyRenown(): RenownState {
   return { xp: 0, level: 0, points: 0, perks: {}, codex: [] };

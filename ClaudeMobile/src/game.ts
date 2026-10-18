@@ -189,7 +189,7 @@ export class Game {
       bubbles: this.settings.bubbles,
       range: this.rangeOverlay(),
       preview: this.pressPick,
-      xray: this.mode.kind === 'land' ? 0.16 : this.mode.kind === 'build' || this.mode.kind === 'move' ? 0.32 : 1,
+      xray: this.mode.kind === 'land' ? (LAND[this.mode.land].mode === 'clear' ? 0.5 : 0.16) : this.mode.kind === 'build' || this.mode.kind === 'move' ? 0.32 : 1,
     });
     audio.night = this.view.night;
     audio.update(dt, this.s.power.wind, this.view.stats().items / 40, this.observe);
@@ -279,6 +279,10 @@ export class Game {
         case 'charm':
           audio.play('discover', 1.3);
           this.ui.charmMilestone(e.milestone);
+          break;
+        case 'achievement':
+          audio.play('discover', 1.15);
+          this.ui.achievementEarned(e.id);
           break;
         case 'codex':
           audio.play('discover');
@@ -514,7 +518,7 @@ export class Game {
   tryExpand(land: string, x: number, y: number, _sx?: number, _sy?: number): void {
     const r = A.expand(this.s, land, x, y);
     if (r.ok) {
-      audio.play('expand');
+      audio.play(LAND[land].mode === 'clear' ? 'remove' : 'expand');
       haptic([10, 30, 10], this.settings.haptics);
       this.view.burst('dust', x, y, this.settings.reduced ? 4 : 14, 40);
       this.view.burst('pop', x, y, 4, 30);
@@ -582,7 +586,7 @@ export class Game {
     } else if (m.kind === 'land') {
       let n = 0;
       for (const c of p.cells) if (A.expand(this.s, m.land, c.x, c.y).ok) { n++; this.view.burst('dust', c.x, c.y, 6, 30); }
-      if (n) { audio.play('expand'); haptic([10, 30, 10], this.settings.haptics); this.markDirty(); }
+      if (n) { audio.play(LAND[m.land].mode === 'clear' ? 'remove' : 'expand'); haptic([10, 30, 10], this.settings.haptics); this.markDirty(); }
       else this.fail(A.canExpand(this.s, m.land, p.cells[0]?.x ?? 0, p.cells[0]?.y ?? 0).reason);
     } else if (m.kind === 'remove') {
       let n = 0;
@@ -631,6 +635,9 @@ export class Game {
           let adj = false;
           for (let d = 0; d < 4; d++) { const k = key(c.x + DX[d], c.y + DY[d]); if (this.s.tiles.has(k) || added.has(k)) adj = true; }
           ok = !t && !added.has(key(c.x, c.y)) && adj;
+        } else if (LAND[m.land].mode === 'clear') {
+          ok = !added.has(key(c.x, c.y)) && A.canExpand(this.s, m.land, c.x, c.y, false).ok;
+          if (ok) added.add(key(c.x, c.y));
         } else ok = A.canExpand(this.s, m.land, c.x, c.y, false).ok;
         const cost: Stack = landCost(m.land, tiles);
         let afford = true;

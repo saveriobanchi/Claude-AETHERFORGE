@@ -25,6 +25,7 @@ const BASE_AMOUNT: Partial<Record<ItemId, number>> = {
   apple: 30, honey: 12, wax: 12, cider: 6, candle: 12, preserves: 5,
   cherry: 30, orange: 25, date: 25, pear: 25, plum: 25, juice: 6, fruit_basket: 2,
   wheat: 60, carrot: 40, flour: 25, bread: 16, wool: 30, cloth: 10, egg: 30, stew: 10, pie: 6,
+  topaz: 1, ruby: 1, opal: 1, emerald: 1,
 };
 /** Goods traders favour (picked more often). */
 const FAVOURED = new Set<ItemId>(['apple', 'honey', 'wax', 'cider', 'candle', 'preserves', 'cherry', 'orange', 'date', 'pear', 'plum', 'juice', 'fruit_basket', 'bread', 'cloth', 'stew', 'pie']);
@@ -87,19 +88,22 @@ export const MARKET: MarketDef[] = [
   { id: 'hive', name: 'Hive Kit', desc: 'Learn to keep bees.', price: 25, once: true, flag: 'bought_hive', needs: 'orchard' },
   { id: 'lanterns', name: 'Lantern Pattern', desc: 'Make trade lanterns from candles.', price: 12, once: true, flag: 'bought_lanterns', needs: 'apiary' },
   { id: 'master', name: 'Master Tools', desc: 'Upgrade machines to levels IV and V.', price: 60, once: true, flag: 'bought_master', needs: 'tinker' },
-  { id: 'copper', name: 'Copper Flakes ×40', desc: 'A crate of bright flakes.', price: 6, grow: 1.25, gives: { copper_grit: 40 } },
-  { id: 'iron', name: 'Iron Flakes ×30', desc: 'A crate of dark flakes.', price: 10, grow: 1.25, gives: { iron_grit: 30 }, needs: 'iron' },
-  { id: 'stardust', name: 'Stardust ×6', desc: 'Swept from a meteor field.', price: 15, grow: 1.25, gives: { stardust: 6 }, needs: 'night' },
+  { id: 'copper', name: 'Copper Flakes ×30', desc: 'A crate of bright flakes.', price: 10, grow: 1.25, gives: { copper_grit: 30 } },
+  { id: 'iron', name: 'Iron Flakes ×24', desc: 'A crate of dark flakes.', price: 18, grow: 1.25, gives: { iron_grit: 24 }, needs: 'iron' },
+  { id: 'stardust', name: 'Stardust ×6', desc: 'Swept from a meteor field.', price: 30, grow: 1.25, gives: { stardust: 6 }, needs: 'night' },
 ];
 export const MARKET_BY_ID: Record<string, MarketDef> = Object.fromEntries(MARKET.map((m) => [m.id, m]));
 
+/** Repeat purchases raise a price, but never past this multiple of the base. */
+export const MARKET_PRICE_CAP = 4;
+
 export function marketPrice(m: MarketDef, bought: number): number {
-  return Math.round(m.price * Math.pow(m.grow ?? 1, bought));
+  return Math.round(m.price * Math.min(MARKET_PRICE_CAP, Math.pow(m.grow ?? 1, bought)));
 }
 
 // ───────────────────────── upgrades ─────────────────────────
 
-export const UPGRADE_KINDS = new Set(['crafter', 'generator', 'harvester', 'drill', 'windmill', 'hive']);
+export const UPGRADE_KINDS = new Set(['crafter', 'generator', 'harvester', 'drill', 'windmill', 'hive', 'roost']);
 export const MAX_LEVEL = 5;
 export const BASIC_MAX_LEVEL = 3;
 

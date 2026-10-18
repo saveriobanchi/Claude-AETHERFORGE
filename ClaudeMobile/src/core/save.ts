@@ -7,7 +7,8 @@ import {
 import { rebuildCache } from './sim';
 import type { Contract } from './content/trade';
 import { BIOMES, type BiomeId } from './content/biomes';
-import { ambitionById } from './content/ambitions';
+import { ACH } from './content/achievements';
+import { LADDER_RUNGS, ambitionById, legacyMarks, oldLegacyMarks } from './content/ambitions';
 import { ROLES } from './content/people';
 
 const RETIRED_AIRDOCK: Stack = { plank: 40, cloth: 12, gear: 10, iron: 10 };
@@ -32,6 +33,8 @@ export interface SaveData {
   chapters?: number;
   people?: GameState['people'];
   ambitions?: string[];
+  /** Achievements: [id, sim time earned]. */
+  achieved?: [string, number][];
   pinned?: string | null;
   charmHigh?: number;
   flow: GameState['flow'];
@@ -96,6 +99,7 @@ export function serialize(s: GameState, view?: SaveData['view']): SaveData {
     trade: s.trade,
     renown: s.renown,
     ambitions: [...s.ambitions],
+    achieved: [...s.achieved],
     pinned: s.pinned,
     people: s.people,
     flow: s.flow,
@@ -132,6 +136,21 @@ export const MIGRATIONS: Record<number, (d: AnySave) => AnySave> = {
   5: (d) => ({ ...d, v: 6, chapters: d.chapters ?? 0 }),
   // v6 → v7: settlers and ambitions. Chapters are dropped; ambitions whose goals the world already meets are achieved (and paid) on load.
   6: (d) => ({ ...d, v: 7, people: d.people ?? emptyPeople() }),
+  // v7 → v8: legacy ambitions used to pay compounding Marks (×1.5 per rung), which ran into
+  // the billions. Take back what they overpaid compared with the new, gentle rewards.
+  7: (d) => {
+    let excess = 0;
+    for (const id of d.ambitions ?? []) {
+      const m = typeof id === 'string' ? /^([a-z]+)_(\d+)$/.exec(id) : null;
+      if (!m || Number(m[2]) <= LADDER_RUNGS || Number(m[2]) >= 10000) continue;
+      const L = Number(m[2]) - LADDER_RUNGS;
+      excess += Math.max(0, oldLegacyMarks(L) - legacyMarks(L));
+    }
+    const tr = d.trade ?? emptyTrade();
+    const marks = Math.max(0, (Number(tr.marks) || 0) - excess);
+    const earned = Math.max(marks, (Number(tr.earned) || 0) - excess);
+    return { ...d, v: 8, trade: { ...tr, marks, earned } };
+  },
   4: (d) => ({ ...d, v: 5, renown: d.renown ?? emptyRenown(), stats: { ...(d.stats ?? {}), made: d.stats?.made ?? d.stats?.obtained ?? {} } }),
 };
 
@@ -201,6 +220,7 @@ export function deserialize(raw: unknown): { state: GameState; view?: SaveData['
   const rn = d.renown ?? emptyRenown();
   for (const c of pendingRefund) for (const k in c) if (isItemId(k)) s.stash[k] += c[k as ItemId] ?? 0;
   s.ambitions = new Set((d.ambitions ?? []).filter((a) => typeof a === 'string' && !!ambitionById(a)));
+  s.achieved = new Map((d.achieved ?? []).filter((e) => Array.isArray(e) && typeof e[0] === 'string' && !!ACH[e[0]]).map(([id, t]) => [id, +t || 0]));
   s.pinned = typeof d.pinned === 'string' ? d.pinned : null;
   const pp = d.people ?? emptyPeople();
   s.people = { ...emptyPeople(), count: Math.max(0, Math.floor(pp.count ?? 0)), mealT: pp.mealT ?? 0, arriveT: pp.arriveT ?? 0, hungry: pp.hungry ?? 0, roles: {}, meals: (pp.meals ?? []).filter((m) => isItemId(m)) as ItemId[] };

@@ -17,6 +17,10 @@ export interface ArtSprite {
   /** Night glows relative to the anchor in world px: [x, y, colour, radius]. */
   lights: [number, number, number, number][];
   smoke?: [number, number];
+  /** Smoke source per facing, for buildings baked in four directions. */
+  smoke4?: [number, number][];
+  /** Light offsets per facing (same lights as `lights`). */
+  lights4?: [number, number][][];
   variants: Record<string, ArtImage[]>;
   frames: ArtImage[];
 }
@@ -32,7 +36,7 @@ interface Manifest {
   decorKinds: string[];
   decorSets?: Record<string, string[]>;
   decorVariants: number;
-  sprites: Record<string, { fps: number; main: string; lamp: boolean; variants: Record<string, number>; lights: [number, number, number, number][]; smoke?: [number, number] }>;
+  sprites: Record<string, { fps: number; main: string; lamp: boolean; variants: Record<string, number>; lights: [number, number, number, number][]; smoke?: [number, number]; smoke4?: [number, number][]; lights4?: [number, number][][] }>;
   rects: Record<string, Rect>;
 }
 
@@ -166,7 +170,7 @@ class Art {
     for (const [type, sp] of Object.entries(man.sprites)) {
       const variants: Record<string, ArtImage[]> = {};
       for (const [v, n] of Object.entries(sp.variants)) variants[v] = Array.from({ length: n }, (_, i) => this.img(`${type}:${v}:${i}`));
-      this.sprites.set(type, { fps: sp.fps, lamp: sp.lamp, main: sp.main, lights: sp.lights, smoke: sp.smoke, variants, frames: variants[sp.main] });
+      this.sprites.set(type, { fps: sp.fps, lamp: sp.lamp, main: sp.main, lights: sp.lights, smoke: sp.smoke, smoke4: sp.smoke4, lights4: sp.lights4, variants, frames: variants[sp.main] });
     }
     this.ready = true;
   }

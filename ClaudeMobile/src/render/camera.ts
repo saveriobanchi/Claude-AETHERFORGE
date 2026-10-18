@@ -12,7 +12,7 @@ export class Camera {
   tzoom = 3;
   vx = 0;
   vy = 0;
-  minZoom = 0.75;
+  minZoom = 0.3;
   maxZoom = 7;
   bounds = { x0: -400, y0: -300, x1: 400, y1: 400 };
   private follow: { x: number; y: number; t: number } | null = null;

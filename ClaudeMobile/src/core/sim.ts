@@ -6,10 +6,11 @@ import type { ItemId, Stack } from './content/items';
 import { FUEL_VALUE, RECIPES, recipesFor, type RecipeDef } from './content/recipes';
 import { ISLETS, FORGE_STAGES, resonanceRequest, summonCost } from './content/world';
 import {
-  type Building, type Dir, type GameState, DX, DY, key, buildingAt, addTo, stackTotal, stashAdd,
+  type Building, type Dir, type Wisp, type GameState, DX, DY, key, buildingAt, addTo, stackTotal, stashAdd,
   rand, isNight, isEdgeTile, computeCapacity, attuneRank, addBuilding, addTile, tileAt, removeBuildingRaw, addXp, made, perkRank, refund,
 } from './state';
 import { checkDiscoveries } from './progression';
+import { checkAchievements } from './achievements';
 import { charm, checkAmbitions } from './ambitions';
 import { merchantBonus, present, settlerBonus, tickPeople } from './people';
 import { charmTradeBonus } from './content/ambitions';
@@ -21,7 +22,7 @@ export const BELT_GAP = 0.34;
 const PUSH_INTERVAL = 0.15;
 const WISPS_PER_ROOST = 4;
 const WISP_SPEED = 3.2;
-const WISP_LOAD = 6;
+const WISP_LOAD = 8;
 const FLOW_BUCKET = 30;
 const FLOW_HISTORY = 10;
 
@@ -115,8 +116,8 @@ export function rebuildCache(s: GameState): void {
   for (const w of s.wisps) if (w.phase === 'out') { const t = s.buildings.get(w.target); if (t) t.claimed++; }
   for (const r of roosts) {
     const have = s.wisps.filter((w) => w.roost === r.id).length;
-    for (let i = have; i < WISPS_PER_ROOST; i++) {
-      s.wisps.push({ roost: r.id, x: r.x, y: r.y, px: r.x, py: r.y, target: 0, phase: 'rest', job: null, carry: null, n: 0 });
+    for (let i = have; i < wispsFor(r); i++) {
+      s.wisps.push({ roost: r.id, x: r.x, y: r.y, px: r.x, py: r.y, target: 0, phase: 'rest', job: null, carry: null, n: 0, wait: 0 });
     }
   }
   s.topoDirty = false;
@@ -565,6 +566,8 @@ function tickDispatcher(s: GameState, b: Building, dt: number): void {
   const stocked = items.filter((it) => s.stash[it] >= 1);
   if (!stocked.length) { b.status = 'noinput'; return; }
   const t = frontOf(s, b);
+  // straight back into the stash would only spin items in place
+  if (t && BUILDINGS[t.type].kind === 'depot') { b.status = 'blocked'; return; }
   let order = stocked;
   if (stocked.length > 1) {
     // two items: send what the machine at the end of the line needs most
@@ -576,14 +579,16 @@ function tickDispatcher(s: GameState, b: Building, dt: number): void {
     } else order = b.rr % 2 ? [stocked[1], stocked[0]] : stocked;
   }
   for (const item of order) {
-    if (t && offer(s, t, item, b.dir)) {
-      s.stash[item]--;
+    if (!t) break;
+    s.stash[item]--; // taken first, so nothing is counted twice if it comes straight back
+    if (offer(s, t, item, b.dir)) {
       addTo(s.flow.cur.out, item, 1);
       b.status = 'working';
       b.cycles++;
       b.rr = (b.rr + 1) % 2;
       return;
     }
+    s.stash[item]++;
   }
   b.status = 'blocked';
 }
@@ -653,20 +658,21 @@ function tickEngine(s: GameState, b: Building, dt: number, needed: boolean): num
 // ───────────────────────────────── wisps ─────────────────────────────────
 
 function wispStep(s: GameState, dt: number): void {
-  const speed = WISP_SPEED * (1 + 0.2 * attuneRank(s, 'wispsong')) * dt;
   for (const w of s.wisps) {
     w.px = w.x;
     w.py = w.y;
     const roost = s.buildings.get(w.roost);
     if (!roost) continue;
-    const powered = s.power.ratio > 0;
     if (w.phase === 'rest') {
-      if (!powered || roost.status === 'nopower') continue;
+      if (s.power.ratio <= 0 || roost.status === 'nopower') continue;
+      if (w.wait > 0) { w.wait -= dt; continue; }
       if (findWispJob(s, w, roost)) w.phase = 'out';
+      else w.wait = 0.5; // nothing to do: look again shortly
       continue;
     }
     const target = w.phase === 'out' ? s.buildings.get(w.target) : roost;
     if (!target) { abortWisp(s, w); continue; }
+    const speed = wispSpeed(s, roost) * dt;
     const dx = target.x - w.x;
     const dy = target.y - w.y;
     const d = Math.hypot(dx, dy);
@@ -679,35 +685,32 @@ function wispStep(s: GameState, dt: number): void {
     w.y = target.y;
     if (w.phase === 'out') {
       target.claimed = Math.max(0, target.claimed - 1);
-      if (w.job === 'collect') {
-        // pick up the most plentiful output
+      // 1) hand over what it brought
+      if (w.carry && w.n > 0) {
+        while (w.n > 0 && offer(s, target, w.carry, 0)) w.n--;
+        if (w.n > 0) { const back = stashAdd(s, w.carry, w.n); addTo(s.flow.cur.inn, w.carry, back); w.n -= back; }
+        if (w.n <= 0) { w.carry = null; w.n = 0; }
+      }
+      // 2) take the most plentiful finished good home on the same trip
+      if (!w.carry) {
         let best: ItemId | null = null;
-        for (const k in target.outBuf) if (!best || (target.outBuf[k as ItemId] ?? 0) > (target.outBuf[best] ?? 0)) best = k as ItemId;
+        for (const k in target.outBuf) if ((target.outBuf[k as ItemId] ?? 0) > (best ? target.outBuf[best] ?? 0 : 0)) best = k as ItemId;
         if (best) {
-          const n = Math.min(WISP_LOAD, target.outBuf[best] ?? 0);
+          const n = Math.min(wispLoad(roost), target.outBuf[best] ?? 0);
           addTo(target.outBuf, best, -n);
           w.carry = best;
           w.n = n;
         }
-      } else if (w.job === 'deliver' && w.carry) {
-        let left = w.n;
-        while (left > 0 && offer(s, target, w.carry, 0)) left--;
-        if (left > 0) s.stash[w.carry] += left;
-        w.carry = null;
-        w.n = 0;
       }
       w.phase = 'back';
     } else {
       if (w.carry && w.n > 0) {
-        const fit = stashAdd(s, w.carry, w.n);
-        addTo(s.flow.cur.inn, w.carry, fit);
-        if (fit < w.n) {
-          // stash full: return what does not fit to the floor (lost would violate conservation) — keep carrying
-          w.n -= fit;
-          w.phase = 'rest';
-          continue;
-        }
-        s.events.push({ type: 'deliver', id: roost.id, item: w.carry });
+        const item = w.carry;
+        const fit = stashAdd(s, item, w.n);
+        addTo(s.flow.cur.inn, item, fit);
+        w.n -= fit;
+        if (w.n > 0) { w.phase = 'rest'; w.wait = 1; continue; } // stash full: hold the rest and retry
+        s.events.push({ type: 'deliver', id: roost.id, item });
       }
       w.carry = null;
       w.n = 0;
@@ -717,73 +720,89 @@ function wispStep(s: GameState, dt: number): void {
   }
 }
 
-function abortWisp(s: GameState, w: (typeof s.wisps)[number]): void {
-  if (w.carry && w.n) s.stash[w.carry] += w.n;
-  w.carry = null;
-  w.n = 0;
-  w.phase = 'back';
-  w.job = null;
-  const roost = s.buildings.get(w.roost);
-  if (!roost) w.phase = 'rest';
+/** Wisps a roost keeps: four, and two more per upgrade level. */
+export function wispsFor(roost: Building): number {
+  return WISPS_PER_ROOST + 2 * (Math.max(1, roost.level) - 1);
+}
+function wispSpeed(s: GameState, roost: Building): number {
+  return WISP_SPEED * (1 + 0.2 * attuneRank(s, 'wispsong')) * levelSpeed(roost.level);
+}
+function wispLoad(roost: Building): number {
+  return WISP_LOAD + 2 * (Math.max(1, roost.level) - 1);
 }
 
-function findWispJob(s: GameState, w: (typeof s.wisps)[number], roost: Building): boolean {
+function abortWisp(s: GameState, w: Wisp): void {
+  if (w.carry && w.n) { const fit = stashAdd(s, w.carry, w.n); addTo(s.flow.cur.inn, w.carry, fit); w.n -= fit; }
+  if (w.n <= 0) { w.carry = null; w.n = 0; }
+  w.job = null;
+  w.phase = s.buildings.has(w.roost) ? 'back' : 'rest';
+}
+
+/** What a machine lacks that the stash can supply: [item, amount] or null. */
+function wispNeed(s: GameState, m: Building, load: number): [ItemId, number] | null {
+  const def = BUILDINGS[m.type];
+  if (def.kind === 'engine') {
+    const room = (def.bufferCap ?? 10) - (m.inBuf.aether ?? 0);
+    return room >= 2 && s.stash.aether > 0 ? ['aether', Math.min(load, room, s.stash.aether)] : null;
+  }
+  if (def.kind !== 'crafter') return null;
+  const r = currentRecipe(m);
+  if (!r) return null;
+  // the input that is furthest below what one more cycle needs comes first
+  let best: [ItemId, number] | null = null, bestShort = -Infinity;
+  for (const k in r.inputs) {
+    const item = k as ItemId;
+    const per = r.inputs[item] ?? 0;
+    const room = Math.max(bufCap(def, m), per * 2) - (m.inBuf[item] ?? 0);
+    if (room <= 0 || s.stash[item] <= 0) continue;
+    const short = per - (m.inBuf[item] ?? 0);
+    if (short > bestShort) { bestShort = short; best = [item, Math.min(load, room, s.stash[item])]; }
+  }
+  return best;
+}
+
+/**
+ * Pick the machine that most needs a visit. One trip does both jobs: bring
+ * what the machine lacks, then carry its finished goods home.
+ */
+function findWispJob(s: GameState, w: Wisp, roost: Building): boolean {
   if (w.carry && w.n) {
     // still holding items the stash could not take
     const fit = stashAdd(s, w.carry, w.n);
+    addTo(s.flow.cur.inn, w.carry, fit);
     w.n -= fit;
-    if (w.n > 0) return false;
+    if (w.n > 0) { w.wait = 1; return false; }
     w.carry = null;
   }
   const targets = s.cache.roostTargets.get(roost.id) ?? [];
-  const n = targets.length;
-  if (!n) return false;
-  const start = Math.floor(rand(s) * n);
-  // 1) collect outputs
-  for (let i = 0; i < n; i++) {
-    const m = s.buildings.get(targets[(start + i) % n]);
-    if (!m || m.claimed > 0) continue;
-    const out = stackTotal(m.outBuf);
-    if (out >= 1) {
-      const front = frontOf(s, m);
-      if (front && BUILDINGS[front.type].kind !== 'node' && out < 4) continue; // let conveyors handle it
-      w.target = m.id;
-      w.job = 'collect';
-      m.claimed++;
-      return true;
-    }
-  }
-  // 2) deliver missing inputs
-  for (let i = 0; i < n; i++) {
-    const m = s.buildings.get(targets[(start + i) % n]);
+  const load = wispLoad(roost);
+  let best: Building | null = null, bestScore = 0, bestNeed: [ItemId, number] | null = null;
+  for (const id of targets) {
+    const m = s.buildings.get(id);
     if (!m || m.claimed > 0) continue;
     const def = BUILDINGS[m.type];
-    let want: ItemId | null = null;
-    let qty = 0;
-    if (def.kind === 'engine') {
-      if ((m.inBuf.aether ?? 0) < 4 && s.stash.aether > 0) { want = 'aether'; qty = Math.min(WISP_LOAD, s.stash.aether); }
-    } else if (def.kind === 'crafter') {
-      const r = currentRecipe(m);
-      if (!r) continue;
-      for (const k in r.inputs) {
-        const item = k as ItemId;
-        const need = (r.inputs[item] ?? 0) * 2 - (m.inBuf[item] ?? 0);
-        if (need > 0 && s.stash[item] > 0) { want = item; qty = Math.min(WISP_LOAD, need, s.stash[item]); break; }
-      }
-      if (!want && r.fuel && m.fuel < 4 && s.stash.charcoal > 0) { want = 'charcoal'; qty = Math.min(2, s.stash.charcoal); }
-    }
-    if (want && qty > 0) {
-      s.stash[want] -= qty;
-      addTo(s.flow.cur.out, want, qty);
-      w.carry = want;
-      w.n = qty;
-      w.target = m.id;
-      w.job = 'deliver';
-      m.claimed++;
-      return true;
-    }
+    let out = stackTotal(m.outBuf);
+    // a conveyor in front carries small amounts away by itself
+    const front = frontOf(s, m);
+    if (front && BUILDINGS[front.type].kind !== 'node' && out < Math.min(4, bufCap(def, m))) out = 0;
+    const need = wispNeed(s, m, load);
+    const starving = need && (m.status === 'noinput' || m.status === 'idle') ? 4 : 0;
+    const full = out > 0 && (m.status === 'blocked' || out >= bufCap(def, m)) ? 4 : 0;
+    const score = Math.min(out, load) + (need ? need[1] : 0) + starving + full;
+    if (score > bestScore) { bestScore = score; best = m; bestNeed = need; }
   }
-  return false;
+  if (!best) return false;
+  if (bestNeed) {
+    const [item, qty] = bestNeed;
+    s.stash[item] -= qty;
+    addTo(s.flow.cur.out, item, qty);
+    w.carry = item;
+    w.n = qty;
+  }
+  w.target = best.id;
+  w.job = bestNeed ? 'deliver' : 'collect';
+  best.claimed++;
+  return true;
 }
 
 // ───────────────────────────────── nature ─────────────────────────────────
@@ -888,10 +907,11 @@ export function completeContract(s: GameState, i: number): void {
 }
 
 /** Fill empty board slots whose refresh time has passed. */
-export function fillBoard(s: GameState, force = false, avoidAlso: ItemId[] = []): void {
+export function fillBoard(s: GameState, force = false, avoidAlso: ItemId[] = [], only?: number): void {
   const tr = s.trade;
   const pool = contractPool(s.stats.obtained);
   for (let i = 0; i < BOARD_SIZE; i++) {
+    if (only !== undefined && i !== only) continue;
     if (tr.board[i] || (!force && tr.refresh[i] > 0)) continue;
     const avoid = [...avoidAlso, ...tr.board.filter((c): c is NonNullable<typeof c> => !!c).map((c) => c.item)];
     tr.board[i] = makeContract(pool, tr.level, rand(s), rand(s), avoid);
@@ -1068,7 +1088,7 @@ export function tick(s: GameState, dt = TICK): void {
   }
 
   // Discoveries once per simulated second (cheap, and deterministic).
-  if (Math.floor(s.time) !== Math.floor(s.time - dt)) { checkDiscoveries(s); checkCodex(s); checkAmbitions(s); }
+  if (Math.floor(s.time) !== Math.floor(s.time - dt)) { checkDiscoveries(s); checkCodex(s); checkAmbitions(s); checkAchievements(s); }
 }
 
 /** Codex sets: each completed set grants a perk point and renown. */
@@ -1107,7 +1127,7 @@ export function salvage(s: GameState, b: Building): void {
     const r = currentRecipe(b);
     if (r) for (const k in r.inputs) s.stash[k as ItemId] += r.inputs[k as ItemId] ?? 0;
   }
-  for (const w of s.wisps) if (w.roost === b.id && w.carry) s.stash[w.carry] += w.n;
+  for (const w of s.wisps) if (w.roost === b.id && w.carry) { s.stash[w.carry] += w.n; w.carry = null; w.n = 0; }
   removeBuildingRaw(s, b);
 }
 
