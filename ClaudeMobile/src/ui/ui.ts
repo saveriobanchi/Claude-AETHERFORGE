@@ -1449,24 +1449,30 @@ export class UI {
   private journalBranch: BranchId = 'hands';
   private journalSel: string | null = null;
 
-  openJournal(tab?: JournalTab): void {
+  openJournal(tab?: JournalTab, keepView = false): void {
     const s = this.g.s;
     if (tab) this.journalTab = tab;
+    // tapping a feat redraws the page: keep every list exactly where the player left it
+    const at = (sel: string) => this.modal.querySelector(sel) as HTMLElement | null;
+    const kept = keepView && at('.book') ? { page: at('.book .page')?.scrollTop ?? 0, tree: at('.tree-view')?.scrollLeft ?? 0, chips: at('.branches')?.scrollLeft ?? 0 } : null;
     s.flags.add('seen:journal:' + s.known.size);
     s.flags.add('seen:feats:' + s.achieved.size);
     this.refreshHud();
-    const prev = this.modal.querySelector('.book .page') as HTMLElement | null;
-    const keepScroll = prev && this.modal.querySelector('.book') ? prev.scrollTop : 0;
     const book = buildJournal({
-      s, tab: this.journalTab, branch: this.journalBranch, selected: this.journalSel,
+      s, tab: this.journalTab, branch: this.journalBranch, selected: this.journalSel, keepView: !!kept,
       onTab: (t) => { audio.play('tap'); this.journalSel = null; this.openJournal(t); },
       onBranch: (b) => { audio.play('tap'); this.journalBranch = b; this.journalSel = null; this.openJournal(); },
-      onSelect: (id) => { audio.play('select'); this.journalSel = id; this.openJournal(); (this.modal.querySelector('.ach-detail') as HTMLElement | null)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); },
+      onSelect: (id) => { audio.play('select'); this.journalSel = id; this.openJournal(undefined, true); },
       openAmbitions: () => this.openAmbitions(),
     });
     const sub = this.journalTab === 'achievements' ? `${s.achieved.size} of ${ACHIEVEMENTS.length} feats` : this.journalTab === 'records' ? 'Your island in numbers' : this.journalTab === 'designs' ? 'Designs you have drafted' : 'What you have learned';
     this.openModal(h('div', { style: 'display:flex;flex-direction:column;min-height:0;max-height:inherit' }, this.modalHead('Journal', sub, glyph('journal')), book), false, 'journal');
-    if (keepScroll && this.journalSel) (this.modal.querySelector('.book .page') as HTMLElement).scrollTop = keepScroll;
+    if (kept) {
+      const page = at('.book .page'), tree = at('.tree-view'), chips = at('.branches');
+      if (page) page.scrollTop = kept.page;
+      if (tree) tree.scrollLeft = kept.tree;
+      if (chips) chips.scrollLeft = kept.chips;
+    }
   }
 
   achievementEarned(id: string): void {

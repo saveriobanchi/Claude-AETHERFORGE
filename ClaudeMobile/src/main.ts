@@ -1,12 +1,11 @@
 import './ui/style.css';
 import { boot } from './game';
+import { installScrollGuard } from './input/scrollguard';
 
 // iOS Safari ignores user-scalable=no: block page pinch zoom and
 // rubber-band scrolling so gestures always belong to the game.
 for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
-document.addEventListener('touchmove', (e) => {
-  if (!(e.target as HTMLElement)?.closest?.('.scroll, .cards, .tabs, textarea, input')) e.preventDefault();
-}, { passive: false });
+installScrollGuard();
 
 /** A failed start after an update is almost always a stale offline cache: clear it and reload, once. */
 async function heal(): Promise<boolean> {

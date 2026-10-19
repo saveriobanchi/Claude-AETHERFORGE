@@ -973,7 +973,7 @@ body.sheet-open .hud-bottom .main-btn.on:not(.big) { border-image: var(--tex-pan
 .m-bronze .medal-chip i, .medal-chip.m-bronze i { background: var(--bronze); }
 .medal-chip.m-silver i { background: var(--silver); } .medal-chip.m-gold i { background: var(--goldm); } .medal-chip.m-star i { background: var(--starm); }
 .recent { font-size: 0.78rem; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.branches { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 8px; margin: 0 -4px; scrollbar-width: thin; }
+.branches { display: flex; gap: 6px; overflow-x: auto; overscroll-behavior: contain; touch-action: pan-x; padding: 2px 2px 8px; margin: 0 -4px; scrollbar-width: thin; }
 .branch { position: relative; flex: none; display: grid; grid-template-columns: 22px auto; grid-template-rows: auto auto; column-gap: 6px; align-items: center; padding: 6px 9px; cursor: pointer;
   font: inherit; color: var(--ink); text-align: left; background: rgba(255, 250, 235, 0.5); border: 1px solid rgba(110, 80, 40, 0.3); border-radius: 6px; }
 .branch img { grid-row: span 2; width: 22px; height: 22px; image-rendering: pixelated; }
@@ -985,7 +985,7 @@ body.sheet-open .hud-bottom .main-btn.on:not(.big) { border-image: var(--tex-pan
 .branch.full .bc { color: #2f6b5a; }
 .branch .dot { position: absolute; top: -3px; right: -3px; width: 9px; height: 9px; border-radius: 50%; background: #d8402e; box-shadow: 0 0 0 2px var(--paper); }
 .branch-head { margin: 4px 0 6px; }
-.tree-view { overflow: auto; margin: 0 -8px; padding: 4px 0 8px; scrollbar-width: thin; -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y; }
+.tree-view { overflow: auto; overscroll-behavior: contain; margin: 0 -8px; padding: 4px 0 8px; scrollbar-width: thin; -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y; }
 .tree-view:not(.wide) .tree-canvas { margin: 0 auto; }
 .tree-canvas { position: relative; }
 .tree-canvas .links { position: absolute; inset: 0; overflow: visible; }
