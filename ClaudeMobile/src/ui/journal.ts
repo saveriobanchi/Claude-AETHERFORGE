@@ -16,6 +16,8 @@ export type JournalTab = 'chronicle' | 'achievements' | 'records' | 'designs';
 
 export interface JournalCtx {
   s: GameState;
+  /** Re-drawing in place (a feat was tapped): leave the scroll positions alone. */
+  keepView?: boolean;
   tab: JournalTab;
   branch: BranchId;
   selected: string | null;
@@ -211,6 +213,7 @@ function feats(c: JournalCtx, page: HTMLElement): void {
   // centre the selected (or first open) node in view once laid out
   const focusId = c.selected ?? nodes.find((n) => !s.achieved.has(n.a.id) && achVisible(s, n.a))?.a.id;
   const fn = focusId ? byId.get(focusId) : undefined;
+  if (c.keepView) return;
   if (fn) requestAnimationFrame(() => { viewport.scrollLeft = Math.max(0, cx(fn) - viewport.clientWidth / 2); });
   requestAnimationFrame(() => {
     const on = chips.querySelector('.branch.on') as HTMLElement | null;
