@@ -19,6 +19,7 @@ import { buildingUnlocked, landUnlocked, recipeUnlocked } from '../core/progress
 import { biomeAt, bufCap, crafterRate, currentRecipe, forgeNeeds, luckyChance, machineSpeed, rareChance, treeMaxStock, tuftYield, weatherNow } from '../core/sim';
 import { type Building, type Dir, capacity, dayFraction, isNight, stackTotal } from '../core/state';
 import type { Game } from '../game';
+import { LENS_COLORS } from '../render/world';
 import { audio } from '../platform/audio';
 import { clear, duration, fmt, h, img, setOnly } from './dom';
 import { glyph, itemIcon, landThumb, thumb, uiIcon } from './glyphs';
@@ -93,6 +94,8 @@ export class UI {
   private btnCraft!: HTMLButtonElement;
   private btnStash!: HTMLButtonElement;
   private btnJournal!: HTMLButtonElement;
+  private lensBtn!: HTMLButtonElement;
+  private lensLegend!: HTMLElement;
   private savedEl!: HTMLElement;
   private build!: HTMLElement;
   private craft!: HTMLElement;
@@ -150,7 +153,9 @@ export class UI {
     const menu = this.iconBtn('gear', 'Menu', () => this.openSettings());
     menu.innerHTML = GEAR_SVG;
     const top = h('div', { class: 'hud-top' }, banner, h('div', { class: 'hud-right' }, h('div', { class: 'res-wrap' }, this.res, plus), menu));
-    const left = h('div', { class: 'hud-left' }, this.iconBtn('compass', 'Centre view', () => this.g.view.cam.focus(0, -10, this.g.defaultZoom())));
+    this.lensBtn = this.iconBtn('eye', 'Lens: see through, show every reach', () => this.g.toggleLens());
+    this.lensLegend = h('div', { class: 'lens-legend panel hide' });
+    const left = h('div', { class: 'hud-left' }, this.iconBtn('compass', 'Centre view', () => this.g.view.cam.focus(0, -10, this.g.defaultZoom())), this.lensBtn, this.lensLegend);
     this.note = h('div', { class: 'qtext' });
     this.questIcon = img(uiIcon('book'));
     this.quest = h('button', { class: 'quest panel hide', onclick: () => (this.questTip ? this.openJournal() : this.openAmbitions()) }, h('div', { class: 'qicon' }, this.questIcon), h('div', { class: 'qbody' }, this.questCaps = h('div', { class: 'caps', text: 'Next step' }), this.note), h('span', { class: 'chev', text: '›' }));
@@ -189,6 +194,25 @@ export class UI {
     this.wasCraftVisible = false;
     this.btnCraft.style.display = 'none';
     this.refreshAll();
+  }
+
+  /** The lens is on or off: light the button and show what each colour means (only kinds on the island). */
+  onLens(on: boolean): void {
+    this.lensBtn.classList.toggle('on', on);
+    clear(this.lensLegend);
+    this.lensLegend.classList.toggle('hide', !on);
+    if (!on) return;
+    const s = this.g.s;
+    const rows: [string, string][] = [['harvester', 'Treewright'], ['roost', 'Wisp roost'], ['pylon', 'Resonance'], ['hive', 'Bees']];
+    let any = false;
+    for (const [kind, name] of rows) {
+      const n = [...s.buildings.values()].filter((b) => BUILDINGS[b.type].kind === kind).length;
+      if (!n) continue;
+      any = true;
+      this.lensLegend.append(h('div', { class: 'll' }, h('i', { style: `background:#${LENS_COLORS[kind].toString(16).padStart(6, '0')}` }), h('span', { text: name }), h('span', { class: 'num', text: '×' + n })));
+    }
+    if (!any) this.lensLegend.append(h('div', { class: 'll muted', text: 'No machines with a reach yet' }));
+    this.hint('Lens on: everything see-through, every reach shown. Tap the eye again to close.', false, 2200);
   }
 
   private iconBtn(name: string, title: string, fn: () => void): HTMLButtonElement {

@@ -24,6 +24,12 @@ export interface Ghost {
   cells: { x: number; y: number; dir: number; ok: boolean }[];
 }
 
+/** A machine's reach on the ground: its anchor tile, radius in tiles, footprint and colour. */
+/** Lens colours per kind of machine with a reach (the interface legend uses the same). */
+export const LENS_COLORS: Record<string, number> = { harvester: 0x9cf07a, roost: 0x8fe3d2, pylon: 0xc8a0ff, hive: 0xffd35a };
+
+export interface RangeArea { x: number; y: number; r: number; size: number; color: number }
+
 export interface ViewOptions {
   selected: number | null;
   ghost: Ghost | null;
@@ -33,6 +39,8 @@ export interface ViewOptions {
   reduced: boolean;
   bubbles: boolean;
   range: { x: number; y: number; r: number; size: number } | null;
+  /** The lens: every machine's reach at once, each in its own colour. */
+  ranges?: RangeArea[];
   /** Building under the finger right now (lit while pressing, before the tap lands). */
   preview?: number | null;
   /**
@@ -931,6 +939,33 @@ export class WorldView {
       }
     }
     for (const [x, y] of o.landSpots) diamond(x, y, 0xf6e9c6, 0.55, 0.08);
+    if (o.ranges?.length) {
+      // Each kind's covered ground: a faint wash, then a bold outline around its edge only,
+      // so overlapping reaches of different machines stay readable.
+      const areas = new Map<number, Set<number>>();
+      for (const r of o.ranges) {
+        let set = areas.get(r.color);
+        if (!set) areas.set(r.color, (set = new Set()));
+        for (let y = r.y - r.r; y <= r.y + r.r + r.size - 1; y++) for (let x = r.x - r.r; x <= r.x + r.r + r.size - 1; x++) set.add(key(x, y));
+      }
+      const w = (2.2 / this.cam.zoom);
+      for (const [color, set] of areas) {
+        for (const k of set) {
+          const t = s.tiles.get(k);
+          const [x, y] = t ? [t.x, t.y] : [Math.floor(k / 4096) - 2048, (k % 4096) - 2048];
+          const [cx, cy] = tileCenter(x, y);
+          const top: [number, number] = [cx, cy - 16], right: [number, number] = [cx + 32, cy], bottom: [number, number] = [cx, cy + 16], left: [number, number] = [cx - 32, cy];
+          g.poly([...top, ...right, ...bottom, ...left]).fill({ color, alpha: 0.07 });
+          // an edge is drawn where the neighbour is outside this kind's reach
+          const edges: [number, number, [number, number], [number, number]][] = [[1, 0, right, bottom], [-1, 0, left, top], [0, 1, bottom, left], [0, -1, top, right]];
+          for (const [dx, dy, a, b] of edges) {
+            if (set.has(key(x + dx, y + dy))) continue;
+            g.moveTo(a[0], a[1]).lineTo(b[0], b[1]).stroke({ width: w, color, alpha: 0.9 });
+          }
+        }
+      }
+      for (const r of o.ranges) for (let y = 0; y < r.size; y++) for (let x = 0; x < r.size; x++) diamond(r.x + x, r.y + y, r.color, 0.95, 0.35);
+    }
     if (o.range) {
       const r = o.range;
       for (let y = r.y - r.r; y <= r.y + r.r + r.size - 1; y++) for (let x = r.x - r.r; x <= r.x + r.r + r.size - 1; x++) diamond(x, y, 0x8fe3d2, 0.35, 0.07);

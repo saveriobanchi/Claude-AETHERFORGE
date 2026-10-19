@@ -1100,3 +1100,11 @@ body.sheet-open .hud-bottom .main-btn.on:not(.big) { border-image: var(--tex-pan
 @keyframes st-plus { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-22px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .stage .tok, .stage.run .st-mach, .stage.run .st-glow, .stage.run .lane::before { animation: none; } .stage.run .tok { opacity: 0.8; } }
 .stage .st-src { width: 44px; height: 44px; object-fit: contain; image-rendering: pixelated; opacity: 0.9; }
+
+/* the lens: see-through view with every machine's reach */
+.icon-btn.on { border-color: var(--gold-hi); box-shadow: 0 0 0 2px rgba(248, 220, 142, 0.5), 0 0 12px rgba(248, 220, 142, 0.45); }
+.lens-legend { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; pointer-events: none; }
+.lens-legend.hide { display: none; }
+.lens-legend .ll { display: grid; grid-template-columns: 10px auto auto; gap: 6px; align-items: center; font-size: 0.72rem; white-space: nowrap; }
+.lens-legend .ll i { width: 10px; height: 10px; box-shadow: 0 0 0 1px #000; }
+.lens-legend .ll .num { color: var(--muted); font-size: 0.85rem; }
