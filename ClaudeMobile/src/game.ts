@@ -15,7 +15,7 @@ import { type MachineVoice, audio, haptic } from './platform/audio';
 import * as store from './platform/storage';
 import { tileCenter } from './render/art/terrain';
 import { attachGestures } from './input/gestures';
-import { type Ghost, WorldView } from './render/world';
+import { type Ghost, LENS_COLORS, type RangeArea, WorldView } from './render/world';
 import { UI } from './ui/ui';
 
 export interface Settings {
@@ -189,8 +189,9 @@ export class Game {
       reduced: this.settings.reduced,
       bubbles: this.settings.bubbles,
       range: this.rangeOverlay(),
+      ranges: this.lens && this.mode.kind === 'play' && !this.observe ? this.lensRanges() : undefined,
       preview: this.pressPick,
-      xray: this.mode.kind === 'land' ? (LAND[this.mode.land].mode === 'clear' ? 0.5 : 0.16) : this.mode.kind === 'build' || this.mode.kind === 'move' ? 0.32 : 1,
+      xray: this.lens && this.mode.kind === 'play' && !this.observe ? 0.35 : this.mode.kind === 'land' ? (LAND[this.mode.land].mode === 'clear' ? 0.5 : 0.16) : this.mode.kind === 'build' || this.mode.kind === 'move' ? 0.32 : 1,
     });
     audio.night = this.view.night;
     audio.update(dt, this.s.power.wind, this.view.stats().items / 40, this.observe);
@@ -429,6 +430,7 @@ export class Game {
     if (e.key === 'Escape') { this.setMode({ kind: 'play' }); this.select(null); this.ui.closeAll(); }
     if (e.key === 'r' || e.key === 'R') this.rotateMode();
     if (e.key === 'o' || e.key === 'O') this.toggleObserve();
+    if (e.key === 'l' || e.key === 'L') this.toggleLens();
     if (e.key === 'b' || e.key === 'B') this.ui.toggleBuild();
   }
 
@@ -480,6 +482,27 @@ export class Game {
       // the camera stays where the player put it: selecting never pans the view
     }
     this.ui.onSelect();
+  }
+
+  /** The lens: everything see-through, every machine's reach drawn on the ground. */
+  lens = false;
+  toggleLens(): void {
+    this.lens = !this.lens;
+    audio.play(this.lens ? 'open' : 'close');
+    this.ui.onLens(this.lens);
+  }
+
+  /** Every machine's reach, for the lens. */
+  private lensRanges(): RangeArea[] {
+    const out: RangeArea[] = [];
+    for (const b of this.s.buildings.values()) {
+      const def = BUILDINGS[b.type];
+      const color = LENS_COLORS[def.kind];
+      if (color === undefined) continue;
+      const r = def.kind === 'harvester' ? harvesterReach(b.level) : def.kind === 'hive' ? 1 : def.radius ?? 0;
+      if (r) out.push({ x: b.x, y: b.y, r, size: def.size, color });
+    }
+    return out;
   }
 
   toggleObserve(): void {

@@ -160,3 +160,14 @@ test('every building places and opens its panel; every recipe and land works', a
   await expect(page.locator('.modal .perk').first()).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test('the lens shows everything see-through and every reach, and turns off again', async ({ page }) => {
+  await fresh(page);
+  const lens = page.locator('[aria-label^="Lens"]');
+  await lens.click();
+  await expect(lens).toHaveClass(/on/);
+  await expect(page.locator('.lens-legend')).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { game: { lens: boolean } }).game.lens)).toBe(true);
+  await lens.click();
+  await expect(page.locator('.lens-legend')).toBeHidden();
+});
