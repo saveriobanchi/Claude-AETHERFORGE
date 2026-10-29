@@ -88,6 +88,14 @@ const R: RecipeDef[] = [
   { id: 'bp_quick_bread', name: 'Quick Bread', inputs: { wheat: 3 }, outputs: { bread: 2 }, time: 8, fuel: 1, stations: ['oven'], unlock: 'bp_quick_bread' },
   { id: 'bp_fine_mesh', name: 'Fine Mesh', inputs: { loam: 1 }, outputs: { pebble: 2 }, chance: { copper_grit: 0.7, sapling: 0.04 }, time: 2.5, stations: ['wind_sifter'], unlock: 'bp_fine_mesh' },
   { id: 'bp_lattice', name: 'Crystal Lattice', inputs: { aether: 3, glass: 1 }, outputs: { crystal: 1 }, time: 14, stations: ['resonator'], unlock: 'bp_lattice' },
+  // metalwork: steel, springs and a better mechanism
+  { id: 'steel', name: 'Steel', inputs: { iron: 2, charcoal: 1 }, outputs: { steel: 1 }, time: 8, stations: ['furnace', 'crucible'], unlock: 'steel' },
+  { id: 'spring', name: 'Springs', inputs: { steel: 1, wire: 2 }, outputs: { spring: 2 }, time: 4, stations: ['hand', 'assembler'], unlock: 'steel' },
+  { id: 'spring_mech', name: 'Spring Mechanism', inputs: { gear: 1, spring: 2, plate: 1 }, outputs: { mechanism: 2 }, time: 8, stations: ['assembler'], unlock: 'steel' },
+  // kitchen: more dishes for settlers
+  { id: 'soup', name: 'Garden Soup', inputs: { carrot: 2, wheat: 1 }, outputs: { soup: 2 }, time: 8, fuel: 1, stations: ['oven'], unlock: 'kitchen' },
+  { id: 'jam', name: 'Cherry Jam', inputs: { cherry: 3, honey: 1 }, outputs: { jam: 2 }, time: 10, fuel: 1, stations: ['oven', 'kiln'], unlock: 'kitchen' },
+  { id: 'honey_cake', name: 'Honey Cake', inputs: { flour: 2, honey: 1, egg: 1 }, outputs: { honey_cake: 2 }, time: 12, fuel: 1, stations: ['oven'], unlock: 'kitchen' },
   // second roots for loam: farm and orchard surplus rot down too
   { id: 'mulch', name: 'Straw Mulch', inputs: { wheat: 3 }, outputs: { loam: 2 }, time: 8, stations: ['composter'], unlock: 'farming' },
   { id: 'pulp', name: 'Fruit Pulp', inputs: { apple: 2 }, outputs: { loam: 2 }, time: 8, stations: ['composter'], unlock: 'orchard' },

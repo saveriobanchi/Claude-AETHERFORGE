@@ -8,10 +8,10 @@ export const HOME_CAPACITY = 2;
 export const ARRIVE_EVERY = 45;      // seconds between arrivals while there is room and food
 export const MEAL_EVERY = 90;        // seconds between meals per settler
 export const LEAVE_AFTER = 300;      // seconds of hunger before one settler leaves
-export const MEMORY = 8;             // meals remembered for variety
+export const MEMORY = 10;            // meals remembered for variety
 
 /** What settlers will eat (the one you have most of, each meal). */
-export const FOODS: ItemId[] = ['bread', 'stew', 'pie', 'egg', 'carrot', 'apple', 'cherry', 'orange', 'date', 'pear', 'plum', 'cider', 'juice', 'preserves', 'honey'];
+export const FOODS: ItemId[] = ['bread', 'stew', 'pie', 'egg', 'carrot', 'apple', 'cherry', 'orange', 'date', 'pear', 'plum', 'cider', 'juice', 'preserves', 'honey', 'soup', 'jam', 'honey_cake'];
 
 export type Role = 'forester' | 'mason' | 'smith' | 'mystic' | 'merchant';
 export interface RoleDef { id: Role; name: string; desc: string; types: string[] }

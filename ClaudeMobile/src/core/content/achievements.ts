@@ -107,6 +107,8 @@ add('craft', 'c_iron', 'c_gear', 'silver', 'Ironmonger', 'Dark and dependable.',
 add('craft', 'c_plate', 'c_iron', 'gold', 'Plated', 'Heavy sheets of metal.', made('plate', 300));
 add('craft', 'c_mech', 'c_gear', 'gold', 'Clockwork', 'Twenty-five little marvels.', made('mechanism', 25));
 add('craft', 'c_mech250', 'c_mech', 'star', 'Horologist', 'Two hundred and fifty mechanisms.', made('mechanism', 250));
+add('craft', 'c_steel', 'c_iron', 'silver', 'Steelwright', 'Iron that holds an edge.', made('steel', 100));
+add('craft', 'c_spring', 'c_steel', 'gold', 'Wound Up', 'Five hundred springs.', made('spring', 500));
 add('craft', 'c_lens', 'c_glass', 'gold', 'Lensgrinder', 'Fifty lenses, each one true.', made('lens', 50));
 
 // ── Engineer ──
@@ -170,6 +172,9 @@ add('settlement', 's_bread1k', 's_bread', 'silver', 'Bakehouse', 'A thousand loa
 add('settlement', 's_stew', 's_bread', 'silver', 'Hearty', 'A hundred bowls of stew.', made('stew', 100));
 add('settlement', 's_pie', 's_stew', 'gold', 'Pie Day', 'A hundred pies.', made('pie', 100));
 add('settlement', 's_pie1k', 's_pie', 'star', 'Feast', 'A thousand pies.', made('pie', 1000));
+add('settlement', 's_soup', 's_bread', 'bronze', 'Soup Kitchen', 'A hundred bowls of garden soup.', made('soup', 100));
+add('settlement', 's_jam', 's_soup', 'silver', 'Preserver', 'Fifty jars of cherry jam.', made('jam', 50));
+add('settlement', 's_cake', 's_stew', 'gold', 'Sweet Tooth', 'A hundred honey cakes.', made('honey_cake', 100));
 add('settlement', 's_home5', 's_5', 'silver', 'Lane of Cottages', 'Five homes.', { t: 'kind', kind: 'home', n: 5, label: 'homes' });
 
 // ── Skybound ──
