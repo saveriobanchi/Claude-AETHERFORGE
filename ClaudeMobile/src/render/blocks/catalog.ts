@@ -591,6 +591,15 @@ function painted(): Record<string, () => Tex> {
     twine: () => ring(disc(new Paint(), 8, 8, 6.5, 0xc8a86a), 8, 8, 1.5, 6.5, 0xa8884a, 0xd8b87a).rect(7, 7, 2, 2, 0x5a4428),
     wire: () => ring(new Paint(), 8, 8, 2.5, 6.5, 0xd08a4a, 0xf0b07a).rect(13, 7, 3, 1, 0xd08a4a),
     coil: () => ring(new Paint(), 8, 8, 2, 6.8, 0xffd060, 0xfff2b0).rect(6, 6, 4, 4, 0x8ad0ff),
+    // a steel spring: five bright turns with shaded ends, leaning slightly
+    spring: () => {
+      const p = new Paint();
+      for (let k = 0; k < 5; k++) {
+        const y = 3 + k * 2, x = 4 + (k % 2);
+        p.rect(x, y, 8, 1, 0x9aa4b4).rect(x + 1, y, 4, 1, 0xe2e9f2).rect(x, y + 1, 1, 1, 0x4e5664).rect(x + 7, y + 1, 1, 1, 0x4e5664);
+      }
+      return p.rect(7, 1, 1, 2, 0x9aa4b4).rect(8, 13, 1, 2, 0x9aa4b4);
+    },
     lens: () => { const p = disc(new Paint(), 8, 8, 6.5, 0xc8962a); disc(p, 8, 8, 5, 0x8ad0e8, 0xe0f6ff, 0x5a9ab8); p.set(6, 5, 0xffffff); p.set(5, 6, 0xffffff); return p; },
     gear: () => B.gearTex(0xd8a04a, 0x7a4a1a, 0),
     sack: () => { const p = disc(new Paint(), 8, 10, 5.5, 0xa07a4a, 0xc89a64, 0x6a4a2a); p.rect(6, 2, 4, 3, 0xa07a4a).rect(5, 4, 6, 1, 0x5a3a20).rect(7, 1, 2, 1, 0xc89a64); return p; },
@@ -705,6 +714,11 @@ function itemDefs(): Record<ItemId, IconDef> {
     egg: { flat: P.egg() },
     stew: { flat: 'as/ethereal_hearty_stew' },
     pie: { flat: P.pie() },
+    steel: { flat: 'as/moreores_silver_ingot', tint: [0.78, 0.84, 0.98] },
+    spring: { flat: P.spring() },
+    soup: { flat: 'as/chicken_noodle_soup', tint: [1.2, 0.92, 0.62] },
+    jam: { flat: P.jar(), tint: [1.25, 0.42, 0.5] },
+    honey_cake: { flat: 'as/mesecraft_furniture_breadslice', tint: [1.2, 0.98, 0.6] },
   };
 }
 

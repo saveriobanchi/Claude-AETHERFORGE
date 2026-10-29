@@ -11,7 +11,8 @@ export type ItemId =
   | 'cherry_sapling' | 'orange_sapling' | 'date_sapling' | 'pear_sapling' | 'plum_sapling'
   | 'cherry' | 'orange' | 'date' | 'pear' | 'plum' | 'juice' | 'fruit_basket'
   | 'topaz' | 'ruby' | 'opal' | 'emerald'
-  | 'wheat' | 'carrot' | 'flour' | 'bread' | 'wool' | 'cloth' | 'egg' | 'stew' | 'pie';
+  | 'wheat' | 'carrot' | 'flour' | 'bread' | 'wool' | 'cloth' | 'egg' | 'stew' | 'pie'
+  | 'steel' | 'spring' | 'soup' | 'jam' | 'honey_cake';
 
 export interface ItemDef {
   id: ItemId;
@@ -85,6 +86,11 @@ const list: ItemDef[] = [
   { id: 'egg', name: 'Eggs', desc: 'Fresh from the coop.', tier: 1 },
   { id: 'stew', name: 'Stew', desc: 'Carrots and egg, slow-cooked.', tier: 3 },
   { id: 'pie', name: 'Apple Pie', desc: 'The best thing on any island.', tier: 3 },
+  { id: 'steel', name: 'Steel', desc: 'Iron folded with charcoal until it holds an edge.', tier: 4 },
+  { id: 'spring', name: 'Spring', desc: 'A coil of steel that always comes back.', tier: 4 },
+  { id: 'soup', name: 'Garden Soup', desc: 'Carrots and grain, simmered. Simple and filling.', tier: 2 },
+  { id: 'jam', name: 'Cherry Jam', desc: 'Cherries and honey, boiled down dark and sweet.', tier: 3 },
+  { id: 'honey_cake', name: 'Honey Cake', desc: 'Soft, golden and gone in minutes.', tier: 3 },
   { id: 'topaz', name: 'Topaz', desc: 'A honey-coloured stone, very rarely sifted from loam.', tier: 4 },
   { id: 'ruby', name: 'Ruby', desc: 'A red spark, very rarely sifted from gravel.', tier: 4 },
   { id: 'opal', name: 'Opal', desc: 'Milky fire, very rarely ground from stone.', tier: 4 },

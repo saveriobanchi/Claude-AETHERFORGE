@@ -91,6 +91,7 @@ const RESONANCE_POOL: { item: ItemId; base: number }[] = [
   { item: 'lens', base: 50 }, { item: 'skystone', base: 100 }, { item: 'crystal', base: 30 },
   { item: 'sunmetal', base: 25 }, { item: 'cell', base: 12 }, { item: 'coil', base: 10 },
   { item: 'gear', base: 150 }, { item: 'wire', base: 200 }, { item: 'copper', base: 150 },
+  { item: 'steel', base: 60 }, { item: 'spring', base: 80 },
 ];
 
 /** Deterministic resonance request for a given level. */

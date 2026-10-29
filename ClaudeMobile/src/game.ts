@@ -16,6 +16,10 @@ import * as store from './platform/storage';
 import { tileCenter } from './render/art/terrain';
 import { attachGestures } from './input/gestures';
 import { type Ghost, LENS_COLORS, type RangeArea, WorldView } from './render/world';
+
+/** Seconds after a player action before the world is written. */
+const SAVE_SOON = 0.8;
+const QUICK_KEY = 'af:quick';
 import { UI } from './ui/ui';
 
 export interface Settings {
@@ -121,7 +125,7 @@ export class Game {
     });
     window.addEventListener('keydown', (e) => this.onKey(e));
     document.addEventListener('visibilitychange', () => this.onVisibility());
-    window.addEventListener('pagehide', () => { void this.save(); });
+    window.addEventListener('pagehide', () => { this.quickSave(); void this.save(); });
     window.addEventListener('pointerdown', () => audio.unlock(), { capture: true });
     void store.persist();
 
@@ -437,6 +441,7 @@ export class Game {
   private onVisibility(): void {
     if (document.hidden) {
       this.hiddenAt = Date.now();
+      this.quickSave();
       void this.save();
       audio.suspend();
     } else {
@@ -523,7 +528,22 @@ export class Game {
 
   markDirty(): void {
     this.dirty = true;
+    // a player's choice is written within a second, not at the next 6 s autosave
+    this.saveTimer = Math.max(this.saveTimer, 6 - SAVE_SOON);
     this.ui.dirty();
+  }
+
+  /**
+   * Instant copy of the world in localStorage, for when the page is being
+   * hidden or closed: the IndexedDB save is asynchronous and the browser may
+   * stop the page before it finishes. On start the newer of the two is used.
+   */
+  private quickSave(): void {
+    if (!this.s) return;
+    try {
+      this.s.savedAt = Date.now();
+      localStorage.setItem(QUICK_KEY, JSON.stringify(serialize(this.s, this.viewState())));
+    } catch { /* storage full or blocked: the regular save still runs */ }
   }
 
   tryPlace(type: string, x: number, y: number, dir: Dir, sx?: number, sy?: number): void {
@@ -748,8 +768,14 @@ export class Game {
   }
 
   private async load(): Promise<ReturnType<typeof deserialize> | null> {
+    // the quick copy written while the page was closing wins if it is newer than the last full save
+    let quick: { savedAt?: number } | null = null;
+    try { const q = localStorage.getItem(QUICK_KEY); quick = q ? JSON.parse(q) : null; } catch { quick = null; }
     for (const k of ['save', 'backup2', 'backup1', 'backup0']) {
       const raw = await store.get<unknown>(k);
+      if (k === 'save' && quick && (!raw || (quick.savedAt ?? 0) > ((raw as { savedAt?: number }).savedAt ?? 0))) {
+        try { return deserialize(quick); } catch (e) { console.warn('Quick save unreadable:', e); }
+      }
       if (!raw) continue;
       try {
         const r = deserialize(raw);

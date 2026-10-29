@@ -16,6 +16,7 @@ export const TRADE_VALUE: Partial<Record<ItemId, number>> = {
   cherry: 1, orange: 1.2, date: 1.4, pear: 1, plum: 1.4, juice: 5, fruit_basket: 40,
   topaz: 30, ruby: 35, opal: 35, emerald: 45,
   wheat: 0.4, carrot: 0.5, flour: 1.2, bread: 2.5, wool: 0.8, cloth: 3.5, egg: 0.6, stew: 4, pie: 6,
+  steel: 7, spring: 3.5, soup: 2.2, jam: 5, honey_cake: 6.5,
 };
 
 /** Base contract size per item (scaled by trade level). */
@@ -27,9 +28,10 @@ const BASE_AMOUNT: Partial<Record<ItemId, number>> = {
   cherry: 30, orange: 25, date: 25, pear: 25, plum: 25, juice: 6, fruit_basket: 2,
   wheat: 60, carrot: 40, flour: 25, bread: 16, wool: 30, cloth: 10, egg: 30, stew: 10, pie: 6,
   topaz: 1, ruby: 1, opal: 1, emerald: 1,
+  steel: 8, spring: 16, soup: 16, jam: 8, honey_cake: 6,
 };
 /** Goods traders favour (picked more often). */
-const FAVOURED = new Set<ItemId>(['apple', 'honey', 'wax', 'cider', 'candle', 'preserves', 'cherry', 'orange', 'date', 'pear', 'plum', 'juice', 'fruit_basket', 'bread', 'cloth', 'stew', 'pie']);
+const FAVOURED = new Set<ItemId>(['jam', 'honey_cake', 'apple', 'honey', 'wax', 'cider', 'candle', 'preserves', 'cherry', 'orange', 'date', 'pear', 'plum', 'juice', 'fruit_basket', 'bread', 'cloth', 'stew', 'pie']);
 
 export interface Contract { item: ItemId; n: number; got: number; marks: number }
 
@@ -132,6 +134,8 @@ export function upgradeCost(def: BuildingDef, level: number): { items: Stack; ma
   const items: Stack = {};
   const m = level; // ×2, ×3, ×4, ×5 the build cost: each level stays worth taking
   for (const k in def.cost) items[k as ItemId] = Math.ceil((def.cost[k as ItemId] ?? 0) * m);
+  // the last level is master work: it takes steel
+  if (level >= 5) items.steel = (items.steel ?? 0) + 6;
   return { items, marks: level >= 4 ? 15 * (level - 3) : 0 };
 }
 
